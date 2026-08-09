@@ -31,6 +31,21 @@ Errors use one shape:
 { "error": { "code": "event_not_found", "message": "No event with that slug." } }
 ```
 
+## Current Build Priorities
+
+The organizer clarified in Discord that the admin path is the priority and Accelevents is not required for the hackathon MVP.
+
+Build API coverage in this order:
+
+1. CFP conditional validation and track routing.
+2. Organizer submissions and review decisions: `unreviewed`, `approve`, `maybe`, `deny`.
+3. Acceptance-to-session conversion and direct session creation.
+4. Agenda day/room placement with room and speaker conflict detection.
+5. Speaker tasks, asset uploads, reminder/calendar previews.
+6. Public schedule/session/speaker embeds.
+7. Airtable persistence proof.
+8. Optional Accelevents mapping/CSV handoff.
+
 ## Iframe Embeds
 
 The iframe routes return standalone HTML with inline CSS and a short public cache TTL.

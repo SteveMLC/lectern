@@ -19,7 +19,20 @@ Scaffold + golden path. Working today:
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking) and idempotent acceptance-to-session conversion.
 
-The remaining workflows (reviews UI, agenda board, deeper speaker portal polish, communications, Accelevents/Airtable sync) build on these contracts — see Roadmap.
+The remaining workflows (reviews UI, agenda board, deeper speaker portal polish, communications, Airtable proof, and optional Accelevents handoff) build on these contracts — see Roadmap.
+
+## Hackathon scope clarifications
+
+Latest organizer FAQ from Discord:
+
+- Basic conditional form logic is enough for MVP; the current shared browser/API rule is the right foundation.
+- Talks can be routed to one or more tracks, and reviewers can cover one or more tracks.
+- Minimum review flow: `unreviewed` -> `approve` / `maybe` / `deny`.
+- Decision email from inside the app is a bonus, especially when it can carry feedback or change requests.
+- Day/room scheduling with drag-and-drop and conflict detection is enough.
+- Email/calendar workflows should exist at MVP depth through preview/simulated send, with Resend or Cloudflare email wiring when a key is available.
+- Accelevents is optional and may be skipped. A mapping preview or CSV handoff is sufficient if we include anything.
+- Admin UI is the highest-priority surface.
 
 ## Stack
 
@@ -142,10 +155,10 @@ The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions ac
 
 ## Roadmap (post-scaffold lanes)
 
-- **Lane A — CFP + review:** form builder UI, reviewer assignments, two scoring rounds, accept/reject decisions.
-- **Lane B — sessions + agenda + Accelevents:** acceptance flow UI, direct-add sessions, drag-and-drop agenda with the conflict engine, list/day/week views, Accelevents mapping preview + sync log + CSV fallback.
-- **Lane C — speaker operations:** magic-link portal, profile editing, R2 headshot/slides uploads, task board, reminders with real `.ics` files (simulated outbox by default, Resend behind a secret).
-- **Lane D — public surface + hardening:** dashboard metrics, Airtable live persistence, demo reset UI, accessibility and performance passes.
+- **Lane A — CFP + review:** form builder UI, track routing, reviewer assignments, `unreviewed` -> `approve` / `maybe` / `deny`, and optional decision email feedback.
+- **Lane B — sessions + agenda:** acceptance flow UI, direct-add sessions, drag-and-drop day/room agenda with conflict detection, list/day/week views if time allows.
+- **Lane C — speaker operations:** magic-link portal, profile editing, R2 headshot/slides uploads, task board, reminder/calendar preview with real `.ics` files (simulated outbox by default, Resend or Cloudflare email behind a secret).
+- **Lane D — public surface + hardening:** dashboard metrics, Airtable live persistence, demo reset UI, optional Accelevents CSV/mapping handoff, accessibility and performance passes.
 
 ## Contributing
 
