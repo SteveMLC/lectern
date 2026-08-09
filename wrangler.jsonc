@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "speakerops",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-12-01",
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "speakerops-db",
+      // Placeholder id works for --local dev. Replace with the real id printed by
+      // `wrangler d1 create speakerops-db` before any --remote command or deploy.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "speakerops-assets"
+    }
+  ],
+  "vars": {
+    // Non-secret configuration only. Secrets (ORGANIZER_PASSCODE, AIRTABLE_TOKEN,
+    // RESEND_API_KEY) go in .dev.vars locally and `wrangler secret put` in prod.
+    "DATA_BACKEND": "d1"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

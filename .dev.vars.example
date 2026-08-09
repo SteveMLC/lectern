@@ -1,0 +1,12 @@
+# Copy to .dev.vars for local development. Never commit .dev.vars.
+# Production values are set with `wrangler secret put <NAME>`.
+
+# Passcode for the organizer console (required).
+ORGANIZER_PASSCODE=speakerops-dev
+
+# Optional — Airtable live persistence (Lane D wires this).
+# AIRTABLE_TOKEN=
+# AIRTABLE_BASE_ID=
+
+# Optional — real email sending (Lane C wires this; simulated outbox without it).
+# RESEND_API_KEY=
