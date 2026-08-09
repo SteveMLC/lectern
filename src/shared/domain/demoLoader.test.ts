@@ -23,8 +23,8 @@ function dataset(overrides: Partial<DemoDataset> = {}): DemoDataset {
       ...overrides.event,
     },
     speakers: overrides.speakers ?? [
-      { key: "ada", name: "Ada", email: "ada@example.dev", tasksComplete: ["bio"] },
-      { key: "lin", name: "Lin", email: "lin@example.dev", tasksComplete: [] },
+      { key: "ada", name: "Ada", email: "ada@example.com", tasksComplete: ["bio"] },
+      { key: "lin", name: "Lin", email: "lin@example.com", tasksComplete: [] },
     ],
     submissions: overrides.submissions ?? [],
   };

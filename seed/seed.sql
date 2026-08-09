@@ -88,14 +88,14 @@ INSERT INTO conditional_rules (id, form_id, source_field_key, operator, values_j
 -- Speakers
 -- ---------------------------------------------------------------------------
 INSERT INTO speakers (id, event_id, email, name, company, title, bio, location, socials_json, created_at, updated_at) VALUES
-('spk_ada',   'evt_horizon2026', 'ada@nimbuslabs.dev',      'Ada Okafor',    'Nimbus Labs',      'Principal Engineer',  'Ada runs the agent platform team at Nimbus Labs and has spent two years getting LLM systems past the demo stage.', 'Lagos / Remote', '{"github":"adaokafor"}', '2026-07-22T10:00:00Z', '2026-08-02T10:00:00Z'),
-('spk_lin',   'evt_horizon2026', 'lin@nimbuslabs.dev',      'Lin Zhao',      'Nimbus Labs',      'Staff Engineer',      'Lin builds evaluation infrastructure and owns the incident reviews nobody else wants to run.', 'Vancouver', NULL, '2026-07-22T10:05:00Z', '2026-07-22T10:05:00Z'),
-('spk_priya', 'evt_horizon2026', 'priya@evalworks.io',      'Priya Sharma',  'Evalworks',        'Co-founder',          'Priya co-founded Evalworks after five years of shipping ML platforms that had to answer to auditors.', 'Bengaluru', '{"twitter":"priyaships"}', '2026-07-23T11:00:00Z', '2026-07-23T11:00:00Z'),
-('spk_marco', 'evt_horizon2026', 'marco@ferrostack.com',    'Marco Reyes',   'Ferrostack',       'SRE Lead',            'Marco keeps a nine-figure-request platform boring on purpose.', 'Mexico City', NULL, '2026-07-24T09:00:00Z', '2026-07-24T09:00:00Z'),
-('spk_tom',   'evt_horizon2026', 'tom@plainsignal.co',      'Tom Ostrander', 'PlainSignal',      'Head of Platform',    'Tom has migrated three companies off Kubernetes and is still invited to KubeCon.', 'Austin', NULL, '2026-07-25T14:00:00Z', '2026-07-25T14:00:00Z'),
-('spk_yuki',  'evt_horizon2026', 'yuki@typecraft.dev',      'Yuki Tanaka',   'Typecraft',        'Developer Advocate',  'Yuki teaches type-level TypeScript to working teams without melting anyone. Author of the Typecraft workbook.', 'Tokyo', '{"github":"yukitype"}', '2026-07-26T08:00:00Z', '2026-07-26T08:00:00Z'),
-('spk_dana',  'evt_horizon2026', 'dana@auroracompute.com',  'Dana Whitfield','Aurora Compute',   'CTO',                 'Dana is CTO of Aurora Compute, the headline partner of Horizon Dev Summit 2026.', 'Denver', NULL, '2026-07-28T16:00:00Z', '2026-07-28T16:00:00Z'),
-('spk_omar',  'evt_horizon2026', 'omar@stackparliament.org','Omar Haddad',   'Stack Parliament', 'Moderator',           'Omar moderates hard panels well. Formerly infra lead at two unicorns.', 'Amsterdam', NULL, '2026-07-29T12:00:00Z', '2026-07-29T12:00:00Z');
+('spk_ada',   'evt_horizon2026', 'ada@nimbuslabs.example',      'Ada Okafor',    'Nimbus Labs',      'Principal Engineer',  'Ada runs the agent platform team at Nimbus Labs and has spent two years getting LLM systems past the demo stage.', 'Lagos / Remote', '{"github":"adaokafor"}', '2026-07-22T10:00:00Z', '2026-08-02T10:00:00Z'),
+('spk_lin',   'evt_horizon2026', 'lin@nimbuslabs.example',      'Lin Zhao',      'Nimbus Labs',      'Staff Engineer',      'Lin builds evaluation infrastructure and owns the incident reviews nobody else wants to run.', 'Vancouver', NULL, '2026-07-22T10:05:00Z', '2026-07-22T10:05:00Z'),
+('spk_priya', 'evt_horizon2026', 'priya@evalworks.example',      'Priya Sharma',  'Evalworks',        'Co-founder',          'Priya co-founded Evalworks after five years of shipping ML platforms that had to answer to auditors.', 'Bengaluru', '{"twitter":"priyaships"}', '2026-07-23T11:00:00Z', '2026-07-23T11:00:00Z'),
+('spk_marco', 'evt_horizon2026', 'marco@ferrostack.example',    'Marco Reyes',   'Ferrostack',       'SRE Lead',            'Marco keeps a nine-figure-request platform boring on purpose.', 'Mexico City', NULL, '2026-07-24T09:00:00Z', '2026-07-24T09:00:00Z'),
+('spk_tom',   'evt_horizon2026', 'tom@plainsignal.example',      'Tom Ostrander', 'PlainSignal',      'Head of Platform',    'Tom has migrated three companies off Kubernetes and is still invited to KubeCon.', 'Austin', NULL, '2026-07-25T14:00:00Z', '2026-07-25T14:00:00Z'),
+('spk_yuki',  'evt_horizon2026', 'yuki@typecraft.example',      'Yuki Tanaka',   'Typecraft',        'Developer Advocate',  'Yuki teaches type-level TypeScript to working teams without melting anyone. Author of the Typecraft workbook.', 'Tokyo', '{"github":"yukitype"}', '2026-07-26T08:00:00Z', '2026-07-26T08:00:00Z'),
+('spk_dana',  'evt_horizon2026', 'dana@auroracompute.example',  'Dana Whitfield','Aurora Compute',   'CTO',                 'Dana is CTO of Aurora Compute, the headline partner of Horizon Dev Summit 2026.', 'Denver', NULL, '2026-07-28T16:00:00Z', '2026-07-28T16:00:00Z'),
+('spk_omar',  'evt_horizon2026', 'omar@stackparliament.example','Omar Haddad',   'Stack Parliament', 'Moderator',           'Omar moderates hard panels well. Formerly infra lead at two unicorns.', 'Amsterdam', NULL, '2026-07-29T12:00:00Z', '2026-07-29T12:00:00Z');
 
 -- ---------------------------------------------------------------------------
 -- Submissions (applications to speak) — the full status spread
@@ -170,11 +170,11 @@ INSERT INTO rubric_criteria (id, plan_id, key, label, description, max_score, we
 ('crit_readiness', 'plan_pc2026', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
 
 INSERT INTO reviews (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at) VALUES
-('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.dev',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
-('rev_screen_rag_ines',   'round_screen', 'sub_rag_dead',     'Ines Farrow', 'ines@horizonsummit.dev', '{"relevance":4,"depth":3,"readiness":4}', 'Title is bait but the content reads real.', 'accept', '2026-07-29T08:30:00Z'),
-('rev_screen_dx_sam',     'round_screen', 'sub_dx_metrics',   'Sam Peters',  'sam@horizonsummit.dev',  '{"relevance":4,"depth":3,"readiness":3}', 'First-time speaker; pair with a mentor if accepted.', 'waitlist', '2026-07-29T21:15:00Z'),
-('rev_screen_design_ines','round_screen', 'sub_design_evals', 'Ines Farrow', 'ines@horizonsummit.dev', '{"relevance":5,"depth":3,"readiness":5}', 'Would make a great Panel Loft session.', 'accept', '2026-07-30T09:45:00Z'),
-('rev_screen_k8s_sam',    'round_screen', 'sub_k8s_escape',   'Sam Peters',  'sam@horizonsummit.dev',  '{"relevance":3,"depth":2,"readiness":3}', 'We ran a nearly identical talk last year.', 'reject', '2026-07-30T10:00:00Z');
+('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
+('rev_screen_rag_ines',   'round_screen', 'sub_rag_dead',     'Ines Farrow', 'ines@horizonsummit.example', '{"relevance":4,"depth":3,"readiness":4}', 'Title is bait but the content reads real.', 'accept', '2026-07-29T08:30:00Z'),
+('rev_screen_dx_sam',     'round_screen', 'sub_dx_metrics',   'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":3,"readiness":3}', 'First-time speaker; pair with a mentor if accepted.', 'waitlist', '2026-07-29T21:15:00Z'),
+('rev_screen_design_ines','round_screen', 'sub_design_evals', 'Ines Farrow', 'ines@horizonsummit.example', '{"relevance":5,"depth":3,"readiness":5}', 'Would make a great Panel Loft session.', 'accept', '2026-07-30T09:45:00Z'),
+('rev_screen_k8s_sam',    'round_screen', 'sub_k8s_escape',   'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":3,"depth":2,"readiness":3}', 'We ran a nearly identical talk last year.', 'reject', '2026-07-30T10:00:00Z');
 
 -- ---------------------------------------------------------------------------
 -- Sessions. Two carry submission lineage; two are direct-added.
@@ -279,7 +279,7 @@ The {{event_name}} team',
  '2026-08-01T09:05:00Z', '2026-08-01T09:05:00Z');
 
 INSERT INTO messages (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at) VALUES
-('msg_ada_assets_draft', 'evt_horizon2026', 'tmpl_missing_assets', 'spk_ada', 'ada@nimbuslabs.dev',
+('msg_ada_assets_draft', 'evt_horizon2026', 'tmpl_missing_assets', 'spk_ada', 'ada@nimbuslabs.example',
  'Action needed for Horizon Dev Summit 2026: 2 item(s) outstanding',
  'Hi Ada Okafor,
 
