@@ -32,6 +32,7 @@ export function AdminLayout() {
 
 function AdminShell({ onLock }: { onLock: () => void }) {
   const { data, error, loading } = useAsync(() => apiClient.events(), []);
+  const [navOpen, setNavOpen] = useState(false);
 
   if (loading) {
     return (
@@ -57,8 +58,52 @@ function AdminShell({ onLock }: { onLock: () => void }) {
   const ctx: AdminContext = { eventSlug: event.slug, eventName: event.name };
 
   return (
-    <div className="flex min-h-dvh bg-zinc-50">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-zinc-200 bg-white">
+    <div className="min-h-dvh bg-zinc-50 lg:flex">
+      <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
+              S
+            </span>
+            SpeakerOps
+          </Link>
+          <button
+            type="button"
+            onClick={() => setNavOpen((open) => !open)}
+            className="inline-flex size-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700"
+            aria-expanded={navOpen}
+            aria-label="Toggle organizer navigation"
+          >
+            <span className="flex flex-col gap-1">
+              <span
+                className={cn("block h-0.5 w-4 rounded bg-current", navOpen && "rotate-45")}
+              />
+              <span className={cn("block h-0.5 w-4 rounded bg-current", navOpen && "hidden")} />
+              <span
+                className={cn(
+                  "block h-0.5 w-4 rounded bg-current",
+                  navOpen && "-mt-1.5 -rotate-45",
+                )}
+              />
+            </span>
+          </button>
+        </div>
+        {navOpen ? (
+          <div className="mt-3">
+            <AdminNav onNavigate={() => setNavOpen(false)} />
+            <AdminFooter
+              eventSlug={event.slug}
+              onLock={() => {
+                setNavOpen(false);
+                clearPasscode();
+                onLock();
+              }}
+            />
+          </div>
+        ) : null}
+      </header>
+
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-dvh">
         <div className="border-b border-zinc-200 px-5 py-4">
           <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
@@ -70,47 +115,63 @@ function AdminShell({ onLock }: { onLock: () => void }) {
             {event.name}
           </p>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                cn(
-                  "block rounded-lg px-3 py-2 text-sm font-medium",
-                  isActive
-                    ? "bg-accent-soft text-accent"
-                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="space-y-2 border-t border-zinc-200 p-4">
-          <Link
-            to={`/e/${event.slug}`}
-            className="block text-xs font-medium text-zinc-500 hover:text-zinc-800"
-          >
-            View public event page →
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              clearPasscode();
-              onLock();
-            }}
-            className="text-xs font-medium text-zinc-400 hover:text-rose-600"
-          >
-            Lock console
-          </button>
-        </div>
+        <AdminNav />
+        <AdminFooter
+          eventSlug={event.slug}
+          onLock={() => {
+            clearPasscode();
+            onLock();
+          }}
+        />
       </aside>
-      <main className="min-w-0 flex-1 px-8 py-8">
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <Outlet context={ctx} />
       </main>
+    </div>
+  );
+}
+
+function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      {NAV.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              "block rounded-lg px-3 py-2 text-sm font-medium",
+              isActive
+                ? "bg-accent-soft text-accent"
+                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
+            )
+          }
+        >
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+function AdminFooter({ eventSlug, onLock }: { eventSlug: string; onLock: () => void }) {
+  return (
+    <div className="space-y-2 border-t border-zinc-200 p-4">
+      <Link
+        to={`/e/${eventSlug}`}
+        className="block text-xs font-medium text-zinc-500 hover:text-zinc-800"
+      >
+        View public event page →
+      </Link>
+      <button
+        type="button"
+        onClick={onLock}
+        className="text-xs font-medium text-zinc-400 hover:text-rose-600"
+      >
+        Lock console
+      </button>
     </div>
   );
 }

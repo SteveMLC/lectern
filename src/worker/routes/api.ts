@@ -7,6 +7,9 @@ import {
   type EventCounts,
   type EventsListResponse,
   type HealthResponse,
+  type PublicScheduleResponse,
+  type PublicSessionsResponse,
+  type PublicSpeakersResponse,
   type SubmissionsListResponse,
   type UploadAssetResponse,
 } from "../../shared/contracts";
@@ -21,6 +24,152 @@ import { createRepo } from "../repo/factory";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export const api = new Hono<{ Bindings: Env }>();
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeCssColor(value: string | null): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#eef2ff";
+}
+
+function embedDocument(title: string, body: string): Response {
+  return new Response(
+    `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #ffffff; color: #18181b; }
+    .wrap { padding: 16px; }
+    .header { border-bottom: 1px solid #e4e4e7; margin-bottom: 14px; padding-bottom: 12px; }
+    .eyebrow { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    h1 { font-size: 20px; line-height: 1.2; margin: 3px 0 0; }
+    .subtle { color: #71717a; font-size: 13px; }
+    .stack { display: grid; gap: 10px; }
+    .item { border: 1px solid #e4e4e7; border-radius: 8px; padding: 12px; }
+    .row { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+    .title { font-size: 15px; font-weight: 700; line-height: 1.35; margin: 0; }
+    .meta { color: #52525b; font-size: 12px; line-height: 1.5; margin-top: 5px; }
+    .abstract { color: #3f3f46; font-size: 13px; line-height: 1.55; margin: 8px 0 0; }
+    .pill { border-radius: 999px; display: inline-flex; font-size: 11px; font-weight: 700; padding: 2px 8px; }
+    .empty { border: 1px dashed #d4d4d8; border-radius: 8px; color: #71717a; font-size: 13px; padding: 16px; text-align: center; }
+    .speaker { display: grid; gap: 4px; }
+    .speaker-name { font-size: 15px; font-weight: 700; }
+    @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
+  </style>
+</head>
+<body><main class="wrap">${body}</main></body>
+</html>`,
+    {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "public, max-age=60",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
+      },
+    },
+  );
+}
+
+function formatEmbedDateTime(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+function formatEmbedTime(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+function sessionSpeakers(speakers: PublicSessionsResponse["sessions"][number]["speakers"]): string {
+  if (speakers.length === 0) return "Speakers TBA";
+  return speakers.map((speaker) => escapeHtml(speaker.name)).join(", ");
+}
+
+function renderScheduleEmbed(data: PublicScheduleResponse): Response {
+  const items =
+    data.slots.length === 0
+      ? `<div class="empty">Schedule coming soon.</div>`
+      : data.slots
+          .map((slot) => {
+            const track = slot.session.track;
+            const starts = formatEmbedDateTime(slot.startsAt, data.timezone);
+            const ends = formatEmbedTime(slot.endsAt, data.timezone);
+            return `<article class="item">
+  <div class="row">
+    <p class="title">${escapeHtml(slot.session.title)}</p>
+    ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
+  </div>
+  <div class="meta">${escapeHtml(starts)}-${escapeHtml(ends)}${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${sessionSpeakers(slot.session.speakers)}</div>
+  <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
+</article>`;
+          })
+          .join("");
+
+  return embedDocument(
+    `${data.event.name} schedule`,
+    `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">${escapeHtml(data.timezone)}</div></header><section class="stack">${items}</section>`,
+  );
+}
+
+function renderSessionsEmbed(data: PublicSessionsResponse): Response {
+  const items =
+    data.sessions.length === 0
+      ? `<div class="empty">Sessions coming soon.</div>`
+      : data.sessions
+          .map((session) => {
+            const track = session.track;
+            return `<article class="item">
+  <div class="row">
+    <p class="title">${escapeHtml(session.title)}</p>
+    ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
+  </div>
+  <div class="meta">${escapeHtml(session.format)} · ${sessionSpeakers(session.speakers)}</div>
+  <p class="abstract">${escapeHtml(session.abstract)}</p>
+</article>`;
+          })
+          .join("");
+
+  return embedDocument(
+    `${data.event.name} sessions`,
+    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1></header><section class="stack">${items}</section>`,
+  );
+}
+
+function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
+  const items =
+    data.speakers.length === 0
+      ? `<div class="empty">Speakers coming soon.</div>`
+      : data.speakers
+          .map(
+            (speaker) => `<article class="item speaker">
+  <div class="speaker-name">${escapeHtml(speaker.name)}</div>
+  <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
+  ${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : ""}
+</article>`,
+          )
+          .join("");
+
+  return embedDocument(
+    `${data.event.name} speakers`,
+    `<header class="header"><div class="eyebrow">Speakers</div><h1>${escapeHtml(data.event.name)}</h1></header><section class="stack">${items}</section>`,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Health
@@ -62,6 +211,79 @@ api.get("/events/:slug", async (c) => {
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   return c.json(bundle);
 });
+
+api.get("/public/events/:slug/schedule", async (c) => {
+  const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return c.json(body);
+});
+
+api.get("/public/events/:slug/sessions", async (c) => {
+  const body = await createRepo(c.env).getPublicSessions(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return c.json(body);
+});
+
+api.get("/public/events/:slug/speakers", async (c) => {
+  const body = await createRepo(c.env).getPublicSpeakers(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return c.json(body);
+});
+
+api.get("/embeds/events/:slug/schedule", async (c) => {
+  const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderScheduleEmbed(body);
+});
+
+api.get("/embeds/events/:slug/sessions", async (c) => {
+  const body = await createRepo(c.env).getPublicSessions(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSessionsEmbed(body);
+});
+
+api.get("/embeds/events/:slug/speakers", async (c) => {
+  const body = await createRepo(c.env).getPublicSpeakers(c.req.param("slug"));
+  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSpeakersEmbed(body);
+});
+
+api.get("/docs", (c) =>
+  c.json({
+    name: "SpeakerOps API",
+    version: pkg.version,
+    basePath: "/api",
+    auth: {
+      public: "No auth. Public routes never include speaker emails or organizer-only review data.",
+      organizer: "Bearer passcode in the Authorization header.",
+    },
+    endpoints: [
+      { method: "GET", path: "/health", auth: "public", purpose: "Worker, version, backend, D1/R2 checks." },
+      { method: "GET", path: "/events", auth: "public", purpose: "List public events." },
+      { method: "GET", path: "/events/:slug", auth: "public", purpose: "Event bundle for event and CFP pages." },
+      { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
+      { method: "GET", path: "/public/events/:slug/sessions", auth: "public", purpose: "Iframe-safe sessions JSON." },
+      { method: "GET", path: "/public/events/:slug/speakers", auth: "public", purpose: "Iframe-safe speaker gallery JSON." },
+      { method: "GET", path: "/embeds/events/:slug/schedule", auth: "public", purpose: "Drop-in schedule iframe HTML." },
+      { method: "GET", path: "/embeds/events/:slug/sessions", auth: "public", purpose: "Drop-in sessions iframe HTML." },
+      { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
+      { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
+      { method: "GET", path: "/speaker-portal/:token", auth: "public", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
+      { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
+      { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
+      { method: "GET", path: "/assets/:assetId", auth: "public", purpose: "Stream a stored asset." },
+    ],
+    embeds: {
+      schedule:
+        '<iframe src="/api/embeds/events/horizon-2026/schedule" title="Horizon Dev Summit schedule" width="100%" height="640" loading="lazy"></iframe>',
+      sessions:
+        '<iframe src="/api/embeds/events/horizon-2026/sessions" title="Horizon Dev Summit sessions" width="100%" height="640" loading="lazy"></iframe>',
+      speakers:
+        '<iframe src="/api/embeds/events/horizon-2026/speakers" title="Horizon Dev Summit speakers" width="100%" height="640" loading="lazy"></iframe>',
+    },
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Public: CFP submission (the write half of the golden path)
@@ -124,6 +346,21 @@ api.post("/events/:slug/submissions", async (c) => {
 
   const body: CreateSubmissionResponse = { submission };
   return c.json(body, 201);
+});
+
+// ---------------------------------------------------------------------------
+// Public: speaker portal demo magic link
+// ---------------------------------------------------------------------------
+
+api.get("/speaker-portal/:token", async (c) => {
+  const token = c.req.param("token").trim();
+  if (!token) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+
+  // Isolated stub: the seeded demo uses speaker ids as magic-link tokens until
+  // real expiring tokens land. Keep this route replaceable and read-only.
+  const bundle = await createRepo(c.env).getSpeakerPortalByToken(token);
+  if (!bundle) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+  return c.json(bundle);
 });
 
 // ---------------------------------------------------------------------------

@@ -3,17 +3,24 @@ import { AdminLayout } from "./pages/admin/AdminLayout";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Submissions } from "./pages/admin/Submissions";
+import { ApiDocs } from "./pages/ApiDocs";
 import { CfpPage } from "./pages/CfpPage";
+import { EmbedPreview } from "./pages/EmbedPreview";
 import { EventPage } from "./pages/EventPage";
 import { Landing } from "./pages/Landing";
 import { NotFound } from "./pages/NotFound";
+import { SpeakerPortal } from "./pages/SpeakerPortal";
 
 export function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/docs" element={<ApiDocs />} />
+      <Route path="/api-docs" element={<ApiDocs />} />
+      <Route path="/embed-preview" element={<EmbedPreview />} />
       <Route path="/e/:slug" element={<EventPage />} />
       <Route path="/e/:slug/cfp" element={<CfpPage />} />
+      <Route path="/speaker/:token" element={<SpeakerPortal />} />
 
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Dashboard />} />

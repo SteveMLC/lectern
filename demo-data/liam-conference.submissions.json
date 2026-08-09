@@ -1,0 +1,249 @@
+{
+  "event": "groundwork-2026",
+  "submissions": [
+    {
+      "key": "cobol-migration",
+      "title": "Eleven Years Off COBOL and Still Going",
+      "abstract": "Meridian Freight has been migrating off a 1994 routing engine since 2015. Rosa walks through what incremental actually means at that scale: the seams they cut, the four times they nearly gave up, and why the remaining twelve percent may never move.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["rosa-delgado"],
+      "submittedDayOffset": 3,
+      "answers": { "prior_speaking": "Conference regular" },
+      "schedule": { "day": 1, "start": "10:00", "end": "10:45", "room": "foundry" },
+      "storyNote": "STORYLINE: half of the speaker double-booking. Rosa is also a co-speaker on observability-debt, which overlaps this slot."
+    },
+    {
+      "key": "observability-debt",
+      "title": "You Cannot Grep Your Way Out of This",
+      "abstract": "Bellwether had 1,900 alerts and no idea which mattered. Kwame and Rosa on deleting most of them, the two incidents that got worse before it got better, and what they measure now instead.",
+      "track": "reliability",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["kwame-asante", "rosa-delgado"],
+      "submittedDayOffset": 5,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "schedule": { "day": 1, "start": "10:30", "end": "11:15", "room": "annex" },
+      "storyNote": "STORYLINE: causes TWO conflicts. Speaker clash with cobol-migration (Rosa, 10:30-10:45) and room clash with oncall-humane (The Annex, 11:00-11:15)."
+    },
+    {
+      "key": "oncall-humane",
+      "title": "On-Call Without the Burnout Tax",
+      "abstract": "A hospital platform team cannot miss a page, and cannot grind people down either. Hana on the rota redesign, the escalation policy that finally stuck, and the honest cost of 24/7 coverage on a team of nine.",
+      "track": "reliability",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["hana-kobayashi"],
+      "submittedDayOffset": 6,
+      "answers": { "prior_speaking": "First time" },
+      "schedule": { "day": 1, "start": "11:00", "end": "11:45", "room": "annex" },
+      "storyNote": "STORYLINE: room clash with observability-debt. Also Hana is the most-outstanding speaker on the task dashboard."
+    },
+    {
+      "key": "migrations-without-fear",
+      "title": "Database Migrations at a Bank, Without the Fear",
+      "abstract": "Ferrous Bank runs schema changes against tables that hold other people's money. Dmitri covers expand-contract in practice, the review checklist, and the rollback they have needed exactly twice in six years.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["dmitri-volkov"],
+      "submittedDayOffset": 8,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "schedule": { "day": 1, "start": "13:00", "end": "13:45", "room": "foundry" },
+      "storyNote": "STORYLINE: accepted, but Dmitri's bio is empty. Portal should nudge him."
+    },
+    {
+      "key": "tests-for-untested",
+      "title": "Writing Tests for Code Nobody Understands",
+      "abstract": "Sean inherited 180,000 lines with no test suite and a release every Thursday. A practical order of operations: characterization tests first, seams second, and the refactors you earn the right to do third.",
+      "track": "craft",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["sean-brennan"],
+      "submittedDayOffset": 4,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "schedule": { "day": 1, "start": "14:00", "end": "14:45", "room": "foundry" },
+      "storyNote": "STORYLINE: missing recording release, and The Foundry is the recorded room. This outstanding task actually blocks something."
+    },
+    {
+      "key": "incident-review-real",
+      "title": "Blameless Postmortems That Are Actually Blameless",
+      "abstract": "Amara on what changed when leadership started attending incident reviews, the three phrases they banned, and the uncomfortable finding that most of their incidents traced to one deploy process.",
+      "track": "teams",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["amara-nwosu"],
+      "submittedDayOffset": 9,
+      "answers": { "prior_speaking": "Conference regular" },
+      "schedule": { "day": 2, "start": "10:00", "end": "10:45", "room": "foundry" }
+    },
+    {
+      "key": "build-times",
+      "title": "Forty Minutes to Four",
+      "abstract": "Tobias took a build from forty minutes to four without a build-system rewrite. Where the time actually went, which fixes were boring, and the one clever thing he now regrets.",
+      "track": "craft",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["tobias-lindqvist"],
+      "submittedDayOffset": 11,
+      "answers": { "prior_speaking": "First time" },
+      "schedule": { "day": 2, "start": "11:00", "end": "11:45", "room": "annex" },
+      "storyNote": "STORYLINE: the late-slides persona. Missing headshot and slides close to the event."
+    },
+    {
+      "key": "deprecation-policy",
+      "title": "How to Delete an Internal API Without Breaking Claims",
+      "abstract": "An internal API disappeared mid-quarter and took a claims pipeline with it. Mei-Lin wrote the policy that followed: deprecation windows, consumer discovery, and the dashboard that names names.",
+      "track": "teams",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["mei-lin-chen"],
+      "submittedDayOffset": 7,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "schedule": { "day": 2, "start": "13:00", "end": "13:45", "room": "annex" }
+    },
+    {
+      "key": "onboarding-legacy",
+      "title": "Onboarding Engineers onto Code Older Than They Are",
+      "abstract": "Ironwood's codebase started in 1998. Jamal turned a six-month ramp into six weeks with guided archaeology, a first-week deploy, and a map of the system that is allowed to be wrong.",
+      "track": "teams",
+      "format": "talk",
+      "status": "accepted",
+      "speakers": ["jamal-carter"],
+      "submittedDayOffset": 12,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "schedule": { "day": 2, "start": "14:00", "end": "14:45", "room": "foundry" }
+    },
+
+    {
+      "key": "strangler-fig-reality",
+      "title": "The Strangler Fig Pattern, Honestly Assessed",
+      "abstract": "Everyone cites the strangler fig. Priyanka has run it three times and reports what the diagrams leave out: the proxy layer that becomes permanent, the two-system tax, and how you know when to stop.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "under_review",
+      "speakers": ["priyanka-rao"],
+      "submittedDayOffset": 14,
+      "answers": { "prior_speaking": "Conference regular" },
+      "storyNote": "STORYLINE: near-duplicate of incremental-rewrite. The review screen should surface these two together so the committee picks one."
+    },
+    {
+      "key": "incremental-rewrite",
+      "title": "Incremental Rewrites: What the Diagrams Leave Out",
+      "abstract": "The incremental rewrite is the accepted wisdom. Sofia argues the accepted wisdom hides a permanent proxy layer and the cost of running two systems, and offers a way to tell when to stop.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "under_review",
+      "speakers": ["sofia-marchetti"],
+      "submittedDayOffset": 15,
+      "answers": { "prior_speaking": "First time" },
+      "storyNote": "STORYLINE: near-duplicate of strangler-fig-reality. Same argument, different author."
+    },
+    {
+      "key": "internal-tools-ux",
+      "title": "Designing Tools Nobody Chose to Use",
+      "abstract": "Internal tools have captive users, so bad design never shows up as churn. Sofia on measuring friction when people cannot leave, and the three changes that cut support tickets by half.",
+      "track": "teams",
+      "format": "talk",
+      "status": "under_review",
+      "speakers": ["sofia-marchetti"],
+      "submittedDayOffset": 16,
+      "answers": { "prior_speaking": "First time" }
+    },
+    {
+      "key": "warehouse-migration",
+      "title": "Three Warehouse Migrations and What They Cost",
+      "abstract": "Priyanka has moved three companies between data warehouses. The real budget line is not the platform, it is the eighteen months of dual-writing and the reports nobody admits still run on the old one.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "under_review",
+      "speakers": ["priyanka-rao"],
+      "submittedDayOffset": 17,
+      "answers": { "prior_speaking": "Conference regular", "travel_support": true }
+    },
+
+    {
+      "key": "feature-flags-debt",
+      "title": "Your Feature Flags Are Technical Debt Now",
+      "abstract": "Oakline had 400 live flags and no owner for most of them. Sean on flag lifecycles, the cleanup sprint that paid for itself, and the two flags they will never remove.",
+      "track": "craft",
+      "format": "talk",
+      "status": "submitted",
+      "speakers": ["sean-brennan"],
+      "submittedDayOffset": 21,
+      "answers": { "prior_speaking": "1-5 talks" }
+    },
+    {
+      "key": "runbooks-that-work",
+      "title": "Runbooks People Actually Open at 3am",
+      "abstract": "Most runbooks are written for the author. Kwame on rewriting them for a stressed stranger: decision trees over prose, one command per step, and testing them during business hours.",
+      "track": "reliability",
+      "format": "lightning",
+      "status": "submitted",
+      "speakers": ["kwame-asante"],
+      "submittedDayOffset": 23,
+      "answers": { "prior_speaking": "1-5 talks" }
+    },
+    {
+      "key": "postgres-vacuum",
+      "title": "Nobody Told Me About Autovacuum",
+      "abstract": "A production incident traced to table bloat nobody was watching. Dmitri on the Postgres maintenance nobody teaches, the metrics that would have caught it, and the alert they added afterwards.",
+      "track": "reliability",
+      "format": "lightning",
+      "status": "submitted",
+      "speakers": ["dmitri-volkov"],
+      "submittedDayOffset": 24,
+      "answers": { "prior_speaking": "1-5 talks" }
+    },
+    {
+      "key": "pairing-legacy",
+      "title": "Pairing as Legacy Documentation",
+      "abstract": "Ironwood stopped trying to document the old system and started pairing on it. Jamal on what transferred, what did not, and the tracking spreadsheet that made it deliberate rather than accidental.",
+      "track": "teams",
+      "format": "lightning",
+      "status": "submitted",
+      "speakers": ["jamal-carter"],
+      "submittedDayOffset": 26,
+      "answers": { "prior_speaking": "First time" }
+    },
+
+    {
+      "key": "monolith-modular",
+      "title": "We Went Modular Monolith and It Was Fine",
+      "abstract": "Copperfield considered microservices, chose a modular monolith, and has not regretted it. Mei-Lin on module boundaries, the enforcement tooling, and the two places the boundary leaks anyway.",
+      "track": "craft",
+      "format": "talk",
+      "status": "waitlisted",
+      "speakers": ["mei-lin-chen"],
+      "submittedDayOffset": 18,
+      "answers": { "prior_speaking": "1-5 talks" },
+      "storyNote": "STORYLINE: strong talk, no slot left. Good candidate for the waitlist conversation in the demo."
+    },
+
+    {
+      "key": "microservices-mistake",
+      "title": "Microservices Were a Mistake",
+      "abstract": "A polemic against service decomposition, drawn from one migration at one company.",
+      "track": "legacy",
+      "format": "talk",
+      "status": "rejected",
+      "speakers": ["tobias-lindqvist"],
+      "submittedDayOffset": 19,
+      "answers": { "prior_speaking": "First time" },
+      "storyNote": "STORYLINE: rejected — thin abstract, single data point, and we ran a similar talk last year."
+    },
+    {
+      "key": "agile-is-dead",
+      "title": "Agile Is Dead: A Manifesto",
+      "abstract": "A call to abandon agile ceremonies in favour of something the speaker describes as flow-native delivery.",
+      "track": "teams",
+      "format": "talk",
+      "status": "rejected",
+      "speakers": ["sofia-marchetti"],
+      "submittedDayOffset": 20,
+      "answers": { "prior_speaking": "First time" },
+      "storyNote": "STORYLINE: rejected — no concrete system behind it. Shows the committee saying no to a hot take."
+    }
+  ]
+}

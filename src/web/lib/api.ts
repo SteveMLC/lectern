@@ -1,13 +1,23 @@
-import type { z } from "zod";
+import { z } from "zod";
 import {
   ApiError,
   CfpSubmissionRequest,
   CreateSubmissionResponse,
   EventBundle,
   EventCounts,
+  EventSummary,
   EventsListResponse,
   HealthResponse,
+  PublicScheduleResponse,
+  PublicSessionsResponse,
+  PublicSpeakersResponse,
+  ResourcePage,
+  SessionFormat,
+  Speaker,
+  SpeakerAsset,
+  SpeakerTask,
   SubmissionsListResponse,
+  TaskDefinition,
 } from "../../shared/contracts";
 
 /**
@@ -19,6 +29,31 @@ import {
  */
 
 const PASSCODE_KEY = "speakerops.organizer.passcode";
+
+const SpeakerPortalSession = z.object({
+  id: z.string(),
+  title: z.string(),
+  abstract: z.string(),
+  format: SessionFormat,
+  startsAt: z.iso.datetime({ offset: true }).nullable(),
+  endsAt: z.iso.datetime({ offset: true }).nullable(),
+  roomName: z.string().nullable(),
+});
+
+export const SpeakerPortalResponse = z.object({
+  event: EventSummary,
+  speaker: Speaker,
+  sessions: z.array(SpeakerPortalSession),
+  tasks: z.array(
+    z.object({
+      task: SpeakerTask,
+      definition: TaskDefinition,
+    }),
+  ),
+  assets: z.array(SpeakerAsset),
+  resources: z.array(ResourcePage),
+});
+export type SpeakerPortalResponse = z.infer<typeof SpeakerPortalResponse>;
 
 export function getPasscode(): string | null {
   return sessionStorage.getItem(PASSCODE_KEY);
@@ -86,6 +121,15 @@ export const apiClient = {
 
   eventBundle: (slug: string) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}`),
 
+  publicSchedule: (slug: string) =>
+    request(PublicScheduleResponse, `/api/public/events/${encodeURIComponent(slug)}/schedule`),
+
+  publicSessions: (slug: string) =>
+    request(PublicSessionsResponse, `/api/public/events/${encodeURIComponent(slug)}/sessions`),
+
+  publicSpeakers: (slug: string) =>
+    request(PublicSpeakersResponse, `/api/public/events/${encodeURIComponent(slug)}/speakers`),
+
   submitCfp: (slug: string, body: CfpSubmissionRequest) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
       method: "POST",
@@ -104,6 +148,9 @@ export const apiClient = {
     request(EventCounts, `/api/events/${encodeURIComponent(slug)}/counts`, undefined, {
       auth: true,
     }),
+
+  speakerPortal: (token: string) =>
+    request(SpeakerPortalResponse, `/api/speaker-portal/${encodeURIComponent(token)}`),
 
   /** Verifies a candidate passcode against the API without storing it first. */
   verifyPasscode: async (candidate: string): Promise<boolean> => {

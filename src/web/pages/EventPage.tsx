@@ -81,6 +81,23 @@ export function EventPage() {
           </div>
         </Card>
 
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900">Speaker portal</h2>
+              <p className="mt-1 text-sm text-zinc-600">
+                Ada Okafor's current sessions, tasks, files, and guide page.
+              </p>
+            </div>
+            <Link
+              to="/speaker/spk_ada"
+              className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+            >
+              Open demo portal
+            </Link>
+          </div>
+        </Card>
+
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Tracks

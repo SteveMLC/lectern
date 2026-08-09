@@ -1,0 +1,60 @@
+{
+  "key": "groundwork-2026",
+  "name": "Groundwork 2026",
+  "slug": "groundwork-2026",
+  "tagline": "For the people who keep the old thing running while building the new one.",
+  "description": "Groundwork is a two-day conference about the unglamorous work: legacy migrations, on-call that does not burn people out, tests for code nobody wants to touch, and the process changes that actually stick. No keynote hype. Bring war stories.",
+  "startsOn": "2026-11-05",
+  "endsOn": "2026-11-06",
+  "timezone": "America/Los_Angeles",
+  "venue": "The Machinists Hall, Portland",
+  "cfp": {
+    "title": "Groundwork 2026 — Call for Speakers",
+    "welcomeText": "We want the talk you would give to a colleague at 6pm, not the one you would give to a boardroom. Real systems, real numbers, real things that went wrong.",
+    "thankYouText": "Got it. The program committee reads everything and you will hear back by September 30 either way.",
+    "isOpen": true,
+    "closesAt": "2026-09-15T07:00:00Z"
+  },
+  "tracks": [
+    {
+      "key": "legacy",
+      "name": "Legacy & Migration",
+      "description": "Moving off the old thing without stopping the business.",
+      "color": "#b45309"
+    },
+    {
+      "key": "reliability",
+      "name": "Reliability & Operations",
+      "description": "On-call, incidents, and staying boring on purpose.",
+      "color": "#0369a1"
+    },
+    {
+      "key": "craft",
+      "name": "Craft & Codebases",
+      "description": "Tests, refactors, and code you did not write.",
+      "color": "#4d7c0f"
+    },
+    {
+      "key": "teams",
+      "name": "Teams & Process",
+      "description": "How the work gets decided, reviewed, and shipped.",
+      "color": "#7c3aed"
+    }
+  ],
+  "rooms": [
+    { "key": "foundry", "name": "The Foundry", "capacity": 350 },
+    { "key": "annex", "name": "The Annex", "capacity": 120 },
+    { "key": "workshop", "name": "Workshop Room", "capacity": 60 }
+  ],
+  "invitedSessions": [
+    {
+      "key": "sponsor-keynote",
+      "title": "Opening Keynote: Nobody Gets a Greenfield",
+      "abstract": "Sable Payments has been running the same ledger since 2009. Gwen Okonkwo on what fourteen years of incremental change taught her about ambition, and why the rewrite you are planning is probably three smaller projects.",
+      "format": "keynote",
+      "speakers": ["gwen-okonkwo"],
+      "schedule": { "day": 1, "start": "09:00", "end": "09:45", "room": "workshop" },
+      "note": "STORYLINE: sponsor keynote, never went through the CFP. Proves sessions and submissions are different things. Also deliberately booked into the 60-seat Workshop Room — a capacity mismatch a real organizer would catch."
+    }
+  ]
+}

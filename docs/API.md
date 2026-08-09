@@ -1,0 +1,74 @@
+# SpeakerOps API and Embeds
+
+SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. Public routes do not require auth and do not include speaker email addresses, review data, private tasks, or organizer notes.
+
+## Public JSON
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | Service, version, backend, D1/R2 checks |
+| GET | `/api/events` | Public event list |
+| GET | `/api/events/:slug` | Event bundle for public event and CFP pages |
+| GET | `/api/public/events/:slug/schedule` | Event schedule with slots, rooms, sessions, tracks, and public speakers |
+| GET | `/api/public/events/:slug/sessions` | Confirmed sessions with tracks and public speakers |
+| GET | `/api/public/events/:slug/speakers` | Public speaker gallery |
+| POST | `/api/events/:slug/submissions` | Public CFP proposal intake |
+
+## Organizer API
+
+Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/events/:slug/submissions` | Organizer submissions list |
+| GET | `/api/events/:slug/counts` | Dashboard counts |
+| POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
+| GET | `/api/admin/ping` | Passcode verification |
+
+Errors use one shape:
+
+```json
+{ "error": { "code": "event_not_found", "message": "No event with that slug." } }
+```
+
+## Iframe Embeds
+
+The iframe routes return standalone HTML with inline CSS and a short public cache TTL.
+
+```html
+<iframe
+  src="https://your-worker.example/api/embeds/events/horizon-2026/schedule"
+  title="Horizon Dev Summit schedule"
+  width="100%"
+  height="640"
+  loading="lazy"
+></iframe>
+```
+
+```html
+<iframe
+  src="https://your-worker.example/api/embeds/events/horizon-2026/sessions"
+  title="Horizon Dev Summit sessions"
+  width="100%"
+  height="640"
+  loading="lazy"
+></iframe>
+```
+
+```html
+<iframe
+  src="https://your-worker.example/api/embeds/events/horizon-2026/speakers"
+  title="Horizon Dev Summit speakers"
+  width="100%"
+  height="640"
+  loading="lazy"
+></iframe>
+```
+
+## Built-In Docs
+
+After local dev or deploy:
+
+- `/docs` or `/api-docs` shows the human-readable docs page in the React app.
+- `/embed-preview` renders the three live iframes for the seeded demo event.
+- `/api/docs` returns a compact machine-readable endpoint index and example snippets.

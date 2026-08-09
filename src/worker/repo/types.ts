@@ -3,10 +3,16 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  PublicScheduleResponse,
+  PublicSessionsResponse,
+  PublicSpeakersResponse,
+  ResourcePage,
   SessionFormat,
   Speaker,
   SpeakerAsset,
+  SpeakerTask,
   SubmissionListItem,
+  TaskDefinition,
 } from "../../shared/contracts";
 
 /**
@@ -25,6 +31,9 @@ export interface SpeakerOpsRepo {
 
   listEvents(): Promise<EventSummary[]>;
   getEventBySlug(slug: string): Promise<EventBundle | null>;
+  getPublicSchedule(slug: string): Promise<PublicScheduleResponse | null>;
+  getPublicSessions(slug: string): Promise<PublicSessionsResponse | null>;
+  getPublicSpeakers(slug: string): Promise<PublicSpeakersResponse | null>;
 
   /**
    * Public CFP intake. Upserts the speaker by (event, email) — a returning
@@ -37,8 +46,33 @@ export interface SpeakerOpsRepo {
   countsForEvent(eventId: string): Promise<EventCounts>;
 
   getSpeakerById(id: string): Promise<Speaker | null>;
+  getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
+}
+
+export interface SpeakerPortalBundle {
+  event: EventSummary;
+  speaker: Speaker;
+  sessions: SpeakerPortalSession[];
+  tasks: SpeakerPortalTask[];
+  assets: SpeakerAsset[];
+  resources: ResourcePage[];
+}
+
+export interface SpeakerPortalSession {
+  id: string;
+  title: string;
+  abstract: string;
+  format: SessionFormat;
+  startsAt: string | null;
+  endsAt: string | null;
+  roomName: string | null;
+}
+
+export interface SpeakerPortalTask {
+  task: SpeakerTask;
+  definition: TaskDefinition;
 }
 
 export interface CreateCfpSubmissionInput {

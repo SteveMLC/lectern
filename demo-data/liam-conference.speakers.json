@@ -1,0 +1,134 @@
+{
+  "event": "groundwork-2026",
+  "speakers": [
+    {
+      "key": "rosa-delgado",
+      "name": "Rosa Delgado",
+      "email": "rosa.delgado@meridianfreight.example",
+      "company": "Meridian Freight",
+      "title": "Principal Engineer",
+      "bio": "Rosa has spent eleven years inside a freight routing system that predates her career and will outlast it. She writes about incremental migration and refuses to use the word 'rewrite'.",
+      "location": "Chicago",
+      "socials": { "github": "rosadelgado" },
+      "tasksComplete": ["bio", "headshot", "slides", "release"],
+      "storyNote": "STORYLINE: double-booked. She is the primary on the COBOL talk and a co-speaker on the observability talk, and both land in overlapping slots on day 1."
+    },
+    {
+      "key": "kwame-asante",
+      "name": "Kwame Asante",
+      "email": "kwame@bellwethersystems.example",
+      "company": "Bellwether Systems",
+      "title": "Staff SRE",
+      "bio": "Kwame runs reliability for a platform that cannot go down during tax season. He believes most alerting is theatre and has the graphs to prove it.",
+      "location": "Accra / Remote",
+      "tasksComplete": ["bio", "slides", "release"],
+      "storyNote": "STORYLINE: missing headshot. First person the organizer chases in the comms demo."
+    },
+    {
+      "key": "hana-kobayashi",
+      "name": "Hana Kobayashi",
+      "email": "h.kobayashi@tidewaterhealth.example",
+      "company": "Tidewater Health",
+      "title": "Platform Lead",
+      "bio": "Hana rebuilt on-call at a hospital system where a pager going unanswered is not a metrics problem. She is unreasonably calm.",
+      "location": "Seattle",
+      "tasksComplete": ["bio", "headshot"],
+      "storyNote": "STORYLINE: missing slides AND release. The most-outstanding speaker on the dashboard."
+    },
+    {
+      "key": "dmitri-volkov",
+      "name": "Dmitri Volkov",
+      "email": "dvolkov@ferrousbank.example",
+      "company": "Ferrous Bank",
+      "title": "Principal Architect",
+      "bio": "",
+      "location": "Toronto",
+      "tasksComplete": ["headshot", "slides", "release"],
+      "storyNote": "STORYLINE: accepted with an empty bio. Shows the portal nudging someone to write one."
+    },
+    {
+      "key": "amara-nwosu",
+      "name": "Amara Nwosu",
+      "email": "amara.nwosu@kestrellogistics.example",
+      "company": "Kestrel Logistics",
+      "title": "Engineering Manager",
+      "bio": "Amara runs incident review for a fleet operations team and has opinions about blameless postmortems that are more blameless in theory than practice.",
+      "location": "Lagos",
+      "socials": { "linkedin": "amaranwosu" },
+      "tasksComplete": ["bio", "headshot", "slides", "release"]
+    },
+    {
+      "key": "sean-brennan",
+      "name": "Sean Brennan",
+      "email": "sean.brennan@oaklineretail.example",
+      "company": "Oakline Retail",
+      "title": "Staff Engineer",
+      "bio": "Sean writes tests for code that has no tests, which he describes as archaeology with a deadline.",
+      "location": "Dublin",
+      "tasksComplete": ["bio", "headshot", "slides"],
+      "storyNote": "STORYLINE: missing recording release. His session is in the recorded room, so this one actually blocks something."
+    },
+    {
+      "key": "priyanka-rao",
+      "name": "Priyanka Rao",
+      "email": "priyanka@longshoredata.example",
+      "company": "Longshore Data",
+      "title": "Director of Engineering",
+      "bio": "Priyanka has migrated three companies between data warehouses and would like to stop being the person who does that.",
+      "location": "Bengaluru",
+      "tasksComplete": []
+    },
+    {
+      "key": "tobias-lindqvist",
+      "name": "Tobias Lindqvist",
+      "email": "tobias@nordhavenenergy.example",
+      "company": "Nordhaven Energy",
+      "title": "Systems Engineer",
+      "bio": "Tobias cut a forty-minute build to four and has been dining out on it ever since. Deservedly.",
+      "location": "Stockholm",
+      "tasksComplete": ["bio", "release"],
+      "storyNote": "STORYLINE: the late-slides persona. Missing headshot and slides two weeks out."
+    },
+    {
+      "key": "mei-lin-chen",
+      "name": "Mei-Lin Chen",
+      "email": "meilin.chen@copperfieldins.example",
+      "company": "Copperfield Insurance",
+      "title": "Tech Lead",
+      "bio": "Mei-Lin wrote her company's deprecation policy after an internal API vanished mid-quarter and took a claims pipeline with it.",
+      "location": "Taipei",
+      "tasksComplete": ["bio", "headshot", "slides", "release"]
+    },
+    {
+      "key": "jamal-carter",
+      "name": "Jamal Carter",
+      "email": "jcarter@ironwoodmfg.example",
+      "company": "Ironwood Manufacturing",
+      "title": "DevOps Lead",
+      "bio": "Jamal onboards engineers onto a codebase older than most of them and has turned it into a repeatable process.",
+      "location": "Detroit",
+      "tasksComplete": ["bio", "headshot", "slides", "release"]
+    },
+    {
+      "key": "sofia-marchetti",
+      "name": "Sofia Marchetti",
+      "email": "sofia@vantagemedia.example",
+      "company": "Vantage Media",
+      "title": "Principal Designer",
+      "bio": "Sofia designs internal tools nobody chose to use and everybody has to.",
+      "location": "Milan",
+      "tasksComplete": []
+    },
+    {
+      "key": "gwen-okonkwo",
+      "name": "Gwen Okonkwo",
+      "email": "gwen.okonkwo@sablepayments.example",
+      "company": "Sable Payments",
+      "title": "VP Engineering",
+      "bio": "Gwen has run engineering at Sable Payments since the ledger was a single Postgres box. It is still, in her words, mostly a single Postgres box.",
+      "location": "London",
+      "tasksComplete": ["bio", "headshot", "slides", "release"],
+      "storyNote": "STORYLINE: sponsor keynote speaker. Never submitted to the CFP — added directly by the organizer."
+    }
+  ]
+}

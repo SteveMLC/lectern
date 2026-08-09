@@ -66,6 +66,7 @@ export function CfpPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [portalToken, setPortalToken] = useState<string | null>(null);
 
   const ruleCtx = useMemo(
     () => ({ format: form.format, answers: form.answers }),
@@ -119,6 +120,14 @@ export function CfpPage() {
             <Link to={`/e/${event.slug}`} className="text-sm font-medium text-accent hover:underline">
               Back to {event.name}
             </Link>
+            {portalToken ? (
+              <Link
+                to={`/speaker/${portalToken}`}
+                className="text-sm font-medium text-accent hover:underline"
+              >
+                Open speaker portal
+              </Link>
+            ) : null}
           </div>
         </Card>
       </div>
@@ -168,6 +177,7 @@ export function CfpPage() {
     try {
       const res = await apiClient.submitCfp(slug, parsed.success ? parsed.data : payload);
       setSubmittedId(res.submission.id);
+      setPortalToken(res.submission.speakers[0]?.speakerId ?? null);
     } catch (err) {
       setServerError(
         err instanceof ApiRequestError ? err.message : "Submission failed. Please try again.",

@@ -2,7 +2,7 @@
 
 **CFP to published agenda, without the enterprise tax.**
 
-SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, submission review rounds, acceptance-to-session flow, drag-and-drop agenda with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule/speaker pages.
+SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, submission review rounds, acceptance-to-session flow, drag-and-drop agenda with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
 Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and an Airtable adapter (behind a repository boundary) mirrors the live operational record for teams that run on Airtable.
 
@@ -14,10 +14,12 @@ Scaffold + golden path. Working today:
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts and the submissions table with status filters.
 - **R2 uploads**: speaker asset upload/download round trip as first-class records.
+- **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
+- **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking) and idempotent acceptance-to-session conversion.
 
-The remaining workflows (reviews UI, agenda board, speaker portal, communications, embeds, Accelevents/Airtable sync) build on these contracts — see Roadmap.
+The remaining workflows (reviews UI, agenda board, deeper speaker portal polish, communications, Accelevents/Airtable sync) build on these contracts — see Roadmap.
 
 ## Stack
 
@@ -48,6 +50,12 @@ pnpm dev:web                       # terminal 2: Vite dev server, proxies /api t
 
 Organizer console: open `/admin` and use the passcode from `.dev.vars` (`speakerops-dev` by default).
 
+Public docs and embeds:
+
+- `/docs` or `/api-docs` — endpoint reference and embed snippets.
+- `/embed-preview` — live schedule, sessions, and speakers iframes for the seeded event.
+- `/api/docs` — machine-readable endpoint index.
+
 Checks:
 
 ```bash
@@ -76,6 +84,8 @@ pnpm deploy                        # vite build && wrangler deploy
 
 The deployed URL serves the app, the API, and the seeded demo event immediately.
 
+After deploy, replace the host in any iframe snippet with the deployed Worker URL.
+
 ## API
 
 The JSON API the app uses is the public API.
@@ -85,6 +95,12 @@ The JSON API the app uses is the public API.
 | GET | `/api/health` | — | Health, version, backend, DB/R2 checks |
 | GET | `/api/events` | — | List events |
 | GET | `/api/events/:slug` | — | Event bundle: event, tracks, rooms, CFP form + fields + rules |
+| GET | `/api/public/events/:slug/schedule` | — | Public schedule JSON |
+| GET | `/api/public/events/:slug/sessions` | — | Public sessions JSON |
+| GET | `/api/public/events/:slug/speakers` | — | Public speaker gallery JSON |
+| GET | `/api/embeds/events/:slug/schedule` | — | Iframe schedule HTML |
+| GET | `/api/embeds/events/:slug/sessions` | — | Iframe sessions HTML |
+| GET | `/api/embeds/events/:slug/speakers` | — | Iframe speaker gallery HTML |
 | POST | `/api/events/:slug/submissions` | — | Submit a CFP proposal (validated, conditional-rule aware) |
 | GET | `/api/events/:slug/submissions` | Bearer passcode | Organizer submissions list |
 | GET | `/api/events/:slug/counts` | Bearer passcode | Dashboard counts |
@@ -93,6 +109,8 @@ The JSON API the app uses is the public API.
 | GET | `/api/admin/ping` | Bearer passcode | Passcode verification (204) |
 
 Errors are uniform: `{ "error": { "code", "message", "issues?" } }`.
+
+Full API and embed details live in [`docs/API.md`](docs/API.md).
 
 ## Domain invariants
 
@@ -108,14 +126,40 @@ These are load-bearing. Do not weaken them without the integration owner's sign-
 
 ## Demo data
 
-`seed/seed.sql` is deterministic (fixed ids and timestamps) and doubles as the reset: 1 event (Horizon Dev Summit 2026), 4 tracks, 3 rooms, 8 speakers, 10 submissions across the full status spread, 2 accepted-with-lineage sessions, 2 direct sessions, and an agenda that contains one room double-booking and one double-booked speaker for the conflict engine to find.
+`seed/seed.sql` is deterministic (fixed ids and timestamps) and doubles as the reset: 1 event (Horizon Dev Summit 2026), 4 tracks, 3 rooms, 8 speakers, 10 submissions across the full status spread, 2 accepted-with-lineage sessions, 2 direct sessions, and an agenda that contains one room double-booking and one double-booked speaker for the conflict engine to find. See [`docs/DEMO_DATA.md`](docs/DEMO_DATA.md).
+
+### Loadable conferences
+
+Richer, hand-authored conferences live in [`demo-data/`](demo-data/) as plain JSON that anyone can edit without touching application code. Records reference each other by readable keys (`"rosa-delgado"`), and the loader derives stable database ids from them.
+
+```bash
+pnpm demo:check     # validate the files and print what they will produce
+```
+
+Then open **`/demo`** in the running app and press **Load**. Loading is idempotent — it deletes that conference and re-inserts it from the files — so the same button is also the reset, which matters because judges will type things into the demo.
+
+The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions across every status, 10 sessions (9 from accepted submissions with lineage kept, 1 sponsor keynote added directly), two deliberate schedule conflicts, and five speakers with outstanding onboarding tasks. The reasoning behind each awkward record is in [`demo-data/liam-conference.storylines.md`](demo-data/liam-conference.storylines.md).
 
 ## Roadmap (post-scaffold lanes)
 
 - **Lane A — CFP + review:** form builder UI, reviewer assignments, two scoring rounds, accept/reject decisions.
 - **Lane B — sessions + agenda + Accelevents:** acceptance flow UI, direct-add sessions, drag-and-drop agenda with the conflict engine, list/day/week views, Accelevents mapping preview + sync log + CSV fallback.
 - **Lane C — speaker operations:** magic-link portal, profile editing, R2 headshot/slides uploads, task board, reminders with real `.ics` files (simulated outbox by default, Resend behind a secret).
-- **Lane D — public surface + hardening:** dashboard metrics, schedule/speaker-gallery embeds, API docs, Airtable live persistence, demo reset UI, accessibility and performance passes.
+- **Lane D — public surface + hardening:** dashboard metrics, Airtable live persistence, demo reset UI, accessibility and performance passes.
+
+## Contributing
+
+You do not need to know Cloudflare, Hono, or D1 to help.
+
+- **Demo data and storylines** — edit JSON in [`demo-data/`](demo-data/), run `pnpm demo:check`, load it at `/demo`. Start with [`demo-data/README.md`](demo-data/README.md).
+- **QA** — use the app as a speaker and as an organizer, and open a `speaker-qa` issue for anything confusing.
+- **Copy and empty states** — open a `ux-polish` issue with the current wording and your version.
+
+Issue templates for each of these live in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/).
+
+## Credits
+
+Demo data and QA: Liam.
 
 ## License
 

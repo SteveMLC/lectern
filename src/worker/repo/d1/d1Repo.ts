@@ -6,17 +6,28 @@ import type {
   EventSummary,
   Form,
   FormField,
+  PublicScheduleResponse,
+  PublicSession,
+  PublicSessionsResponse,
+  PublicSessionSpeaker,
+  PublicSpeaker,
+  PublicSpeakersResponse,
+  ResourcePage,
   Room,
   Speaker,
   SpeakerAsset,
+  SpeakerTask,
   SubmissionListItem,
   SubmissionSpeakerView,
   SubmissionStatus,
+  TaskDefinition,
   Track,
 } from "../../../shared/contracts";
 import type {
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
+  SpeakerPortalBundle,
+  SpeakerPortalSession,
   SpeakerOpsRepo,
 } from "../types";
 
@@ -144,6 +155,79 @@ interface SpeakerAssetRow {
   uploaded_at: string;
 }
 
+interface PublicSessionRow {
+  id: string;
+  title: string;
+  abstract: string;
+  format: string;
+  status: string;
+  origin: string;
+  track_id: string | null;
+  track_name: string | null;
+  track_color: string | null;
+}
+
+interface PublicSessionSpeakerRow {
+  session_id: string;
+  speaker_id: string;
+  role: string;
+  sort_order: number;
+  name: string;
+  company: string | null;
+  title: string | null;
+}
+
+interface PublicScheduleSlotRow {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  room_id: string | null;
+  room_name: string | null;
+  session_id: string;
+}
+
+interface SpeakerPortalSessionRow {
+  id: string;
+  title: string;
+  abstract: string;
+  format: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  room_name: string | null;
+}
+
+interface TaskDefinitionRow {
+  id: string;
+  event_id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  applies_to: string;
+  due_at: string | null;
+  sort_order: number;
+}
+
+interface SpeakerTaskRow {
+  id: string;
+  event_id: string;
+  speaker_id: string;
+  task_definition_id: string;
+  status: string;
+  completed_at: string | null;
+  updated_at: string;
+}
+
+interface ResourcePageRow {
+  id: string;
+  event_id: string;
+  slug: string;
+  title: string;
+  body_md: string;
+  embed_html: string | null;
+  is_published: number;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Mappers (snake_case rows -> camelCase contracts)
 // ---------------------------------------------------------------------------
@@ -171,6 +255,18 @@ function mapEvent(r: EventRow): Event {
     websiteUrl: r.website_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+function mapEventSummary(r: EventRow): EventSummary {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    tagline: r.tagline,
+    startsOn: r.starts_on,
+    endsOn: r.ends_on,
+    timezone: r.timezone,
   };
 }
 
@@ -255,6 +351,47 @@ function mapSpeaker(r: SpeakerRow): Speaker {
   };
 }
 
+function mapPublicSpeaker(r: SpeakerRow): PublicSpeaker {
+  return {
+    id: r.id,
+    name: r.name,
+    company: r.company,
+    title: r.title,
+    bio: r.bio,
+    location: r.location,
+    socials: parseJson<PublicSpeaker["socials"]>(r.socials_json, null),
+  };
+}
+
+function mapPublicSessionSpeaker(r: PublicSessionSpeakerRow): PublicSessionSpeaker {
+  return {
+    id: r.speaker_id,
+    name: r.name,
+    company: r.company,
+    title: r.title,
+    role: r.role as PublicSessionSpeaker["role"],
+    sortOrder: r.sort_order,
+  };
+}
+
+function mapPublicSession(
+  r: PublicSessionRow,
+  speakers: PublicSessionSpeaker[],
+): PublicSession {
+  return {
+    id: r.id,
+    title: r.title,
+    abstract: r.abstract,
+    format: r.format as PublicSession["format"],
+    status: r.status as PublicSession["status"],
+    origin: r.origin as PublicSession["origin"],
+    track: r.track_id
+      ? { id: r.track_id, name: r.track_name ?? "Track", color: r.track_color }
+      : null,
+    speakers,
+  };
+}
+
 function mapAsset(r: SpeakerAssetRow): SpeakerAsset {
   return {
     id: r.id,
@@ -265,6 +402,56 @@ function mapAsset(r: SpeakerAssetRow): SpeakerAsset {
     sizeBytes: r.size_bytes,
     r2Key: r.r2_key,
     uploadedAt: r.uploaded_at,
+  };
+}
+
+function mapPortalSession(r: SpeakerPortalSessionRow): SpeakerPortalSession {
+  return {
+    id: r.id,
+    title: r.title,
+    abstract: r.abstract,
+    format: r.format as SpeakerPortalSession["format"],
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
+    roomName: r.room_name,
+  };
+}
+
+function mapTaskDefinition(r: TaskDefinitionRow): TaskDefinition {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    key: r.key,
+    label: r.label,
+    description: r.description,
+    appliesTo: r.applies_to as TaskDefinition["appliesTo"],
+    dueAt: r.due_at,
+    sortOrder: r.sort_order,
+  };
+}
+
+function mapSpeakerTask(r: SpeakerTaskRow): SpeakerTask {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    speakerId: r.speaker_id,
+    taskDefinitionId: r.task_definition_id,
+    status: r.status as SpeakerTask["status"],
+    completedAt: r.completed_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function mapResourcePage(r: ResourcePageRow): ResourcePage {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    slug: r.slug,
+    title: r.title,
+    bodyMd: r.body_md,
+    embedHtml: r.embed_html,
+    isPublished: r.is_published === 1,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -306,6 +493,83 @@ const ALL_STATUSES: SubmissionStatus[] = [
 
 export class D1Repo implements SpeakerOpsRepo {
   constructor(private readonly db: D1Database) {}
+
+  private async getPublicProgram(slug: string): Promise<{
+    event: EventRow;
+    sessions: PublicSession[];
+    slots: PublicScheduleResponse["slots"];
+  } | null> {
+    const event = await this.db
+      .prepare("SELECT * FROM events WHERE slug = ?")
+      .bind(slug)
+      .first<EventRow>();
+    if (!event) return null;
+
+    const [sessionRes, speakerRes, slotRes] = await this.db.batch([
+      this.db
+        .prepare(
+          `SELECT s.id, s.title, s.abstract, s.format, s.status, s.origin,
+                  t.id AS track_id, t.name AS track_name, t.color AS track_color
+           FROM sessions s
+           LEFT JOIN tracks t ON t.id = s.track_id
+           WHERE s.event_id = ? AND s.status = 'confirmed'
+           ORDER BY COALESCE(t.sort_order, 999), s.title`,
+        )
+        .bind(event.id),
+      this.db
+        .prepare(
+          `SELECT ss.session_id, ss.speaker_id, ss.role, ss.sort_order,
+                  sp.name, sp.company, sp.title
+           FROM session_speakers ss
+           JOIN sessions s ON s.id = ss.session_id
+           JOIN speakers sp ON sp.id = ss.speaker_id
+           WHERE s.event_id = ? AND s.status = 'confirmed'
+           ORDER BY ss.session_id, ss.sort_order`,
+        )
+        .bind(event.id),
+      this.db
+        .prepare(
+          `SELECT a.id, a.starts_at, a.ends_at, a.room_id, r.name AS room_name, a.session_id
+           FROM agenda_slots a
+           JOIN sessions s ON s.id = a.session_id
+           LEFT JOIN rooms r ON r.id = a.room_id
+           WHERE a.event_id = ? AND s.status = 'confirmed'
+           ORDER BY a.starts_at, COALESCE(r.sort_order, 999), s.title`,
+        )
+        .bind(event.id),
+    ]);
+
+    const speakerRows = (speakerRes?.results ?? []) as unknown as PublicSessionSpeakerRow[];
+    const speakersBySession = new Map<string, PublicSessionSpeaker[]>();
+    for (const row of speakerRows) {
+      const list = speakersBySession.get(row.session_id) ?? [];
+      list.push(mapPublicSessionSpeaker(row));
+      speakersBySession.set(row.session_id, list);
+    }
+
+    const sessions = ((sessionRes?.results ?? []) as unknown as PublicSessionRow[]).map((row) =>
+      mapPublicSession(row, speakersBySession.get(row.id) ?? []),
+    );
+    const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+
+    const slots = ((slotRes?.results ?? []) as unknown as PublicScheduleSlotRow[]).flatMap(
+      (row) => {
+        const session = sessionsById.get(row.session_id);
+        if (!session) return [];
+        return [
+          {
+            id: row.id,
+            startsAt: row.starts_at,
+            endsAt: row.ends_at,
+            room: row.room_id ? { id: row.room_id, name: row.room_name ?? "Room" } : null,
+            session,
+          },
+        ];
+      },
+    );
+
+    return { event, sessions, slots };
+  }
 
   async health(): Promise<boolean> {
     const row = await this.db.prepare("SELECT 1 AS ok").first<{ ok: number }>();
@@ -368,6 +632,55 @@ export class D1Repo implements SpeakerOpsRepo {
       tracks: tracks.map(mapTrack),
       rooms: rooms.map(mapRoom),
       cfp,
+    };
+  }
+
+  async getPublicSchedule(slug: string): Promise<PublicScheduleResponse | null> {
+    const program = await this.getPublicProgram(slug);
+    if (!program) return null;
+    return {
+      event: mapEventSummary(program.event),
+      timezone: program.event.timezone,
+      slots: program.slots,
+    };
+  }
+
+  async getPublicSessions(slug: string): Promise<PublicSessionsResponse | null> {
+    const program = await this.getPublicProgram(slug);
+    if (!program) return null;
+    return {
+      event: mapEventSummary(program.event),
+      sessions: program.sessions,
+    };
+  }
+
+  async getPublicSpeakers(slug: string): Promise<PublicSpeakersResponse | null> {
+    const event = await this.db
+      .prepare("SELECT * FROM events WHERE slug = ?")
+      .bind(slug)
+      .first<EventRow>();
+    if (!event) return null;
+
+    const { results } = await this.db
+      .prepare(
+        `SELECT sp.*
+         FROM speakers sp
+         WHERE EXISTS (
+           SELECT 1
+           FROM session_speakers ss
+           JOIN sessions s ON s.id = ss.session_id
+           WHERE ss.speaker_id = sp.id
+             AND s.event_id = ?
+             AND s.status = 'confirmed'
+         )
+         ORDER BY sp.name`,
+      )
+      .bind(event.id)
+      .all<SpeakerRow>();
+
+    return {
+      event: mapEventSummary(event),
+      speakers: results.map(mapPublicSpeaker),
     };
   }
 
@@ -545,6 +858,101 @@ export class D1Repo implements SpeakerOpsRepo {
       .bind(id)
       .first<SpeakerRow>();
     return row ? mapSpeaker(row) : null;
+  }
+
+  async getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null> {
+    // Demo magic-link stub: until Lane C/D adds real one-time tokens, the token
+    // is the seeded speaker id (for example, spk_ada).
+    const speaker = await this.db
+      .prepare("SELECT * FROM speakers WHERE id = ?")
+      .bind(token)
+      .first<SpeakerRow>();
+    if (!speaker) return null;
+
+    const [eventRes, sessionsRes, tasksRes, assetsRes, resourcesRes] = await this.db.batch([
+      this.db
+        .prepare(
+          "SELECT id, slug, name, tagline, starts_on, ends_on, timezone FROM events WHERE id = ?",
+        )
+        .bind(speaker.event_id),
+      this.db
+        .prepare(
+          `SELECT ses.id, ses.title, ses.abstract, ses.format,
+                  slot.starts_at, slot.ends_at, rooms.name AS room_name
+           FROM session_speakers ss
+           JOIN sessions ses ON ses.id = ss.session_id
+           LEFT JOIN agenda_slots slot ON slot.session_id = ses.id
+           LEFT JOIN rooms ON rooms.id = slot.room_id
+           WHERE ss.speaker_id = ?
+           ORDER BY slot.starts_at IS NULL, slot.starts_at, ses.title`,
+        )
+        .bind(speaker.id),
+      this.db
+        .prepare(
+          `SELECT st.*, td.id AS def_id, td.event_id AS def_event_id, td.key AS def_key,
+                  td.label AS def_label, td.description AS def_description,
+                  td.applies_to AS def_applies_to, td.due_at AS def_due_at,
+                  td.sort_order AS def_sort_order
+           FROM speaker_tasks st
+           JOIN task_definitions td ON td.id = st.task_definition_id
+           WHERE st.speaker_id = ?
+           ORDER BY td.sort_order`,
+        )
+        .bind(speaker.id),
+      this.db.prepare("SELECT * FROM speaker_assets WHERE speaker_id = ? ORDER BY uploaded_at DESC").bind(speaker.id),
+      this.db
+        .prepare(
+          "SELECT * FROM resource_pages WHERE event_id = ? AND is_published = 1 ORDER BY title",
+        )
+        .bind(speaker.event_id),
+    ]);
+
+    const event = ((eventRes?.results ?? []) as unknown as EventRow[])[0];
+    if (!event) return null;
+
+    const tasks = ((tasksRes?.results ?? []) as unknown as (SpeakerTaskRow & {
+      def_id: string;
+      def_event_id: string;
+      def_key: string;
+      def_label: string;
+      def_description: string | null;
+      def_applies_to: string;
+      def_due_at: string | null;
+      def_sort_order: number;
+    })[]).map((row) => ({
+      task: mapSpeakerTask(row),
+      definition: mapTaskDefinition({
+        id: row.def_id,
+        event_id: row.def_event_id,
+        key: row.def_key,
+        label: row.def_label,
+        description: row.def_description,
+        applies_to: row.def_applies_to,
+        due_at: row.def_due_at,
+        sort_order: row.def_sort_order,
+      }),
+    }));
+
+    return {
+      event: {
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        tagline: event.tagline,
+        startsOn: event.starts_on,
+        endsOn: event.ends_on,
+        timezone: event.timezone,
+      },
+      speaker: mapSpeaker(speaker),
+      sessions: ((sessionsRes?.results ?? []) as unknown as SpeakerPortalSessionRow[]).map(
+        mapPortalSession,
+      ),
+      tasks,
+      assets: ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset),
+      resources: ((resourcesRes?.results ?? []) as unknown as ResourcePageRow[]).map(
+        mapResourcePage,
+      ),
+    };
   }
 
   async createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

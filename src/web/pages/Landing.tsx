@@ -48,6 +48,12 @@ export function Landing() {
             <Link to={`/e/${demoSlug}`} className="hover:text-zinc-900">
               Demo event
             </Link>
+            <Link to="/docs" className="hover:text-zinc-900">
+              API docs
+            </Link>
+            <Link to="/embed-preview" className="hover:text-zinc-900">
+              Embeds
+            </Link>
             <Link
               to="/admin"
               className="rounded-lg bg-accent px-3 py-1.5 font-medium text-white hover:bg-accent-strong"

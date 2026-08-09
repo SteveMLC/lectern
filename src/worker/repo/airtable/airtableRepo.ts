@@ -2,6 +2,9 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  PublicScheduleResponse,
+  PublicSessionsResponse,
+  PublicSpeakersResponse,
   Speaker,
   SpeakerAsset,
   SubmissionListItem,
@@ -9,6 +12,7 @@ import type {
 import type {
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
+  SpeakerPortalBundle,
   SpeakerOpsRepo,
 } from "../types";
 
@@ -83,6 +87,18 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("getEventBySlug");
   }
 
+  async getPublicSchedule(_slug: string): Promise<PublicScheduleResponse | null> {
+    throw new AirtableNotWiredError("getPublicSchedule");
+  }
+
+  async getPublicSessions(_slug: string): Promise<PublicSessionsResponse | null> {
+    throw new AirtableNotWiredError("getPublicSessions");
+  }
+
+  async getPublicSpeakers(_slug: string): Promise<PublicSpeakersResponse | null> {
+    throw new AirtableNotWiredError("getPublicSpeakers");
+  }
+
   async createCfpSubmission(_input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     throw new AirtableNotWiredError("createCfpSubmission");
   }
@@ -101,6 +117,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async getSpeakerById(_id: string): Promise<Speaker | null> {
     throw new AirtableNotWiredError("getSpeakerById");
+  }
+
+  async getSpeakerPortalByToken(_token: string): Promise<SpeakerPortalBundle | null> {
+    throw new AirtableNotWiredError("getSpeakerPortalByToken");
   }
 
   async createSpeakerAsset(_input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
+  AgendaSlot,
   ConditionalRule,
   Event,
   Form,
   FormField,
   Room,
+  Session,
   SessionFormat,
   SpeakerAsset,
   SpeakerRole,
@@ -83,6 +85,74 @@ export const EventBundle = z.object({
     .nullable(),
 });
 export type EventBundle = z.infer<typeof EventBundle>;
+
+// ---------------------------------------------------------------------------
+// Public embeds
+// ---------------------------------------------------------------------------
+
+export const PublicSpeaker = z.object({
+  id: z.string(),
+  name: z.string(),
+  company: z.string().nullable(),
+  title: z.string().nullable(),
+  bio: z.string().nullable(),
+  location: z.string().nullable(),
+  socials: z.record(z.string(), z.string()).nullable(),
+});
+export type PublicSpeaker = z.infer<typeof PublicSpeaker>;
+
+export const PublicSessionSpeaker = PublicSpeaker.pick({
+  id: true,
+  name: true,
+  company: true,
+  title: true,
+}).extend({
+  role: SpeakerRole,
+  sortOrder: z.number().int(),
+});
+export type PublicSessionSpeaker = z.infer<typeof PublicSessionSpeaker>;
+
+export const PublicSession = Session.pick({
+  id: true,
+  title: true,
+  abstract: true,
+  format: true,
+  status: true,
+  origin: true,
+}).extend({
+  track: Track.pick({ id: true, name: true, color: true }).nullable(),
+  speakers: z.array(PublicSessionSpeaker),
+});
+export type PublicSession = z.infer<typeof PublicSession>;
+
+export const PublicScheduleSlot = AgendaSlot.pick({
+  id: true,
+  startsAt: true,
+  endsAt: true,
+}).extend({
+  room: Room.pick({ id: true, name: true }).nullable(),
+  session: PublicSession,
+});
+export type PublicScheduleSlot = z.infer<typeof PublicScheduleSlot>;
+
+export const PublicScheduleResponse = z.object({
+  event: EventSummary,
+  timezone: z.string(),
+  slots: z.array(PublicScheduleSlot),
+});
+export type PublicScheduleResponse = z.infer<typeof PublicScheduleResponse>;
+
+export const PublicSessionsResponse = z.object({
+  event: EventSummary,
+  sessions: z.array(PublicSession),
+});
+export type PublicSessionsResponse = z.infer<typeof PublicSessionsResponse>;
+
+export const PublicSpeakersResponse = z.object({
+  event: EventSummary,
+  speakers: z.array(PublicSpeaker),
+});
+export type PublicSpeakersResponse = z.infer<typeof PublicSpeakersResponse>;
 
 // ---------------------------------------------------------------------------
 // CFP submission (public)

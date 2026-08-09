@@ -11,6 +11,7 @@
     "build": "vite build",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "test": "vitest run",
+    "demo:check": "vitest run src/shared/domain/demoData.check.test.ts --reporter=verbose",
     "db:migrate:local": "wrangler d1 migrations apply speakerops-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply speakerops-db --remote",
     "db:seed:local": "wrangler d1 execute speakerops-db --local --file seed/seed.sql",

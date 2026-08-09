@@ -13,6 +13,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
     "types": ["vite/client"]
   },
   "include": ["src/web", "src/shared"]

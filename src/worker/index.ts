@@ -2,16 +2,21 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { errorResponse } from "./lib/http";
 import { api } from "./routes/api";
+import { demoApi } from "./routes/demo";
+import { demoPage } from "./routes/demoPage";
 
 /**
  * One Worker serves everything:
  *  - /api/*  -> Hono JSON API
+ *  - /demo   -> server-rendered operator page for loading demo datasets
  *  - all other GET/HEAD -> static assets; unknown paths fall back to the SPA
  *    shell via the assets binding's single-page-application handling.
  */
 const app = new Hono<{ Bindings: Env }>();
 
+app.route("/api/demo", demoApi);
 app.route("/api", api);
+app.route("/", demoPage);
 
 // Unmatched /api paths get JSON 404s, never the SPA shell.
 app.all("/api/*", () => errorResponse(404, "not_found", "No such API route."));

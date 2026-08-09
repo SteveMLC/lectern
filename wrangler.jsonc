@@ -6,7 +6,12 @@
   "assets": {
     "directory": "dist/client",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Assets are served BEFORE the Worker by default, and SPA mode answers any
+    // browser navigation with index.html. Worker-rendered pages must be listed
+    // here or the SPA shell silently wins for real browsers (curl still sees
+    // the Worker, which makes this a nasty one to catch).
+    "run_worker_first": ["/demo", "/api/*"]
   },
   "d1_databases": [
     {
