@@ -3,6 +3,7 @@ import {
   ApiError,
   AgendaSlotRequest,
   AssetKind,
+  AirtableStatusResponse,
   CfpSubmissionRequest,
   CommunicationKind,
   CommunicationPreviewResponse,
@@ -139,6 +140,11 @@ export const apiClient = {
 
   counts: (slug: string) =>
     request(EventCounts, `/api/events/${encodeURIComponent(slug)}/counts`, undefined, {
+      auth: true,
+    }),
+
+  airtableStatus: () =>
+    request(AirtableStatusResponse, "/api/integrations/airtable/status", undefined, {
       auth: true,
     }),
 

@@ -3,6 +3,7 @@ import pkg from "../../../package.json";
 import {
   AssetKind,
   AgendaSlotRequest,
+  type AirtableStatusResponse,
   CfpSubmissionRequest,
   CommunicationKind,
   type CommunicationPreviewResponse,
@@ -34,6 +35,7 @@ import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
 import { errorResponse } from "../lib/http";
 import { createRepo } from "../repo/factory";
+import { AirtableRepo } from "../repo/airtable/airtableRepo";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -338,6 +340,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
+      { method: "GET", path: "/integrations/airtable/status", auth: "organizer", purpose: "Airtable proof connectivity, rate guard, and D1 fallback status." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
       { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
@@ -504,6 +507,28 @@ api.post("/speaker-portal/:token/assets", async (c) => {
 // ---------------------------------------------------------------------------
 
 api.get("/admin/ping", organizerAuth, (c) => c.body(null, 204));
+
+api.get("/integrations/airtable/status", organizerAuth, async (c) => {
+  const configured = Boolean(c.env.AIRTABLE_TOKEN && c.env.AIRTABLE_BASE_ID);
+  let connected = false;
+  if (configured) {
+    connected = await new AirtableRepo({
+      token: c.env.AIRTABLE_TOKEN!,
+      baseId: c.env.AIRTABLE_BASE_ID!,
+    }).health();
+  }
+  const body: AirtableStatusResponse = {
+    configured,
+    active: c.env.DATA_BACKEND === "airtable",
+    connected,
+    readTables: ["Events", "Speakers"],
+    writeTable: "Messages",
+    minimumRequestSpacingMs: 210,
+    cacheTtlSeconds: 15,
+    fallback: "d1",
+  };
+  return c.json(body);
+});
 
 api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   const repo = createRepo(c.env);

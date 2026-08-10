@@ -4,7 +4,7 @@
 # Passcode for the organizer console (required).
 ORGANIZER_PASSCODE=speakerops-dev
 
-# Optional — Airtable live persistence (Lane D wires this).
+# Optional — Airtable proof adapter (see docs/AIRTABLE.md).
 # AIRTABLE_TOKEN=
 # AIRTABLE_BASE_ID=
 

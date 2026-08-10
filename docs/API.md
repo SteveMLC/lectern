@@ -33,6 +33,7 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Create or move a session placement |
 | GET | `/api/events/:slug/communications/preview` | Render task-reminder or session-update email |
 | POST | `/api/events/:slug/communications/simulate` | Persist a simulated send and delivery receipt |
+| GET | `/api/integrations/airtable/status` | Airtable proof connectivity, throttling, and D1 fallback state |
 | POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
 | GET | `/api/admin/ping` | Passcode verification |
 

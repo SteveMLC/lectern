@@ -7,11 +7,11 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   ASSETS: Fetcher;
-  /** "d1" (default) or "airtable" once the Airtable adapter is wired (Lane D). */
+  /** "d1" (default/full app) or "airtable" for the documented proof workflow. */
   DATA_BACKEND?: string;
   /** Secret. Required for every /api organizer route. */
   ORGANIZER_PASSCODE?: string;
-  /** Secrets for the Airtable boundary (unused until Lane D wires it). */
+  /** Secrets for the Airtable proof adapter; never exposed client-side. */
   AIRTABLE_TOKEN?: string;
   AIRTABLE_BASE_ID?: string;
 }

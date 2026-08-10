@@ -4,6 +4,7 @@ import { Agenda } from "./pages/admin/Agenda";
 import { Communications } from "./pages/admin/Communications";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
+import { Integrations } from "./pages/admin/Integrations";
 import { Reviews } from "./pages/admin/Reviews";
 import { Submissions } from "./pages/admin/Submissions";
 import { ApiDocs } from "./pages/ApiDocs";
@@ -51,16 +52,7 @@ export function App() {
             />
           }
         />
-        <Route
-          path="integrations"
-          element={
-            <ComingSoon
-              title="Integrations"
-              lane="Lanes B + D"
-              body="Accelevents one-way push with mapping preview, idempotent sync log, and CSV fallback; Airtable live persistence behind the repository adapter."
-            />
-          }
-        />
+        <Route path="integrations" element={<Integrations />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

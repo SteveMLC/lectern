@@ -4,7 +4,7 @@
 
 SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, submission review rounds, acceptance-to-session flow, drag-and-drop agenda with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
-Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and an Airtable adapter (behind a repository boundary) mirrors the live operational record for teams that run on Airtable.
+Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe Airtable proof adapter reads event/speaker operations and writes communication receipts behind the same repository boundary.
 
 ## Status
 
@@ -15,12 +15,13 @@ Scaffold + golden path. Working today:
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and a room-based agenda with live room/speaker conflicts.
 - **Speaker portal**: magic-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
+- **Airtable proof**: cached Events/Speakers reads, Messages writes, 5 req/s protection, 429 retries, explicit D1 fallback, and an organizer status screen.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
 - **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
-The remaining workflows (Airtable proof, deploy/polish, and optional Accelevents handoff) build on these contracts — see Roadmap.
+The remaining workflows (deploy/polish and optional Accelevents handoff) build on these contracts — see Roadmap.
 
 Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
@@ -131,6 +132,7 @@ The JSON API the app uses is the public API.
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Bearer passcode | Create or move an agenda placement |
 | GET | `/api/events/:slug/communications/preview` | Bearer passcode | Preview a reminder or session update |
 | POST | `/api/events/:slug/communications/simulate` | Bearer passcode | Persist a simulated delivery receipt |
+| GET | `/api/integrations/airtable/status` | Bearer passcode | Airtable proof connectivity and D1 fallback state |
 | POST | `/api/speakers/:speakerId/assets` | Bearer passcode | Upload a speaker file to R2 (multipart: `file`, `kind`) |
 | GET | `/api/assets/:assetId` | — | Download/stream a stored asset |
 | GET | `/api/admin/ping` | Bearer passcode | Passcode verification (204) |
@@ -138,6 +140,7 @@ The JSON API the app uses is the public API.
 Errors are uniform: `{ "error": { "code", "message", "issues?" } }`.
 
 Full API and embed details live in [`docs/API.md`](docs/API.md).
+The exact Airtable base fields and proof procedure live in [`docs/AIRTABLE.md`](docs/AIRTABLE.md).
 
 ## Domain invariants
 
