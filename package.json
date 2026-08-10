@@ -17,6 +17,8 @@
     "usage:summary": "node scripts/usage-ledger.mjs summary",
     "usage:report": "node scripts/usage-ledger.mjs report",
     "usage:snapshot": "node scripts/usage-ledger.mjs snapshot",
+    "usage:sync": "node scripts/usage-ledger.mjs sync",
+    "usage:install-hooks": "node scripts/install-usage-hooks.mjs",
     "release:preflight": "pnpm verify && node scripts/release-preflight.mjs",
     "demo:check": "vitest run src/shared/domain/demoData.check.test.ts --reporter=verbose",
     "db:migrate:local": "wrangler d1 migrations apply speakerops-db --local",

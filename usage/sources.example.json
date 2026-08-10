@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "name": "current-codex-task",
+      "format": "codex",
+      "sessionId": "codex-thread-or-session-uuid",
+      "actor": "Codex engineering task",
+      "surface": "Codex Desktop",
+      "category": "engineering_qa_release",
+      "description": "AI-assisted repository implementation, review, QA, and release work.",
+      "includeStagedArtifacts": true,
+      "required": true
+    },
+    {
+      "name": "current-claude-task",
+      "format": "claude",
+      "sessionId": "claude-session-uuid",
+      "actor": "Claude build session",
+      "surface": "Claude Desktop",
+      "category": "planning_design_engineering",
+      "description": "AI-assisted planning, design, implementation, and handoff work.",
+      "includeStagedArtifacts": true,
+      "required": false
+    }
+  ]
+}

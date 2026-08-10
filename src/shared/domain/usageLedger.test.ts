@@ -1,6 +1,6 @@
 // @ts-nocheck -- exercises the repository's JavaScript CLI module directly.
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, validateEntry } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, selectRateId, validateEntry } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -8,6 +8,23 @@ describe("usage ledger", () => {
       { uncachedInput: 1_000_000, cacheRead: 1_000_000, cacheWrite1h: 1_000_000, output: 1_000_000 },
       { uncachedInput: 10, cacheRead: 1, cacheWrite1h: 20, output: 50 },
     )).toBe(81);
+  });
+
+  it("selects the latest applicable rate from configuration", () => {
+    const pricing = {
+      rates: {
+        old: { provider: "openai", model: "gpt-dynamic", effectiveAt: "2026-01-01" },
+        future: { provider: "openai", model: "gpt-dynamic", effectiveAt: "2027-01-01" },
+        current: { provider: "openai", model: "gpt-dynamic", effectiveAt: "2026-08-01" },
+        other: { provider: "anthropic", model: "gpt-dynamic", effectiveAt: "2026-08-01" },
+      },
+    };
+    expect(selectRateId(pricing, "openai", "gpt-dynamic", "2026-08-10T00:00:00Z")).toBe("current");
+  });
+
+  it("requires a pricing record instead of a hardcoded model change", () => {
+    expect(() => selectRateId({ rates: {} }, "openai", "new-model", "2026-08-10T00:00:00Z"))
+      .toThrow("add a dated entry to usage/pricing.json");
   });
 
   it("deduplicates repeated Claude message records", () => {

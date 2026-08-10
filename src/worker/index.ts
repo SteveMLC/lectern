@@ -5,6 +5,7 @@ import { airtableApi } from "./routes/airtable";
 import { api } from "./routes/api";
 import { demoApi } from "./routes/demo";
 import { demoPage } from "./routes/demoPage";
+import { llms } from "./routes/llms";
 
 /**
  * One Worker serves everything:
@@ -19,6 +20,7 @@ app.route("/api/demo", demoApi);
 app.route("/api/airtable", airtableApi);
 app.route("/api", api);
 app.route("/", demoPage);
+app.route("/", llms);
 
 // Unmatched /api paths get JSON 404s, never the SPA shell.
 app.all("/api/*", () => errorResponse(404, "not_found", "No such API route."));

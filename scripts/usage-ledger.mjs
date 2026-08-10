@@ -1,12 +1,20 @@
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const ledgerPath = resolve(root, "usage/ledger.jsonl");
 const pricingPath = resolve(root, "usage/pricing.json");
 const reportPath = resolve(root, "usage/REPORT.md");
+const sourcesPath = resolve(root, "usage/private/sources.json");
+const defaultSourceRoots = {
+  codex: "~/.codex/sessions",
+  claude: "~/.claude/projects",
+  openclaw: "~/.openclaw/agents",
+};
 const tokenKeys = ["uncachedInput", "cacheRead", "cacheWrite", "cacheWrite5m", "cacheWrite1h", "output", "reasoningOutput", "providerTotal"];
 
 function parseJsonl(text, label) {
@@ -101,16 +109,63 @@ function sourceDigest(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
-function modelRateId(provider, model) {
-  const known = {
-    "anthropic:claude-fable-5": "anthropic-claude-fable-5-2026-08-10",
-    "anthropic:claude-opus-5": "anthropic-claude-opus-5-2026-08-10",
-    "openai:gpt-5.6-sol": "openai-gpt-5.6-sol-2026-08-10",
-    "openai:gpt-5.5": "openai-gpt-5.5-2026-08-10",
+export function selectRateId(pricing, provider, model, at = new Date().toISOString()) {
+  const atDay = at.slice(0, 10);
+  const candidates = Object.entries(pricing.rates)
+    .filter(([, rate]) => rate.provider === provider && rate.model === model && rate.effectiveAt <= atDay)
+    .sort(([, left], [, right]) => right.effectiveAt.localeCompare(left.effectiveAt));
+  if (!candidates.length) {
+    throw new Error(`No pinned price for ${provider}:${model} on ${atDay}; add a dated entry to usage/pricing.json. No code change is required.`);
+  }
+  return candidates[0][0];
+}
+
+function expandLocalPath(path) {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return resolve(homedir(), path.slice(2));
+  return resolve(root, path);
+}
+
+async function findSessionFile(directory, sessionId) {
+  const matches = [];
+  const visit = async (current) => {
+    let entries;
+    try { entries = await readdir(current, { withFileTypes: true }); }
+    catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const path = resolve(current, entry.name);
+      if (entry.isDirectory()) await visit(path);
+      else if (entry.name.includes(sessionId) && entry.name.includes(".jsonl")) matches.push(path);
+    }
   };
-  const rateId = known[`${provider}:${model}`];
-  if (!rateId) throw new Error(`No pinned price for ${provider}:${model}; add one to usage/pricing.json first.`);
-  return rateId;
+  await visit(directory);
+  if (matches.length === 0) {
+    const error = new Error(`No local JSONL file found for session ${sessionId} under ${directory}.`);
+    error.code = "ENOENT";
+    throw error;
+  }
+  if (matches.length > 1) throw new Error(`Multiple local JSONL files match session ${sessionId}; set an explicit private file path.`);
+  return matches[0];
+}
+
+async function resolveSourceFile(source) {
+  if (source.file) return expandLocalPath(source.file);
+  if (!source.sessionId) throw new Error("A source needs either file or sessionId.");
+  const sourceRoot = source.searchRoot ?? defaultSourceRoots[source.format];
+  if (!sourceRoot) throw new Error(`No default search root for format ${source.format}; set searchRoot or file.`);
+  return findSessionFile(expandLocalPath(sourceRoot), source.sessionId);
+}
+
+function stagedArtifacts() {
+  const result = spawnSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) return [];
+  return result.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
 
 function cliArgs(argv) {
@@ -121,6 +176,7 @@ function cliArgs(argv) {
     if (!part.startsWith("--")) continue;
     const key = part.slice(2);
     if (key === "dry-run") options.dryRun = true;
+    else if (key === "quiet") options.quiet = true;
     else options[key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = argv[++index];
   }
   return options;
@@ -202,7 +258,8 @@ export function parseOpenClaw(records, options = {}) {
 
 async function snapshot(options) {
   if (!options.format || !options.file || !options.actor || !options.surface || !options.description || !options.category) throw new Error("snapshot requires --format, --file, --actor, --surface, --description, and --category");
-  const raw = await readFile(resolve(options.file), "utf8");
+  const filePath = expandLocalPath(options.file);
+  const raw = await readFile(filePath, "utf8");
   const records = parseJsonl(raw, basename(options.file));
   const parsers = { claude: parseClaude, codex: parseCodex, openclaw: parseOpenClaw };
   const parser = parsers[options.format];
@@ -210,7 +267,7 @@ async function snapshot(options) {
   const sessionId = options.sessionId
     ?? records.find((record) => record.type === "session_meta")?.payload?.id
     ?? records.find((record) => record.sessionId)?.sessionId
-    ?? basename(options.file).match(/[0-9a-f]{8}-[0-9a-f-]{27,}/)?.[0];
+    ?? basename(filePath).match(/[0-9a-f]{8}-[0-9a-f-]{27,}/)?.[0];
   if (!sessionId) throw new Error("Could not derive source session id; pass --session-id");
   const existing = await readLedger();
   const pricing = await readPricing();
@@ -227,7 +284,7 @@ async function snapshot(options) {
     const priorCalls = prior?.source?.cumulative?.calls ?? 0;
     const calls = item.calls === null ? null : item.calls - priorCalls;
     if (Object.values(tokens).every((value) => value === 0) && (calls === null || calls === 0)) continue;
-    const rateId = modelRateId(item.provider, item.model);
+    const rateId = selectRateId(pricing, item.provider, item.model, item.end);
     const idHash = createHash("sha256").update(`${sessionId}:${item.model}:${JSON.stringify(item.tokens)}`).digest("hex").slice(0, 12);
     entries.push({
       schemaVersion: 1,
@@ -259,9 +316,54 @@ async function snapshot(options) {
   }
   if (!options.dryRun && entries.length) {
     await appendFile(ledgerPath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
-    await renderReport();
+    if (!options.skipReport) await renderReport();
   }
-  console.log(JSON.stringify(entries, null, 2));
+  if (!options.quiet) console.log(JSON.stringify(entries, null, 2));
+  return entries;
+}
+
+async function sync(options = {}) {
+  const configPath = options.config ? expandLocalPath(options.config) : sourcesPath;
+  let config;
+  try {
+    config = JSON.parse(await readFile(configPath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      if (!options.quiet) console.log(`AI usage sync not configured. Copy usage/sources.example.json to usage/private/sources.json and add local session paths.`);
+      return [];
+    }
+    throw error;
+  }
+  if (config.schemaVersion !== 1 || !Array.isArray(config.sources)) throw new Error(`${configPath} must contain schemaVersion 1 and a sources array.`);
+
+  const staged = stagedArtifacts();
+  const captured = [];
+  for (const source of config.sources) {
+    if (source.enabled === false) continue;
+    const artifacts = [...new Set([...(source.artifacts ?? []), ...(source.includeStagedArtifacts === false ? [] : staged)])];
+    try {
+      const file = await resolveSourceFile(source);
+      const entries = await snapshot({
+        ...source,
+        file,
+        artifacts: artifacts.join(","),
+        commits: (source.commits ?? []).join(","),
+        dryRun: options.dryRun,
+        quiet: true,
+        skipReport: true,
+      });
+      captured.push(...entries);
+    } catch (error) {
+      if (source.required === false && error.code === "ENOENT") continue;
+      throw new Error(`Usage source ${source.name ?? source.file}: ${error.message}`);
+    }
+  }
+  if (!options.dryRun && captured.length) await renderReport();
+  if (!options.quiet) {
+    const action = options.dryRun ? "would capture" : "captured";
+    console.log(`AI usage sync ${action} ${captured.length} incremental entr${captured.length === 1 ? "y" : "ies"} from ${config.sources.length} configured source(s).`);
+  }
+  return captured;
 }
 
 
@@ -413,8 +515,9 @@ async function main() {
   if (command === "check") return check();
   if (command === "summary") return summary();
   if (command === "snapshot") return snapshot(cliArgs(rest));
+  if (command === "sync") return sync(cliArgs(rest));
   if (command === "report") return report();
-  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|report>");
+  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|report>");
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

@@ -1,79 +1,81 @@
-# Airtable proof adapter
+# Airtable mirror
 
-SpeakerOps keeps D1 as the complete, reliable demo backend. The Airtable adapter proves one operational workflow end to end: it reads the event and speaker from Airtable, then writes a simulated speaker communication to the Messages table.
+SpeakerOps keeps D1 as the authoritative backend. Airtable is a mirror for event teams that want to see operational records in a familiar base: event setup, tracks, rooms, speakers, submissions, sessions, agenda slots, and speaker tasks.
 
-## Required base schema
+The mirror creates its own Airtable tables. Start with an empty base; do not build the schema by hand.
 
-Create three tables. Field names are exact and case-sensitive.
+## Required Airtable Setup
 
-### Events
+1. Create an empty Airtable base, for example `SpeakerOps Mirror`.
+2. Copy the base id from the URL. It starts with `app`, for example `appXXXXXXXXXXXXXX`.
+3. Create a personal access token at `https://airtable.com/create/tokens`.
+4. Grant the token only this base, not all bases.
+5. Give the token exactly these scopes:
 
-| Field | Airtable type | Required |
-| --- | --- | --- |
-| SpeakerOps ID | Single line text (primary is fine) | Yes |
-| Slug | Single line text | Yes |
-| Name | Single line text | Yes |
-| Tagline | Long text | No |
-| Description | Long text | No |
-| Starts On | Date, ISO format | Yes |
-| Ends On | Date, ISO format | Yes |
-| Timezone | Single line text | Yes |
-| Venue | Single line text | No |
-| Website URL | URL | No |
-| Created At | Date with time | Yes |
-| Updated At | Date with time | Yes |
+| Scope | Why SpeakerOps needs it |
+| --- | --- |
+| `schema.bases:read` | Check which mirror tables already exist. |
+| `schema.bases:write` | Create missing mirror tables automatically. |
+| `data.records:write` | Create and update mirrored records. |
 
-### Speakers
-
-| Field | Airtable type | Required |
-| --- | --- | --- |
-| SpeakerOps ID | Single line text (primary is fine) | Yes |
-| Event ID | Single line text | Yes |
-| Email | Email | Yes |
-| Name | Single line text | Yes |
-| Company | Single line text | No |
-| Title | Single line text | No |
-| Bio | Long text | No |
-| Location | Single line text | No |
-| Socials | Long text containing a JSON object | No |
-| Created At | Date with time | Yes |
-| Updated At | Date with time | Yes |
-
-### Messages
-
-| Field | Airtable type | Required |
-| --- | --- | --- |
-| SpeakerOps ID | Single line text (primary is fine) | Yes |
-| Event ID | Single line text | Yes |
-| Speaker ID | Single line text | Yes |
-| To Email | Email | Yes |
-| Subject | Single line text | Yes |
-| Body Markdown | Long text | Yes |
-| Status | Single select containing `sent_simulated` | Yes |
-| Created At | Date with time | Yes |
-| Delivery Attempt ID | Single line text | Yes |
-| Delivery Mode | Single select containing `simulated` | Yes |
-| Delivery Status | Single select containing `success` | Yes |
-| Delivered At | Date with time | Yes |
-
-## Credentials and switch
-
-Create an Airtable personal access token with `data.records:read` and `data.records:write` access to this base. Set Worker secrets without committing them:
+Set the production Worker secrets without committing them:
 
 ```sh
 pnpm exec wrangler secret put AIRTABLE_TOKEN
 pnpm exec wrangler secret put AIRTABLE_BASE_ID
 ```
 
-For a local proof, add both values to `.dev.vars`, temporarily set `DATA_BACKEND` to `airtable`, and start the Worker. `/api/health` should report `dataBackend: "airtable"`. The communication simulate endpoint then reads Events and Speakers and writes Messages. Set `DATA_BACKEND` back to `d1` for the full demo.
+The token is read from Worker secrets and never sent to the browser. Status endpoints report whether Airtable is configured and reachable; they never return secret values.
 
-## Reliability boundaries
+## Mirror Tables
 
-- Every request is serialized with at least 210 ms between starts, keeping the adapter below Airtable's 5 requests/second per-base limit.
-- HTTP 429 responses honor `Retry-After` and retry twice.
-- Reads are cached per Worker isolate for 15 seconds.
-- Writes are batched in Airtable's `records` shape (the proof writes one record; the API supports up to ten).
-- The adapter fails loudly if the proof tables exceed 100 records because pagination is intentionally outside the hackathon proof.
-- D1 remains the default and complete backend. Unwired Airtable repository methods throw a clear error instead of silently serving partial data.
+The first sync creates these eight tables if they do not already exist:
 
-Automated coverage lives in `src/worker/repo/airtable/airtableRepo.test.ts` and verifies the read/write shape, cache behavior, request spacing, and 429 retry.
+| Table | What it mirrors |
+| --- | --- |
+| Events | Event identity, dates, timezone, venue. |
+| Tracks | Program tracks. |
+| Rooms | Room names and capacity. |
+| Speakers | Speaker contact/profile basics. |
+| Submissions | CFP submissions and decisions. |
+| Sessions | Accepted/direct sessions. |
+| Agenda | Scheduled session slots. |
+| Tasks | Speaker onboarding tasks. |
+
+Every table includes `SpeakerOps ID`, the stable internal id used for idempotent updates.
+
+## API
+
+Both endpoints require the organizer passcode.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/airtable/status` | Reports whether the Worker has Airtable secrets, whether the base is reachable, existing base tables, and the latest sync summary. |
+| POST | `/api/airtable/events/:slug/sync` | Pushes one event's operational records to Airtable. Safe to run repeatedly. |
+
+Current seeded event slug:
+
+```text
+horizon-2026
+```
+
+## Why Re-Syncing Is Safe
+
+SpeakerOps records every created Airtable record id in `external_id_map`. On the next sync, known rows are updated in place and only genuinely new rows are created. Re-running the same event should not create duplicates.
+
+The sync also:
+
+- Batches writes at Airtable's 10-record limit.
+- Serializes requests with at least 210 ms between starts, staying under Airtable's 5 requests/second per-base limit.
+- Retries HTTP 429 responses with Airtable's own `Retry-After` header.
+- Leaves orphaned Airtable rows in place and reports them rather than deleting unexpectedly.
+
+Automated coverage lives in:
+
+- `src/worker/integrations/airtableClient.test.ts`
+- `src/worker/integrations/airtableSync.test.ts`
+- `src/shared/domain/airtableMirror.test.ts`
+
+## Boundary
+
+Do not switch the judging demo to Airtable as the primary backend. D1 remains the complete, reliable product backend; Airtable is the operational mirror/proof.

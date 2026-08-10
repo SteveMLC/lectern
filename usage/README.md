@@ -16,7 +16,25 @@ The ledger distinguishes three things that must not be conflated:
 2. **API-equivalent estimate** — those counters multiplied by a pinned public list price. This is a workload gauge, not proof of what a subscription billed.
 3. **Actual billed spend** — the amount on an invoice or subscription receipt. This is the number to use in a reimbursement claim.
 
-## Log each AI work session
+## Automatic logging
+
+Copy the safe template to the gitignored local configuration and add the stable session IDs used for this repository:
+
+```bash
+cp usage/sources.example.json usage/private/sources.json
+pnpm usage:install-hooks
+pnpm usage:sync -- --dry-run
+```
+
+The logger finds those sessions below the standard Codex, Claude, or OpenClaw directories, so dated folders and machine paths are not committed or hardcoded. An explicit private `file` or `searchRoot` remains available for nonstandard installations.
+
+The tracked `.githooks/pre-commit` hook runs `usage:sync` before every commit, appends only provider-counter deltas, regenerates the tamper-evident report, stages both files, and validates them. Source configuration and raw logs stay in `usage/private/` and never enter git. Staged file paths are attached automatically as artifact provenance.
+
+Model pricing is configuration-driven: the logger selects the newest `pricing.json` record whose provider/model matches the session and whose effective date is not later than the usage. Supporting a new model or price change requires a dated pricing record, not a code edit.
+
+Use `AI_USAGE_SKIP=1 git commit ...` only for an emergency when the provider log is unavailable; run `pnpm usage:sync` before the next commit to close the gap.
+
+## Manual snapshot
 
 At the end of a Fable/Opus, Codex, or Walt/OpenClaw work period, snapshot its local JSONL log:
 
@@ -34,7 +52,7 @@ pnpm usage:snapshot -- \
 
 Formats are `codex`, `claude`, and `openclaw`. For a mixed Claude session, the command produces a separate entry for every model. Re-running a growing session records only the delta from its previous cumulative snapshot. Use `--dry-run` to inspect the entry without appending it. OpenClaw logs that contain unrelated work can be bounded with `--since` and `--until` ISO timestamps.
 
-Then run:
+For an ad-hoc or historical source, use `usage:snapshot` directly. Then run:
 
 ```bash
 pnpm usage:check

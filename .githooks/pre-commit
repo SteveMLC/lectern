@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if [ "${AI_USAGE_SKIP:-0}" = "1" ] || [ ! -f usage/private/sources.json ]; then
+  exit 0
+fi
+
+pnpm usage:sync -- --quiet
+git add usage/ledger.jsonl usage/REPORT.md
+pnpm usage:check
