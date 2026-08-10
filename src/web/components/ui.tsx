@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import type {
   ButtonHTMLAttributes,
+  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
@@ -102,9 +103,9 @@ export function Field({
 // Surfaces
 // ---------------------------------------------------------------------------
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
+export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("rounded-xl border border-zinc-200 bg-white shadow-sm", className)}>
+    <div className={cn("rounded-xl border border-zinc-200 bg-white shadow-sm", className)} {...props}>
       {children}
     </div>
   );

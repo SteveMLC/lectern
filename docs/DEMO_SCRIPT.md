@@ -62,6 +62,11 @@ Point at the red banner reading the two conflicts aloud, short:
 > "A room double-booked in Main Hall, and Ada Okafor booked in two places at once —
 > caught live, named in plain language."
 
+Drag **Eval Pipelines That Do Not Lie** from Main Hall into Workshop Studio.
+> "I can drag a session onto another room, and the move persists immediately. One of
+> those conflicts disappears in front of us; exact room and time controls remain for
+> keyboard, mobile, and precise editing."
+
 Click **Add direct session**, create "Sponsor Keynote" with a speaker, place it.
 > "Sponsor keynotes never went through the CFP — that's a first-class path, not a fake
 > submission."

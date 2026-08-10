@@ -35,8 +35,8 @@ Everything is walkable right now:
 2. Open /admin -> Reviews: your proposal is there with the speaker's bio and
    form answers. Approve it — exactly one session is created, idempotently,
    with source lineage.
-3. /admin/agenda: place it; room and speaker double-bookings are flagged live
-   (two conflicts ship pre-staged in the seed data).
+3. /admin/agenda: drag it onto another room or use exact controls; room and
+   speaker double-bookings are flagged live (two conflicts ship pre-staged).
 4. /admin -> add a direct sponsor session — no submission behind it, by design.
 5. The portal shows derived onboarding tasks; upload a real file (R2).
 6. /admin/communications: previewed reminder, simulated send with receipt,
@@ -60,9 +60,10 @@ Everything is walkable right now:
 
 The Airtable mirror is LIVE on this deployment: POST /api/airtable/events/horizon-2026/sync
 (organizer passcode) pushes the event's records into the organizer's base,
-idempotently — re-syncing updates in place. The agenda uses explicit room/time
-controls plus a live conflict engine rather than drag-and-drop; Accelevents
-was ruled optional by the organizer FAQ and is not built.
+idempotently — re-syncing updates in place. The agenda supports drag-and-drop
+room scheduling, day/track/room filters, list projection, exact room/time
+controls, and a live conflict engine. Accelevents was ruled optional by the
+organizer FAQ and is not built.
 `;
 
 llms.get("/llms.txt", (c) =>

@@ -47,6 +47,14 @@ export function Agenda() {
   }, [eventSlug]);
   const [agendaOverride, setAgendaOverride] = useState<OrganizerAgendaResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null);
+  const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null);
+  const [busyDrop, setBusyDrop] = useState(false);
+  const [view, setView] = useState<"board" | "list">("board");
+  const [dayFilter, setDayFilter] = useState("all");
+  const [trackFilter, setTrackFilter] = useState("all");
+  const [roomFilter, setRoomFilter] = useState("all");
 
   const agenda = agendaOverride ?? data?.agenda;
   const conflictedSessions = useMemo(
@@ -58,11 +66,52 @@ export function Agenda() {
     setAgendaOverride(await apiClient.agenda(eventSlug));
   }
 
+  async function dropOnRoom(roomId: string, transferredSessionId?: string) {
+    const sessionId = transferredSessionId || draggedSessionId;
+    if (!agenda || !data || !sessionId || busyDrop) return;
+    const session = agenda.sessions.find((candidate) => candidate.id === sessionId);
+    if (!session) return;
+    const placement = placementForDrop(
+      session,
+      roomId,
+      agenda.sessions,
+      dayFilter === "all" ? data.bundle.event.startsOn : dayFilter,
+      data.bundle.event.timezone,
+    );
+    setBusyDrop(true);
+    setActionError(null);
+    try {
+      const next = await apiClient.placeSession(eventSlug, session.id, placement);
+      setAgendaOverride(next);
+      setNotice(`“${session.title}” moved by drag-and-drop. Conflicts recalculated immediately.`);
+    } catch (caught) {
+      setActionError(caught instanceof ApiRequestError ? caught.message : "Dragged session could not be placed.");
+    } finally {
+      setBusyDrop(false);
+      setDraggedSessionId(null);
+      setDragOverRoomId(null);
+    }
+  }
+
   if (loading && !data) return <Spinner label="Loading program" />;
   if (error || !data || !agenda) return <ErrorBanner message={error?.message ?? "Program unavailable."} />;
 
   const scheduled = agenda.sessions.filter((session) => session.slot !== null);
-  const unscheduled = agenda.sessions.filter((session) => session.slot === null);
+  const unscheduled = agenda.sessions.filter(
+    (session) => session.slot === null && (trackFilter === "all" || session.trackId === trackFilter),
+  );
+  const visibleScheduled = scheduled.filter((session) => {
+    if (trackFilter !== "all" && session.trackId !== trackFilter) return false;
+    if (roomFilter !== "all" && session.slot?.roomId !== roomFilter) return false;
+    if (
+      dayFilter !== "all" &&
+      session.slot &&
+      dateInTimeZone(session.slot.startsAt, data.bundle.event.timezone) !== dayFilter
+    ) return false;
+    return true;
+  });
+  const visibleRooms = data.bundle.rooms.filter((room) => roomFilter === "all" || room.id === roomFilter);
+  const eventDays = eventDateRange(data.bundle.event.startsOn, data.bundle.event.endsOn);
 
   return (
     <div>
@@ -77,6 +126,7 @@ export function Agenda() {
           {notice}
         </div>
       ) : null}
+      {actionError ? <div className="mb-4"><ErrorBanner message={actionError} /></div> : null}
 
       <DirectSessionForm
         eventSlug={eventSlug}
@@ -87,6 +137,39 @@ export function Agenda() {
           setNotice(`“${title}” was added directly to the program—no submission required.`);
         }}
       />
+
+      <Card className="mb-5 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900">Agenda projection</p>
+            <div className="mt-2 flex gap-1.5" role="group" aria-label="Agenda view">
+              <Button type="button" variant={view === "board" ? "primary" : "ghost"} onClick={() => setView("board")}>Room board</Button>
+              <Button type="button" variant={view === "list" ? "primary" : "ghost"} onClick={() => setView("list")}>List</Button>
+            </div>
+          </div>
+          <Field label="Day">
+            <Select value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}>
+              <option value="all">All event days</option>
+              {eventDays.map((day, index) => <option key={day} value={day}>Day {index + 1} · {day}</option>)}
+            </Select>
+          </Field>
+          <Field label="Track">
+            <Select value={trackFilter} onChange={(event) => setTrackFilter(event.target.value)}>
+              <option value="all">All tracks</option>
+              {data.bundle.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Room">
+            <Select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
+              <option value="all">All rooms</option>
+              {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+            </Select>
+          </Field>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-zinc-500">
+          Drag any session card onto a room. Scheduled sessions keep their time; unscheduled sessions take the next open 45-minute slot. The Move button remains available for exact time editing and mobile use.
+        </p>
+      </Card>
 
       {agenda.conflicts.length > 0 ? (
         <div role="alert">
@@ -132,6 +215,9 @@ export function Agenda() {
                     conflicted={false}
                     onPlaced={setAgendaOverride}
                     eventSlug={eventSlug}
+                    draggable
+                    onDragStart={() => setDraggedSessionId(session.id)}
+                    onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
                   />
                 ))
               )}
@@ -139,14 +225,25 @@ export function Agenda() {
           </section>
 
           <section>
-            <SectionTitle title="By room" count={scheduled.length} />
-            <div className="grid gap-4 lg:grid-cols-2">
-              {data.bundle.rooms.map((room) => {
-                const roomSessions = scheduled
+            <SectionTitle title={view === "board" ? "By room" : "Agenda list"} count={visibleScheduled.length} />
+            {view === "board" ? <div className="grid gap-4 lg:grid-cols-2">
+              {visibleRooms.map((room) => {
+                const roomSessions = visibleScheduled
                   .filter((session) => session.slot?.roomId === room.id)
                   .sort((a, b) => (a.slot?.startsAt ?? "").localeCompare(b.slot?.startsAt ?? ""));
                 return (
-                  <Card key={room.id} className="overflow-hidden">
+                  <Card
+                    key={room.id}
+                    className={cn("overflow-hidden transition-colors", dragOverRoomId === room.id && "border-accent bg-accent-soft")}
+                    role="region"
+                    aria-label={`${room.name} session drop zone`}
+                    onDragOver={(event) => { event.preventDefault(); setDragOverRoomId(room.id); }}
+                    onDragLeave={() => setDragOverRoomId((current) => current === room.id ? null : current)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void dropOnRoom(room.id, event.dataTransfer.getData("text/plain"));
+                    }}
+                  >
                     <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
                       <p className="font-semibold text-zinc-900">{room.name}</p>
                       <p className="text-xs text-zinc-500">{roomSessions.length} sessions</p>
@@ -165,6 +262,9 @@ export function Agenda() {
                             conflicted={conflictedSessions.has(session.id)}
                             onPlaced={setAgendaOverride}
                             eventSlug={eventSlug}
+                            draggable
+                            onDragStart={() => setDraggedSessionId(session.id)}
+                            onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
                           />
                         ))
                       )}
@@ -172,7 +272,29 @@ export function Agenda() {
                   </Card>
                 );
               })}
-            </div>
+            </div> : (
+              <div className="space-y-3">
+                {visibleScheduled.length === 0 ? (
+                  <EmptyState title="No sessions match these filters" body="Change the day, track, or room filter." />
+                ) : visibleScheduled
+                  .sort((a, b) => (a.slot?.startsAt ?? "").localeCompare(b.slot?.startsAt ?? ""))
+                  .map((session) => (
+                    <SessionCard
+                      key={session.id}
+                      session={session}
+                      rooms={data.bundle.rooms}
+                      eventDate={data.bundle.event.startsOn}
+                      timezone={data.bundle.event.timezone}
+                      conflicted={conflictedSessions.has(session.id)}
+                      onPlaced={setAgendaOverride}
+                      eventSlug={eventSlug}
+                      draggable
+                      onDragStart={() => setDraggedSessionId(session.id)}
+                      onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
+                    />
+                  ))}
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -280,6 +402,9 @@ function SessionCard({
   conflicted,
   eventSlug,
   onPlaced,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: {
   session: OrganizerSession;
   rooms: Room[];
@@ -288,6 +413,9 @@ function SessionCard({
   conflicted: boolean;
   eventSlug: string;
   onPlaced: (agenda: OrganizerAgendaResponse) => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }) {
   const [editing, setEditing] = useState(session.slot === null);
   const [roomId, setRoomId] = useState(session.slot?.roomId ?? rooms[0]?.id ?? "");
@@ -320,7 +448,17 @@ function SessionCard({
   }
 
   return (
-    <article className={cn("rounded-lg border bg-white p-3", conflicted ? "border-rose-400 ring-2 ring-rose-100" : "border-zinc-200")}>
+    <article
+      className={cn(
+        "rounded-lg border bg-white p-3",
+        conflicted ? "border-rose-400 ring-2 ring-rose-100" : "border-zinc-200",
+        draggable && "cursor-grab active:cursor-grabbing",
+      )}
+      draggable={draggable}
+      aria-label={draggable ? `${session.title}, draggable session` : undefined}
+      onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", session.id); onDragStart?.(); }}
+      onDragEnd={onDragEnd}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium leading-snug text-zinc-900">{session.title}</p>
@@ -364,6 +502,51 @@ function formatSlot(startsAt: string, endsAt: string, timezone: string): string 
   const date = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: timezone }).format(new Date(startsAt));
   const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: timezone });
   return `${date} · ${time.format(new Date(startsAt))}–${time.format(new Date(endsAt))}`;
+}
+
+export function dateInTimeZone(iso: string, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: timezone,
+  }).format(new Date(iso));
+}
+
+export function eventDateRange(startsOn: string, endsOn: string): string[] {
+  const days: string[] = [];
+  const cursor = new Date(`${startsOn}T12:00:00Z`);
+  const end = new Date(`${endsOn}T12:00:00Z`);
+  while (cursor <= end && days.length < 31) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
+export function placementForDrop(
+  session: OrganizerSession,
+  roomId: string,
+  sessions: OrganizerSession[],
+  day: string,
+  timezone: string,
+): { roomId: string; startsAt: string; endsAt: string } {
+  if (session.slot) {
+    return { roomId, startsAt: session.slot.startsAt, endsAt: session.slot.endsAt };
+  }
+  const defaultStart = zonedLocalInputToIso(`${day}T09:00`, timezone);
+  const roomEnds = sessions
+    .filter(
+      (candidate) =>
+        candidate.slot?.roomId === roomId &&
+        candidate.slot !== null &&
+        dateInTimeZone(candidate.slot.startsAt, timezone) === day,
+    )
+    .map((candidate) => candidate.slot!.endsAt)
+    .sort();
+  const startsAt = roomEnds.at(-1) ?? defaultStart;
+  const endsAt = new Date(Date.parse(startsAt) + 45 * 60 * 1000).toISOString();
+  return { roomId, startsAt, endsAt };
 }
 
 function describeConflict(

@@ -59,5 +59,5 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 
 - D1 is the full backend. Airtable proves a read/write operational slice rather than mirroring every table.
 - Email delivery is simulated and persisted; no external email is sent without credentials.
-- Agenda uses fast explicit room/time controls instead of drag-and-drop, meeting the same placement job with less demo risk.
+- Agenda supports drag-and-drop room scheduling plus day, track, room, and list projections; explicit room/time controls remain as the precise keyboard/mobile fallback.
 - Speaker portal links use stable demo tokens; expiring production magic links are not claimed.

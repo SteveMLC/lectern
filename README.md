@@ -2,7 +2,7 @@
 
 **CFP to published agenda, without the enterprise tax.**
 
-SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, room/time agenda controls with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
+SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, drag-and-drop agenda scheduling with live conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
 Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe, idempotent Airtable mirror pushes the operational record into the organizer's base.
 
@@ -30,7 +30,7 @@ Scaffold + golden path. Working today:
 
 - Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
-- Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and a room-based agenda with live room/speaker conflicts.
+- Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
 - **Airtable proof**: cached Events/Speakers reads, Messages writes, 5 req/s protection, 429 retries, explicit D1 fallback, and an organizer status screen.
@@ -244,7 +244,6 @@ That idempotency is covered by tests rather than asserted: a second sync of unch
 ## Deliberately deferred
 
 - Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.
-- Drag-and-drop and alternate agenda views; the working explicit room/time controls are faster and safer for the judging demo.
 - Real email delivery; previews, calendar attachments, and persisted simulated delivery work without third-party credentials.
 - Full Airtable mirroring; the adapter proves rate-safe Events/Speakers reads and Messages writes while D1 remains the complete backend.
 - Optional Accelevents CSV/mapping handoff, dark mode, and exhaustive mobile admin polish.
