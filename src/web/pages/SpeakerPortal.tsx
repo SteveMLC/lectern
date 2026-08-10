@@ -20,6 +20,7 @@ import {
   Textarea,
 } from "../components/ui";
 import { ApiRequestError, apiClient } from "../lib/api";
+import { sanitizeEmbedHtml } from "../lib/sanitizeEmbedHtml";
 import { formatDateRange, formatDateTime } from "../lib/status";
 import { useAsync } from "../lib/useAsync";
 
@@ -403,9 +404,7 @@ function Resources({ resources }: { resources: ResourcePage[] }) {
         <MarkdownBody body={primary.bodyMd} />
       </article>
       {primary.embedHtml ? (
-        <p className="mt-4 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-500">
-          Additional venue materials will appear here when they are ready.
-        </p>
+        <SanitizedEmbed html={primary.embedHtml} />
       ) : null}
     </Card>
   );
@@ -444,4 +443,20 @@ function MarkdownBody({ body }: { body: string }) {
 
 function cleanMarkdown(text: string): string {
   return text.replace(/\*\*/g, "");
+}
+
+/**
+ * Organizer-authored HTML embed (venue maps, external schedules). Always
+ * rendered through the allowlist sanitizer — never raw — and hidden entirely
+ * when nothing safe survives.
+ */
+function SanitizedEmbed({ html }: { html: string }) {
+  const safe = sanitizeEmbedHtml(html);
+  if (!safe) return null;
+  return (
+    <div
+      className="mt-4 overflow-hidden rounded-lg border border-zinc-200 [&_iframe]:w-full"
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
+  );
 }

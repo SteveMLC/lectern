@@ -21,7 +21,8 @@ const NAV = [
   { to: "/admin/agenda", label: "Agenda", end: false },
   { to: "/admin/speakers", label: "Speakers", end: false },
   { to: "/admin/communications", label: "Communications", end: false },
-  { to: "/admin/resources", label: "Resources", end: false },
+  // Resources admin editing is deliberately deferred; the route stays reachable
+  // by URL but an unfinished surface gets no navigation entry during judging.
   { to: "/admin/integrations", label: "Integrations", end: false },
 ];
 
