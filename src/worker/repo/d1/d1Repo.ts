@@ -892,6 +892,31 @@ export class D1Repo implements SpeakerOpsRepo {
     return mapSubmissionListItem(row, speakers);
   }
 
+  /**
+   * When speakers land on the program, give them the event's onboarding
+   * checklist. Runs inside the same batch as the acceptance so a speaker can
+   * never be on the program without their tasks. Idempotent: the UNIQUE
+   * (speaker_id, task_definition_id) constraint makes re-approval a no-op,
+   * and the SELECT means events with no task definitions derive nothing.
+   */
+  private deriveAcceptedSpeakerTasks(
+    eventId: string,
+    speakerIds: readonly string[],
+    now: string,
+  ): D1PreparedStatement[] {
+    return speakerIds.map((speakerId) =>
+      this.db
+        .prepare(
+          `INSERT INTO speaker_tasks (id, event_id, speaker_id, task_definition_id, status, completed_at, updated_at)
+           SELECT 'task_' || lower(hex(randomblob(8))), td.event_id, ?2, td.id, 'pending', NULL, ?3
+             FROM task_definitions td
+            WHERE td.event_id = ?1 AND td.applies_to = 'accepted_speakers'
+           ON CONFLICT(speaker_id, task_definition_id) DO NOTHING`,
+        )
+        .bind(eventId, speakerId, now),
+    );
+  }
+
   async decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult> {
     const submission = await this.getSubmissionById(input.submissionId);
     if (!submission) throw new Error("submission_not_found");
@@ -958,6 +983,11 @@ export class D1Repo implements SpeakerOpsRepo {
       this.db
         .prepare("UPDATE submissions SET status = 'accepted', updated_at = ?1 WHERE id = ?2")
         .bind(input.now, submission.id),
+      ...this.deriveAcceptedSpeakerTasks(
+        built.session.eventId,
+        built.sessionSpeakers.map((speaker) => speaker.speakerId),
+        input.now,
+      ),
     ];
     await this.db.batch(statements);
 
@@ -1071,6 +1101,12 @@ export class D1Repo implements SpeakerOpsRepo {
              VALUES (?1, ?2, ?3, ?4)`,
           )
           .bind(speaker.sessionId, speaker.speakerId, speaker.role, speaker.sortOrder),
+      ),
+      // Invited speakers are on the program too — same onboarding checklist.
+      ...this.deriveAcceptedSpeakerTasks(
+        input.eventId,
+        built.sessionSpeakers.map((speaker) => speaker.speakerId),
+        input.now,
       ),
     ]);
 
