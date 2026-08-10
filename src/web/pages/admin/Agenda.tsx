@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   EventBundle,
   OrganizerAgendaResponse,
@@ -48,7 +48,7 @@ export function Agenda() {
   const [agendaOverride, setAgendaOverride] = useState<OrganizerAgendaResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null);
+  const draggedSessionIdRef = useRef<string | null>(null);
   const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null);
   const [busyDrop, setBusyDrop] = useState(false);
   const [view, setView] = useState<"board" | "list">("board");
@@ -67,7 +67,7 @@ export function Agenda() {
   }
 
   async function dropOnRoom(roomId: string, transferredSessionId?: string) {
-    const sessionId = transferredSessionId || draggedSessionId;
+    const sessionId = transferredSessionId || draggedSessionIdRef.current;
     if (!agenda || !data || !sessionId || busyDrop) return;
     const session = agenda.sessions.find((candidate) => candidate.id === sessionId);
     if (!session) return;
@@ -88,7 +88,7 @@ export function Agenda() {
       setActionError(caught instanceof ApiRequestError ? caught.message : "Dragged session could not be placed.");
     } finally {
       setBusyDrop(false);
-      setDraggedSessionId(null);
+      draggedSessionIdRef.current = null;
       setDragOverRoomId(null);
     }
   }
@@ -216,8 +216,8 @@ export function Agenda() {
                     onPlaced={setAgendaOverride}
                     eventSlug={eventSlug}
                     draggable
-                    onDragStart={() => setDraggedSessionId(session.id)}
-                    onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
+                    onDragStart={() => { draggedSessionIdRef.current = session.id; }}
+                    onDragEnd={() => { draggedSessionIdRef.current = null; setDragOverRoomId(null); }}
                   />
                 ))
               )}
@@ -241,7 +241,11 @@ export function Agenda() {
                     onDragLeave={() => setDragOverRoomId((current) => current === room.id ? null : current)}
                     onDrop={(event) => {
                       event.preventDefault();
-                      void dropOnRoom(room.id, event.dataTransfer.getData("text/plain"));
+                      void dropOnRoom(
+                        room.id,
+                        event.dataTransfer.getData("application/x-speakerops-session") ||
+                          event.dataTransfer.getData("text/plain"),
+                      );
                     }}
                   >
                     <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
@@ -263,8 +267,8 @@ export function Agenda() {
                             onPlaced={setAgendaOverride}
                             eventSlug={eventSlug}
                             draggable
-                            onDragStart={() => setDraggedSessionId(session.id)}
-                            onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
+                            onDragStart={() => { draggedSessionIdRef.current = session.id; }}
+                            onDragEnd={() => { draggedSessionIdRef.current = null; setDragOverRoomId(null); }}
                           />
                         ))
                       )}
@@ -289,8 +293,8 @@ export function Agenda() {
                       onPlaced={setAgendaOverride}
                       eventSlug={eventSlug}
                       draggable
-                      onDragStart={() => setDraggedSessionId(session.id)}
-                      onDragEnd={() => { setDraggedSessionId(null); setDragOverRoomId(null); }}
+                      onDragStart={() => { draggedSessionIdRef.current = session.id; }}
+                      onDragEnd={() => { draggedSessionIdRef.current = null; setDragOverRoomId(null); }}
                     />
                   ))}
               </div>
@@ -456,7 +460,12 @@ function SessionCard({
       )}
       draggable={draggable}
       aria-label={draggable ? `${session.title}, draggable session` : undefined}
-      onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", session.id); onDragStart?.(); }}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-speakerops-session", session.id);
+        event.dataTransfer.setData("text/plain", session.id);
+        onDragStart?.();
+      }}
       onDragEnd={onDragEnd}
     >
       <div className="flex items-start justify-between gap-2">
