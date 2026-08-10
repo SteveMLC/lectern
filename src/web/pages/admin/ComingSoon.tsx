@@ -1,6 +1,6 @@
 import { Badge, EmptyState, PageHeader } from "../../components/ui";
 
-/** Skeleton for routes the post-scaffold lanes fill in. */
+/** Shared placeholder for deliberately deferred admin surfaces. */
 export function ComingSoon({
   title,
   lane,

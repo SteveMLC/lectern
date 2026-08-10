@@ -2,7 +2,7 @@
 
 **CFP to published agenda, without the enterprise tax.**
 
-SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, submission review rounds, acceptance-to-session flow, drag-and-drop agenda with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
+SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, room/time agenda controls with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
 Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe Airtable proof adapter reads event/speaker operations and writes communication receipts behind the same repository boundary.
 
@@ -21,7 +21,7 @@ Scaffold + golden path. Working today:
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
-The remaining workflows (deploy/polish and optional Accelevents handoff) build on these contracts — see Roadmap.
+The judging-critical product path is complete locally. Cloudflare account authentication and production provisioning are the remaining release steps; see [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
 Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
@@ -170,12 +170,13 @@ Then open **`/demo`** in the running app and press **Load**. Loading is idempote
 
 The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions across every status, 10 sessions (9 from accepted submissions with lineage kept, 1 sponsor keynote added directly), two deliberate schedule conflicts, and five speakers with outstanding onboarding tasks. The reasoning behind each awkward record is in [`demo-data/liam-conference.storylines.md`](demo-data/liam-conference.storylines.md).
 
-## Roadmap (post-scaffold lanes)
+## Deliberately deferred
 
-- **Lane A — CFP + review:** form builder UI, track routing, reviewer assignments, `unreviewed` -> `approve` / `maybe` / `deny`, and optional decision email feedback.
-- **Lane B — sessions + agenda:** acceptance flow UI, direct-add sessions, drag-and-drop day/room agenda with conflict detection, list/day/week views if time allows.
-- **Lane C — speaker operations:** magic-link portal, profile editing, R2 headshot/slides uploads, task board, reminder/calendar preview with real `.ics` files (simulated outbox by default, Resend or Cloudflare email behind a secret).
-- **Lane D — public surface + hardening:** dashboard metrics, Airtable live persistence, demo reset UI, optional Accelevents CSV/mapping handoff, accessibility and performance passes.
+- Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.
+- Drag-and-drop and alternate agenda views; the working explicit room/time controls are faster and safer for the judging demo.
+- Real email delivery; previews, calendar attachments, and persisted simulated delivery work without third-party credentials.
+- Full Airtable mirroring; the adapter proves rate-safe Events/Speakers reads and Messages writes while D1 remains the complete backend.
+- Optional Accelevents CSV/mapping handoff, dark mode, and exhaustive mobile admin polish.
 
 ## Contributing
 

@@ -6,6 +6,7 @@ import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Integrations } from "./pages/admin/Integrations";
 import { Reviews } from "./pages/admin/Reviews";
+import { Speakers } from "./pages/admin/Speakers";
 import { Submissions } from "./pages/admin/Submissions";
 import { ApiDocs } from "./pages/ApiDocs";
 import { CfpPage } from "./pages/CfpPage";
@@ -31,16 +32,7 @@ export function App() {
         <Route path="submissions" element={<Submissions />} />
         <Route path="reviews" element={<Reviews />} />
         <Route path="agenda" element={<Agenda />} />
-        <Route
-          path="speakers"
-          element={
-            <ComingSoon
-              title="Speakers"
-              lane="Lane C"
-              body="Speaker roster, onboarding task board, and the magic-link portal with real R2 uploads. The upload API and asset storage are already live."
-            />
-          }
-        />
+        <Route path="speakers" element={<Speakers />} />
         <Route path="communications" element={<Communications />} />
         <Route
           path="resources"

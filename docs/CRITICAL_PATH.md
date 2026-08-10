@@ -1,33 +1,40 @@
 # SpeakerOps Critical Path
 
-This repo is accepted as the foundation for the hackathon build. It is not submission-ready yet.
+The judging-critical product path is implemented on `main`. Six feature issues are closed; deployment remains blocked only by Cloudflare account authentication and the real D1 database id.
 
-## Verified Foundation
+## Implemented and Verified
 
-- Clean `main` branch pushed to `SteveMLC/speakerops`.
-- Scaffold commit lineage includes `2995105 docs: capture organizer scope clarifications`.
-- Typecheck, tests, production build, local Worker, D1, R2 binding, organizer auth, seeded data, CFP, embeds, and API routes have been verified locally.
-- Browser verification found a coherent organizer dashboard and no runtime errors.
+- Review queue with organizer Approve / Maybe / Deny decisions.
+- Idempotent acceptance: repeated approval reuses the one session derived from the submission.
+- Direct invited/sponsor sessions with `origin=direct` and no source submission.
+- Room-based agenda placement with immediate room and speaker conflict detection.
+- Editable speaker portal: profile, task completion/reopen, and speaker-facing R2 uploads.
+- Reminder and session-update previews, persisted simulated deliveries, and `.ics` downloads.
+- Airtable proof adapter: Events/Speakers reads, Messages write, cache, 5 req/s protection, 429 retry, and D1 fallback.
+- Public event, CFP, schedule/session/speaker embeds, API docs, deterministic seed, and Liam's Groundwork demo loader.
+- Persistent organizer event switcher so the loaded Groundwork dataset is reachable from every admin screen.
 
-## Honest Gaps
+Verification evidence:
 
-- Reviews, agenda, speakers, communications, resources, and integrations are still placeholder screens in `src/web/App.tsx`.
-- Speaker portal is mostly read-only: no bio editing, task completion, or speaker-facing upload yet.
-- R2 works through an admin API, not the speaker workflow.
-- `AirtableRepo` compiles but is not wired into the live app path.
-- No review decision mutation, acceptance UI, direct-session UI, drag-and-drop agenda, communication preview, or ICS generation exists yet.
-- Cloudflare deploy is blocked until Wrangler is authenticated and the real D1 database id replaces the placeholder in `wrangler.jsonc`.
+- `pnpm check` passes.
+- 67 tests pass across domain, demo-loader, calendar, timezone, and Airtable adapter coverage.
+- Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
+- A fresh headed Groundwork walkthrough verified Reviews, Agenda, Speakers, Speaker Portal, Communications, Integrations, and persistent event switching with no console errors.
 
-## Handoff Order
+## Remaining External Blocker
 
-1. Reviews: `approve` / `maybe` / `deny`, then idempotent acceptance to session.
-2. Direct-add sponsor session.
-3. Day/room agenda with drag-and-drop and live conflicts.
-4. Editable speaker portal with R2 uploads and task completion.
-5. Reminder preview plus valid `.ics`.
-6. Airtable proof.
-7. Deploy, walkthrough QA, and polish.
+`pnpm exec wrangler whoami` reports unauthenticated and `wrangler.jsonc` still contains the local-only placeholder D1 id. Deployment requires:
 
-## Cut From MVP
+1. `pnpm exec wrangler login`
+2. Provision or identify the production D1 database and R2 bucket.
+3. Replace the placeholder D1 id in `wrangler.jsonc`.
+4. Set `ORGANIZER_PASSCODE` (and optional Airtable credentials) as Worker secrets.
+5. Apply migrations/seed, deploy, and run the production walkthrough.
 
-Accelevents is optional per organizer clarification. Keep it to a mapping preview or CSV handoff only if the critical path is already stable.
+Do not flip the full judging demo to Airtable. D1 is the complete backend; Airtable is a documented bonus proof.
+
+## Optional, Not MVP
+
+- Accelevents mapping/CSV handoff.
+- Real Resend delivery (simulated delivery is intentional and persisted).
+- Dark mode and exhaustive mobile admin polish.

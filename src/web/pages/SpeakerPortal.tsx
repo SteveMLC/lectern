@@ -97,6 +97,7 @@ export function SpeakerPortal() {
 
   const completedTasks = data.tasks.filter((item) => item.task.status === "complete").length;
   const nextDue = data.tasks
+    .filter((item) => item.task.status !== "complete")
     .map((item) => item.definition.dueAt)
     .filter((due): due is string => Boolean(due))
     .sort()[0];
@@ -131,7 +132,10 @@ export function SpeakerPortal() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric label="Tasks complete" value={`${completedTasks}/${data.tasks.length}`} />
             <Metric label="Sessions" value={String(data.sessions.length)} />
-            <Metric label="Next due" value={nextDue ? formatDateTime(nextDue) : "None"} />
+            <Metric
+              label="Next due"
+              value={nextDue ? formatDateTime(nextDue, data.event.timezone) : "None"}
+            />
           </div>
 
           <ProfileEditor token={token} speaker={data.speaker} onUpdated={setPortalOverride} />
@@ -150,7 +154,9 @@ export function SpeakerPortal() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone="sky">{FORMAT_LABEL[session.format] ?? session.format}</Badge>
                       <span className="text-xs text-zinc-500">
-                        {session.startsAt ? formatDateTime(session.startsAt) : "Time pending"}
+                        {session.startsAt
+                          ? formatDateTime(session.startsAt, data.event.timezone)
+                          : "Time pending"}
                         {session.roomName ? ` · ${session.roomName}` : ""}
                       </span>
                     </div>
@@ -186,7 +192,9 @@ export function SpeakerPortal() {
                     <Badge tone={TASK_TONE[task.status]}>{TASK_LABEL[task.status]}</Badge>
                   </div>
                   {definition.dueAt ? (
-                    <p className="mt-2 text-xs text-zinc-500">Due {formatDateTime(definition.dueAt)}</p>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Due {formatDateTime(definition.dueAt, data.event.timezone)}
+                    </p>
                   ) : null}
                   <Button
                     type="button"

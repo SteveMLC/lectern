@@ -23,6 +23,7 @@ import {
   cn,
 } from "../../components/ui";
 import { ApiRequestError, apiClient } from "../../lib/api";
+import { formatZonedLocalInput, zonedLocalInputToIso } from "../../../shared/domain/timezone";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
@@ -290,8 +291,12 @@ function SessionCard({
 }) {
   const [editing, setEditing] = useState(session.slot === null);
   const [roomId, setRoomId] = useState(session.slot?.roomId ?? rooms[0]?.id ?? "");
-  const [startsAt, setStartsAt] = useState(session.slot?.startsAt.slice(0, 16) ?? `${eventDate}T09:00`);
-  const [endsAt, setEndsAt] = useState(session.slot?.endsAt.slice(0, 16) ?? `${eventDate}T09:45`);
+  const [startsAt, setStartsAt] = useState(
+    session.slot ? formatZonedLocalInput(session.slot.startsAt, timezone) : `${eventDate}T09:00`,
+  );
+  const [endsAt, setEndsAt] = useState(
+    session.slot ? formatZonedLocalInput(session.slot.endsAt, timezone) : `${eventDate}T09:45`,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const speakers = session.speakers.map((speaker) => speaker.name).join(", ");
@@ -302,8 +307,8 @@ function SessionCard({
     try {
       const agenda = await apiClient.placeSession(eventSlug, session.id, {
         roomId,
-        startsAt: `${startsAt}:00Z`,
-        endsAt: `${endsAt}:00Z`,
+        startsAt: zonedLocalInputToIso(startsAt, timezone),
+        endsAt: zonedLocalInputToIso(endsAt, timezone),
       });
       onPlaced(agenda);
       setEditing(false);
@@ -337,7 +342,7 @@ function SessionCard({
             <Input aria-label={`Start for ${session.title}`} type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
             <Input aria-label={`End for ${session.title}`} type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
           </div>
-          <p className="text-[11px] text-zinc-400">Times are entered in UTC for this demo.</p>
+          <p className="text-[11px] text-zinc-400">Times use the event timezone: {timezone}.</p>
           {error ? <ErrorBanner message={error} /> : null}
           <div className="flex gap-2">
             <Button type="button" className="flex-1" disabled={saving || !roomId} onClick={() => void save()}>{saving ? "Saving…" : "Save placement"}</Button>

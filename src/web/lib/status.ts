@@ -37,7 +37,7 @@ export function formatDateRange(startsOn: string, endsOn: string): string {
   return `${formatDateOnly(startsOn)} – ${formatDateOnly(endsOn)}`;
 }
 
-export function formatDateTime(iso: string | null): string {
+export function formatDateTime(iso: string | null, timeZone?: string): string {
   if (!iso) return "—";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -46,5 +46,6 @@ export function formatDateTime(iso: string | null): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   });
 }

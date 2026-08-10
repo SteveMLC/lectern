@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useOutletContext } from "react-router";
+import type { EventSummary } from "../../../shared/contracts";
 import { Button, Card, ErrorBanner, Input, Spinner, cn } from "../../components/ui";
 import { apiClient, clearPasscode, getPasscode, setPasscode } from "../../lib/api";
 import { useAsync } from "../../lib/useAsync";
@@ -24,6 +25,8 @@ const NAV = [
   { to: "/admin/integrations", label: "Integrations", end: false },
 ];
 
+const ACTIVE_EVENT_KEY = "speakerops.organizer.event";
+
 export function AdminLayout() {
   const [unlocked, setUnlocked] = useState(() => getPasscode() !== null);
   if (!unlocked) return <PasscodeGate onUnlocked={() => setUnlocked(true)} />;
@@ -33,6 +36,9 @@ export function AdminLayout() {
 function AdminShell({ onLock }: { onLock: () => void }) {
   const { data, error, loading } = useAsync(() => apiClient.events(), []);
   const [navOpen, setNavOpen] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState(
+    () => sessionStorage.getItem(ACTIVE_EVENT_KEY) ?? "",
+  );
 
   if (loading) {
     return (
@@ -41,7 +47,8 @@ function AdminShell({ onLock }: { onLock: () => void }) {
       </div>
     );
   }
-  const event = data?.events[0];
+  const events = data?.events ?? [];
+  const event = events.find((candidate) => candidate.slug === selectedSlug) ?? events[0];
   if (error || !event) {
     return (
       <div className="mx-auto max-w-xl px-6 py-20">
@@ -56,6 +63,11 @@ function AdminShell({ onLock }: { onLock: () => void }) {
   }
 
   const ctx: AdminContext = { eventSlug: event.slug, eventName: event.name };
+
+  function selectEvent(slug: string) {
+    setSelectedSlug(slug);
+    sessionStorage.setItem(ACTIVE_EVENT_KEY, slug);
+  }
 
   return (
     <div className="min-h-dvh bg-zinc-50 lg:flex">
@@ -90,6 +102,7 @@ function AdminShell({ onLock }: { onLock: () => void }) {
         </div>
         {navOpen ? (
           <div className="mt-3">
+            <EventPicker events={events} value={event.slug} onChange={selectEvent} />
             <AdminNav onNavigate={() => setNavOpen(false)} />
             <AdminFooter
               eventSlug={event.slug}
@@ -111,9 +124,9 @@ function AdminShell({ onLock }: { onLock: () => void }) {
             </span>
             SpeakerOps
           </Link>
-          <p className="mt-2 truncate text-xs text-zinc-500" title={event.name}>
-            {event.name}
-          </p>
+          <div className="mt-3">
+            <EventPicker events={events} value={event.slug} onChange={selectEvent} />
+          </div>
         </div>
         <AdminNav />
         <AdminFooter
@@ -128,6 +141,29 @@ function AdminShell({ onLock }: { onLock: () => void }) {
         <Outlet context={ctx} />
       </main>
     </div>
+  );
+}
+
+function EventPicker({
+  events,
+  value,
+  onChange,
+}: {
+  events: EventSummary[];
+  value: string;
+  onChange: (slug: string) => void;
+}) {
+  return (
+    <select
+      aria-label="Active event"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-medium text-zinc-700 focus:border-accent focus:outline-none"
+    >
+      {events.map((event) => (
+        <option key={event.id} value={event.slug}>{event.name}</option>
+      ))}
+    </select>
   );
 }
 

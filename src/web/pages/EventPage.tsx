@@ -84,17 +84,22 @@ export function EventPage() {
         <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-base font-semibold text-zinc-900">Speaker portal</h2>
+              <h2 className="text-base font-semibold text-zinc-900">Published program</h2>
               <p className="mt-1 text-sm text-zinc-600">
-                Ada Okafor's current sessions, tasks, files, and guide page.
+                Public schedule, session directory, and speaker gallery from the live program data.
               </p>
             </div>
-            <Link
-              to="/speaker/spk_ada"
-              className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-            >
-              Open demo portal
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              {(["schedule", "sessions", "speakers"] as const).map((view) => (
+                <a
+                  key={view}
+                  href={`/api/embeds/events/${encodeURIComponent(event.slug)}/${view}`}
+                  className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium capitalize text-zinc-800 hover:bg-zinc-50"
+                >
+                  {view}
+                </a>
+              ))}
+            </div>
           </div>
         </Card>
 
