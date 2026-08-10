@@ -190,6 +190,8 @@ export const SubmissionSpeakerView = z.object({
   name: z.string(),
   email: z.email(),
   company: z.string().nullable(),
+  /** Present so reviewers can judge the speaker without leaving the queue. */
+  bio: z.string().nullable(),
 });
 export type SubmissionSpeakerView = z.infer<typeof SubmissionSpeakerView>;
 

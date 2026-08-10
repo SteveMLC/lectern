@@ -156,6 +156,7 @@ interface SubmissionSpeakerLinkRow {
   name: string;
   email: string;
   company: string | null;
+  bio: string | null;
 }
 
 interface SessionRow {
@@ -825,7 +826,7 @@ export class D1Repo implements SpeakerOpsRepo {
         .bind(eventId),
       this.db
         .prepare(
-          `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company
+          `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.bio
            FROM submission_speakers ss
            JOIN speakers sp ON sp.id = ss.speaker_id
            JOIN submissions s ON s.id = ss.submission_id
@@ -850,6 +851,7 @@ export class D1Repo implements SpeakerOpsRepo {
         name: link.name,
         email: link.email,
         company: link.company,
+        bio: link.bio,
       });
       speakersBySubmission.set(link.submission_id, list);
     }
@@ -871,7 +873,7 @@ export class D1Repo implements SpeakerOpsRepo {
 
     const { results } = await this.db
       .prepare(
-        `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company
+        `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.bio
          FROM submission_speakers ss
          JOIN speakers sp ON sp.id = ss.speaker_id
          WHERE ss.submission_id = ?
@@ -887,6 +889,7 @@ export class D1Repo implements SpeakerOpsRepo {
       name: link.name,
       email: link.email,
       company: link.company,
+      bio: link.bio,
     }));
 
     return mapSubmissionListItem(row, speakers);

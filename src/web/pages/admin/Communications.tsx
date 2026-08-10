@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import type { CommunicationKind, CommunicationPreviewResponse } from "../../../shared/contracts";
 import {
   Badge,
@@ -19,7 +20,9 @@ import { useAdminContext } from "./AdminLayout";
 export function Communications() {
   const { eventSlug } = useAdminContext();
   const speakers = useAsync(() => apiClient.publicSpeakers(eventSlug), [eventSlug]);
-  const [selectedSpeaker, setSelectedSpeaker] = useState("");
+  // "Request more info" on a review card lands here with the speaker preselected.
+  const [searchParams] = useSearchParams();
+  const [selectedSpeaker, setSelectedSpeaker] = useState(searchParams.get("speaker") ?? "");
   const [kind, setKind] = useState<CommunicationKind>("reminder");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<{ messageId: string; deliveredAt: string } | null>(null);

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
   SubmissionStatus,
+  type ReviewDecision,
   type SubmissionListItem,
   type SubmissionStatus as SubmissionStatusType,
 } from "../../../shared/contracts";
@@ -15,12 +17,23 @@ import {
   Spinner,
   cn,
 } from "../../components/ui";
-import { apiClient } from "../../lib/api";
+import { ApiRequestError, apiClient } from "../../lib/api";
 import { STATUS_LABEL, STATUS_TONE, formatDateTime } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
 type Filter = "all" | SubmissionStatusType;
+
+const DECISIONS: readonly { decision: ReviewDecision; label: string; className: string }[] = [
+  { decision: "approve", label: "Approve", className: "bg-emerald-600 hover:bg-emerald-700" },
+  { decision: "maybe", label: "Maybe", className: "bg-amber-500 hover:bg-amber-600" },
+  { decision: "deny", label: "Deny", className: "bg-rose-600 hover:bg-rose-700" },
+];
+
+interface DecisionState {
+  busyId: string | null;
+  decide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
+}
 
 export function Submissions() {
   const { eventSlug } = useAdminContext();
@@ -30,8 +43,36 @@ export function Submissions() {
   );
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const submissions = data?.submissions ?? [];
+
+  async function decide(submission: SubmissionListItem, decision: ReviewDecision) {
+    setBusyId(submission.id);
+    setNotice(null);
+    setActionError(null);
+    try {
+      const result = await apiClient.decideSubmission(eventSlug, submission.id, { decision });
+      if (decision === "approve") {
+        setNotice(
+          result.reusedSession
+            ? `“${submission.title}” was already accepted; its existing session was reused.`
+            : `“${submission.title}” is accepted and now lives in the program.`,
+        );
+      } else {
+        setNotice(`“${submission.title}” moved to ${decision === "maybe" ? "Maybe" : "Denied"}.`);
+      }
+      reload();
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiRequestError ? caught.message : "The decision could not be saved.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const countsByStatus = useMemo(() => {
     const counts = new Map<SubmissionStatus, number>();
@@ -66,17 +107,41 @@ export function Submissions() {
     (submission) => getCompleteness(submission).percent === 100,
   ).length;
 
+  const decisionState: DecisionState = { busyId, decide };
+
   return (
     <div>
       <PageHeader
         title="Submissions"
-        subtitle="Every proposal from the public CFP, newest first."
+        subtitle="Every proposal from the public CFP, newest first. Decide here, or work the queue in Reviews."
         actions={
-          <Button variant="secondary" onClick={reload}>
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/reviews"
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-strong"
+            >
+              Review queue
+            </Link>
+            <Button variant="secondary" onClick={reload}>
+              Refresh
+            </Button>
+          </div>
         }
       />
+
+      {notice ? (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          {notice}
+        </div>
+      ) : null}
+      {actionError ? (
+        <div className="mb-4">
+          <ErrorBanner message={actionError} />
+        </div>
+      ) : null}
 
       {loading ? (
         <Spinner label="Loading submissions" />
@@ -125,7 +190,7 @@ export function Submissions() {
           ) : (
             <>
               <Card className="hidden overflow-x-auto rounded-lg lg:block">
-                <table className="w-full min-w-[55rem] text-left text-sm">
+                <table className="w-full min-w-[62rem] text-left text-sm">
                   <thead>
                     <tr className="border-b border-zinc-200 bg-zinc-50/80 text-xs font-medium uppercase tracking-wide text-zinc-500">
                       <th className="px-4 py-3">Proposal</th>
@@ -134,11 +199,16 @@ export function Submissions() {
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Completeness</th>
                       <th className="px-4 py-3">Submitted</th>
+                      <th className="px-4 py-3">Decision</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visible.map((submission) => (
-                      <SubmissionRow key={submission.id} submission={submission} />
+                      <SubmissionRow
+                        key={submission.id}
+                        submission={submission}
+                        decisionState={decisionState}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -146,7 +216,11 @@ export function Submissions() {
 
               <div className="space-y-3 lg:hidden">
                 {visible.map((submission) => (
-                  <SubmissionMobileCard key={submission.id} submission={submission} />
+                  <SubmissionMobileCard
+                    key={submission.id}
+                    submission={submission}
+                    decisionState={decisionState}
+                  />
                 ))}
               </div>
             </>
@@ -157,7 +231,61 @@ export function Submissions() {
   );
 }
 
-function SubmissionRow({ submission }: { submission: SubmissionListItem }) {
+/**
+ * The same transition rules the API enforces: drafts and withdrawn proposals
+ * are locked, and an accepted proposal can only be re-approved (which safely
+ * reuses its session).
+ */
+function decisionAvailability(submission: SubmissionListItem, decision: ReviewDecision): boolean {
+  if (submission.status === "draft" || submission.status === "withdrawn") return false;
+  if (submission.status === "accepted") return decision === "approve";
+  return true;
+}
+
+function DecisionButtons({
+  submission,
+  decisionState,
+  compact,
+}: {
+  submission: SubmissionListItem;
+  decisionState: DecisionState;
+  compact?: boolean;
+}) {
+  const { busyId, decide } = decisionState;
+  const busy = busyId === submission.id;
+  const locked = submission.status === "draft" || submission.status === "withdrawn";
+
+  if (locked) {
+    return <p className="text-xs text-zinc-400">Locked ({STATUS_LABEL[submission.status]})</p>;
+  }
+
+  return (
+    <div
+      className={cn("flex flex-wrap items-center gap-1.5", compact && "flex-nowrap")}
+      aria-label={`Decision for ${submission.title}`}
+    >
+      {DECISIONS.map((action) => (
+        <Button
+          key={action.decision}
+          type="button"
+          className={cn(action.className, compact ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-xs")}
+          disabled={busyId !== null || !decisionAvailability(submission, action.decision)}
+          onClick={() => void decide(submission, action.decision)}
+        >
+          {busy ? "…" : action.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SubmissionRow({
+  submission,
+  decisionState,
+}: {
+  submission: SubmissionListItem;
+  decisionState: DecisionState;
+}) {
   const speakerLine = submission.speakers
     .map((sp) => (sp.company ? `${sp.name} (${sp.company})` : sp.name))
     .join(", ");
@@ -191,11 +319,20 @@ function SubmissionRow({ submission }: { submission: SubmissionListItem }) {
       <td className="whitespace-nowrap px-4 py-4 text-zinc-500">
         {formatDateTime(submission.submittedAt)}
       </td>
+      <td className="px-4 py-4">
+        <DecisionButtons submission={submission} decisionState={decisionState} compact />
+      </td>
     </tr>
   );
 }
 
-function SubmissionMobileCard({ submission }: { submission: SubmissionListItem }) {
+function SubmissionMobileCard({
+  submission,
+  decisionState,
+}: {
+  submission: SubmissionListItem;
+  decisionState: DecisionState;
+}) {
   const speakerLine = submission.speakers
     .map((speaker) => (speaker.company ? `${speaker.name} (${speaker.company})` : speaker.name))
     .join(", ");
@@ -224,6 +361,9 @@ function SubmissionMobileCard({ submission }: { submission: SubmissionListItem }
             <CompletenessIndicator submission={submission} />
           </div>
         </div>
+      </div>
+      <div className="mt-4 border-t border-zinc-100 pt-3">
+        <DecisionButtons submission={submission} decisionState={decisionState} />
       </div>
     </Card>
   );

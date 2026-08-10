@@ -62,6 +62,7 @@ export function Dashboard() {
               label="Submissions"
               value={counts.submissions}
               detail={`${needsDecision} need decision`}
+              to="/admin/reviews"
             />
             <MetricCard
               label="Accepted"
@@ -89,12 +90,20 @@ export function Dashboard() {
                     Current proposal mix and decision workload.
                   </p>
                 </div>
-                <Link
-                  to="/admin/submissions"
-                  className="text-sm font-medium text-accent hover:underline"
-                >
-                  Open submissions
-                </Link>
+                <div className="flex items-center gap-4">
+                  <Link
+                    to="/admin/reviews"
+                    className="text-sm font-semibold text-accent hover:underline"
+                  >
+                    Make decisions →
+                  </Link>
+                  <Link
+                    to="/admin/submissions"
+                    className="text-sm font-medium text-zinc-500 hover:text-zinc-800 hover:underline"
+                  >
+                    Open submissions
+                  </Link>
+                </div>
               </div>
 
               <div className="mt-5 space-y-3">
@@ -178,12 +187,29 @@ export function Dashboard() {
   );
 }
 
-function MetricCard({ label, value, detail }: { label: string; value: number; detail: string }) {
+function MetricCard({
+  label,
+  value,
+  detail,
+  to,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  /** When set, the detail line becomes the action that takes you there. */
+  to?: string;
+}) {
   return (
     <Card className="rounded-lg p-5">
       <p className="text-sm text-zinc-500">{label}</p>
       <p className="mt-1 text-3xl font-semibold text-zinc-900">{value}</p>
-      <p className="mt-2 text-sm text-zinc-500">{detail}</p>
+      {to ? (
+        <Link to={to} className="mt-2 block text-sm font-medium text-accent hover:underline">
+          {detail} →
+        </Link>
+      ) : (
+        <p className="mt-2 text-sm text-zinc-500">{detail}</p>
+      )}
     </Card>
   );
 }
