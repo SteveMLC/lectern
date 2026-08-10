@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
 import { errorResponse } from "./lib/http";
+import { airtableApi } from "./routes/airtable";
 import { api } from "./routes/api";
 import { demoApi } from "./routes/demo";
 import { demoPage } from "./routes/demoPage";
@@ -15,6 +16,7 @@ import { demoPage } from "./routes/demoPage";
 const app = new Hono<{ Bindings: Env }>();
 
 app.route("/api/demo", demoApi);
+app.route("/api/airtable", airtableApi);
 app.route("/api", api);
 app.route("/", demoPage);
 

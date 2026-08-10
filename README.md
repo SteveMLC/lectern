@@ -190,6 +190,40 @@ Then open **`/demo`** in the running app and press **Load**. Loading is idempote
 
 The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions across every status, 10 sessions (9 from accepted submissions with lineage kept, 1 sponsor keynote added directly), two deliberate schedule conflicts, and five speakers with outstanding onboarding tasks. The reasoning behind each awkward record is in [`demo-data/liam-conference.storylines.md`](demo-data/liam-conference.storylines.md).
 
+## Airtable mirror
+
+Plenty of event teams already run their operations out of Airtable. SpeakerOps mirrors an event's records into a base so those people see submissions, decisions, the schedule, and outstanding speaker tasks without opening the app.
+
+**D1 stays authoritative.** Airtable is a mirror, not the backend, and that is a deliberate call:
+
+- Airtable allows **5 requests/second per base**. Serving page loads from it would put a rate limit in the demo path. Mirroring keeps it off the read path entirely.
+- Airtable has no transactions or joins, so the submission/session invariants below would be unenforceable there.
+- If Airtable is slow or down, the app keeps working and the sync reports a failure. The reverse would take the whole product down.
+
+### Turning it on
+
+Two secrets, and the mirror builds its own tables — you do not hand-build a base.
+
+```bash
+wrangler secret put AIRTABLE_TOKEN      # personal access token
+wrangler secret put AIRTABLE_BASE_ID    # the appXXXXXXXX id from the base URL
+```
+
+The token needs three scopes: `schema.bases:read`, `schema.bases:write` (so the mirror can create the tables), and `data.records:write`. Grant it access to the one base you want mirrored.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/airtable/status` | Whether it is configured and reachable, which tables exist, and what has been mirrored |
+| POST | `/api/airtable/events/:slug/sync` | Push an event's records. Safe to run repeatedly |
+
+Both need the organizer passcode. The token is read from Worker secrets and never reaches the browser — status reports *whether* a token is configured, never its value.
+
+### Why re-syncing is safe
+
+Every internal row is mapped to its Airtable record id in the `external_id_map` table. Known rows are updated in place; only genuinely new rows are created. Press Sync ten times and you get the same records, not ten copies. Writes are batched to Airtable's 10-record limit and spaced under the rate cap, and a 429 is retried with the server's own `Retry-After`.
+
+That idempotency is covered by tests rather than asserted: a second sync of unchanged data creates nothing and updates everything, and a 23-record table batches as 10 / 10 / 3.
+
 ## Deliberately deferred
 
 - Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.

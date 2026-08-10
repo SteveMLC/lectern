@@ -1,0 +1,282 @@
+import {
+  MIRROR_TABLES,
+  batch,
+  estimateRequests,
+  mapAgendaRow,
+  mapEventRow,
+  mapRoomRow,
+  mapSessionRow,
+  mapSpeakerRow,
+  mapSubmissionRow,
+  mapTaskRow,
+  mapTrackRow,
+  mergePlans,
+  planTable,
+  type MirrorRow,
+  type MirrorSourceRow,
+  type MirrorTable,
+} from "../../shared/domain/airtableMirror";
+import { randomId } from "../../shared/ids";
+import { AirtableClient } from "./airtableClient";
+
+/**
+ * Mirrors an event's operational records from D1 into Airtable.
+ *
+ * D1 remains authoritative. This pushes a readable copy into the organizer's
+ * base so the people who live in Airtable see submissions, decisions, the
+ * schedule, and outstanding speaker tasks without opening the app.
+ *
+ * Idempotent by construction: `external_id_map` remembers which Airtable
+ * record each internal row became, so re-running updates in place. Pressing
+ * Sync ten times leaves the same rows, not ten copies.
+ */
+
+export interface SyncResult {
+  ok: boolean;
+  runId: string;
+  tablesCreated: MirrorTable[];
+  created: number;
+  updated: number;
+  orphans: number;
+  airtableRequests: number;
+  report: string[];
+  error?: string;
+}
+
+/** The queries that shape each mirror table, with joins resolved for humans. */
+const SOURCE_QUERIES: Record<MirrorTable, { sql: string; map: (r: MirrorSourceRow) => MirrorRow }> = {
+  Events: {
+    sql: "SELECT id, name, slug, tagline, starts_on, ends_on, timezone, venue FROM events WHERE id = ?1",
+    map: mapEventRow,
+  },
+  Tracks: {
+    sql: "SELECT id, name, description, event_id FROM tracks WHERE event_id = ?1 ORDER BY sort_order",
+    map: mapTrackRow,
+  },
+  Rooms: {
+    sql: "SELECT id, name, capacity, event_id FROM rooms WHERE event_id = ?1 ORDER BY sort_order",
+    map: mapRoomRow,
+  },
+  Speakers: {
+    sql: "SELECT id, name, email, company, title, bio, location FROM speakers WHERE event_id = ?1 ORDER BY name",
+    map: mapSpeakerRow,
+  },
+  Submissions: {
+    sql: `SELECT s.id, s.title, s.abstract, s.status, s.format, s.submitted_at,
+                 t.name AS track_name,
+                 (SELECT group_concat(sp.name, ', ')
+                    FROM submission_speakers ss JOIN speakers sp ON sp.id = ss.speaker_id
+                   WHERE ss.submission_id = s.id) AS speaker_names
+            FROM submissions s
+            LEFT JOIN tracks t ON t.id = s.track_id
+           WHERE s.event_id = ?1
+           ORDER BY s.submitted_at IS NULL, s.submitted_at DESC, s.id`,
+    map: mapSubmissionRow,
+  },
+  Sessions: {
+    sql: `SELECT s.id, s.title, s.format, s.status, s.origin, s.source_submission_id,
+                 t.name AS track_name,
+                 (SELECT group_concat(sp.name, ', ')
+                    FROM session_speakers ss JOIN speakers sp ON sp.id = ss.speaker_id
+                   WHERE ss.session_id = s.id) AS speaker_names
+            FROM sessions s
+            LEFT JOIN tracks t ON t.id = s.track_id
+           WHERE s.event_id = ?1
+           ORDER BY s.id`,
+    map: mapSessionRow,
+  },
+  Agenda: {
+    sql: `SELECT a.id, a.starts_at, a.ends_at,
+                 ses.title AS session_title, r.name AS room_name
+            FROM agenda_slots a
+            JOIN sessions ses ON ses.id = a.session_id
+            LEFT JOIN rooms r ON r.id = a.room_id
+           WHERE a.event_id = ?1
+           ORDER BY a.starts_at`,
+    map: mapAgendaRow,
+  },
+  Tasks: {
+    sql: `SELECT st.id, st.status, st.completed_at,
+                 sp.name AS speaker_name, td.label AS task_label
+            FROM speaker_tasks st
+            JOIN speakers sp ON sp.id = st.speaker_id
+            JOIN task_definitions td ON td.id = st.task_definition_id
+           WHERE st.event_id = ?1
+           ORDER BY sp.name, td.sort_order`,
+    map: mapTaskRow,
+  },
+};
+
+/** The integration_connections row for this event's Airtable link. */
+async function ensureConnection(db: D1Database, eventId: string, now: string): Promise<string> {
+  const existing = await db
+    .prepare("SELECT id FROM integration_connections WHERE event_id = ?1 AND system = 'airtable'")
+    .bind(eventId)
+    .first<{ id: string }>();
+  if (existing) return existing.id;
+
+  const id = randomId("conn");
+  await db
+    .prepare(
+      `INSERT INTO integration_connections (id, event_id, system, status, config_json, updated_at)
+       VALUES (?1, ?2, 'airtable', 'configured', '{}', ?3)`,
+    )
+    .bind(id, eventId, now)
+    .run();
+  return id;
+}
+
+async function loadExternalIds(
+  db: D1Database,
+  connectionId: string,
+): Promise<Map<MirrorTable, Map<string, string>>> {
+  const { results } = await db
+    .prepare(
+      "SELECT entity_type, internal_id, external_id FROM external_id_map WHERE connection_id = ?1",
+    )
+    .bind(connectionId)
+    .all<{ entity_type: string; internal_id: string; external_id: string }>();
+
+  const byTable = new Map<MirrorTable, Map<string, string>>();
+  for (const table of MIRROR_TABLES) byTable.set(table, new Map());
+  for (const row of results) {
+    const table = byTable.get(row.entity_type as MirrorTable);
+    if (table) table.set(row.internal_id, row.external_id);
+  }
+  return byTable;
+}
+
+export async function syncEventToAirtable(options: {
+  db: D1Database;
+  client: AirtableClient;
+  eventId: string;
+  now: string;
+}): Promise<SyncResult> {
+  const { db, client, eventId, now } = options;
+  const report: string[] = [];
+  const runId = randomId("sync");
+  const connectionId = await ensureConnection(db, eventId, now);
+
+  await db
+    .prepare(
+      `INSERT INTO sync_runs (id, connection_id, started_at, finished_at, direction, status, stats_json, log_json)
+       VALUES (?1, ?2, ?3, NULL, 'push', 'running', NULL, NULL)`,
+    )
+    .bind(runId, connectionId, now)
+    .run();
+
+  const finish = async (result: Omit<SyncResult, "runId">): Promise<SyncResult> => {
+    await db
+      .prepare(
+        `UPDATE sync_runs SET finished_at = ?2, status = ?3, stats_json = ?4, log_json = ?5 WHERE id = ?1`,
+      )
+      .bind(
+        runId,
+        new Date().toISOString(),
+        result.ok ? "success" : "failure",
+        JSON.stringify({
+          created: result.created,
+          updated: result.updated,
+          orphans: result.orphans,
+          airtableRequests: result.airtableRequests,
+        }),
+        JSON.stringify(result.report),
+      )
+      .run();
+    await db
+      .prepare("UPDATE integration_connections SET status = ?2, updated_at = ?3 WHERE id = ?1")
+      .bind(connectionId, result.ok ? "configured" : "error", new Date().toISOString())
+      .run();
+    return { ...result, runId };
+  };
+
+  try {
+    const tablesCreated = await client.ensureTables(MIRROR_TABLES);
+    if (tablesCreated.length > 0) {
+      report.push(`Created ${tablesCreated.length} table(s) in the base: ${tablesCreated.join(", ")}`);
+    }
+
+    const known = await loadExternalIds(db, connectionId);
+
+    // Read every source table first so the plan is decided before any write.
+    const plans = [];
+    for (const table of MIRROR_TABLES) {
+      const query = SOURCE_QUERIES[table];
+      const { results } = await db
+        .prepare(query.sql)
+        .bind(eventId)
+        .all<MirrorSourceRow>();
+      const rows = results.map(query.map);
+      plans.push(planTable(table, rows, known.get(table) ?? new Map()));
+    }
+    const plan = mergePlans(plans);
+
+    report.push(
+      `Plan: ${plan.creates.length} new, ${plan.updates.length} existing, ` +
+        `~${estimateRequests(plan)} Airtable requests`,
+    );
+
+    // Writes, batched to Airtable's 10-record limit, table by table.
+    let created = 0;
+    let updated = 0;
+
+    for (const table of MIRROR_TABLES) {
+      const creates = plan.creates.filter((c) => c.table === table);
+      for (const chunk of batch(creates)) {
+        const mapping = await client.createRecords(table, chunk);
+        const stmts = [...mapping.entries()].map(([internalId, externalId]) =>
+          db
+            .prepare(
+              `INSERT INTO external_id_map (id, connection_id, entity_type, internal_id, external_id, last_synced_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+               ON CONFLICT(connection_id, entity_type, internal_id)
+               DO UPDATE SET external_id = excluded.external_id, last_synced_at = excluded.last_synced_at`,
+            )
+            .bind(randomId("ext"), connectionId, table, internalId, externalId, now),
+        );
+        if (stmts.length > 0) await db.batch(stmts);
+        created += mapping.size;
+      }
+
+      const updates = plan.updates.filter((u) => u.table === table);
+      for (const chunk of batch(updates)) {
+        await client.updateRecords(table, chunk);
+        updated += chunk.length;
+      }
+
+      const touched = creates.length + updates.length;
+      if (touched > 0) report.push(`${table}: ${creates.length} created, ${updates.length} updated`);
+    }
+
+    if (plan.orphans.length > 0) {
+      report.push(
+        `${plan.orphans.length} record(s) in Airtable no longer exist in SpeakerOps and were left in place.`,
+      );
+    }
+
+    report.push(`Done in ${client.requestCount} Airtable request(s).`);
+
+    return await finish({
+      ok: true,
+      tablesCreated,
+      created,
+      updated,
+      orphans: plan.orphans.length,
+      airtableRequests: client.requestCount,
+      report,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    report.push(`Sync failed: ${message}`);
+    return await finish({
+      ok: false,
+      tablesCreated: [],
+      created: 0,
+      updated: 0,
+      orphans: 0,
+      airtableRequests: client.requestCount,
+      report,
+      error: message,
+    });
+  }
+}

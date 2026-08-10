@@ -4,7 +4,9 @@
 # Passcode for the organizer console (required).
 ORGANIZER_PASSCODE=speakerops-dev
 
-# Optional — Airtable proof adapter (see docs/AIRTABLE.md).
+# Optional — Airtable mirror. The token needs schema.bases:read,
+# schema.bases:write, and data.records:write; the mirror creates its own
+# tables, so you do not need to build the base by hand. See the README.
 # AIRTABLE_TOKEN=
 # AIRTABLE_BASE_ID=
 
