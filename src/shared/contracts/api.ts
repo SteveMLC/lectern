@@ -219,6 +219,22 @@ export const SubmissionDecisionRequest = z.object({
 });
 export type SubmissionDecisionRequest = z.infer<typeof SubmissionDecisionRequest>;
 
+export const FeedbackDraftRequest = z.object({
+  decision: z.enum(["deny", "maybe"]),
+  /** The organizer's internal reasoning; drives the drafted email. */
+  reasoning: z.string().trim().max(2000).default(""),
+});
+export type FeedbackDraftRequest = z.infer<typeof FeedbackDraftRequest>;
+
+export const FeedbackDraftResponse = z.object({
+  subject: z.string(),
+  bodyMd: z.string(),
+  aiUsed: z.boolean(),
+  model: z.string().optional(),
+  note: z.string().optional(),
+});
+export type FeedbackDraftResponse = z.infer<typeof FeedbackDraftResponse>;
+
 export const SubmissionDecisionResponse = z.object({
   submission: SubmissionListItem,
   session: Session.nullable(),

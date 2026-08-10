@@ -13,6 +13,8 @@ import {
   EventBundle,
   EventCounts,
   EventsListResponse,
+  FeedbackDraftRequest,
+  FeedbackDraftResponse,
   HealthResponse,
   OrganizerAgendaResponse,
   PublicScheduleResponse,
@@ -178,6 +180,14 @@ export const apiClient = {
       { auth: true },
     );
   },
+
+  feedbackDraft: (slug: string, submissionId: string, body: FeedbackDraftRequest) =>
+    request(
+      FeedbackDraftResponse,
+      `/api/events/${encodeURIComponent(slug)}/submissions/${encodeURIComponent(submissionId)}/feedback-draft`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
 
   simulateCommunication: (slug: string, body: SimulateCommunicationRequest) =>
     request(

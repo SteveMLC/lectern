@@ -19,6 +19,8 @@ import {
   type PublicSpeakersResponse,
   SubmissionDecisionRequest,
   type SubmissionDecisionResponse,
+  FeedbackDraftRequest,
+  type FeedbackDraftResponse,
   type SpeakerPortalResponse,
   SimulateCommunicationRequest,
   type SimulateCommunicationResponse,
@@ -28,6 +30,7 @@ import {
   UpdateSpeakerTaskRequest,
 } from "../../shared/contracts";
 import { isCfpOpen } from "../../shared/domain/cfp";
+import { submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { randomId } from "../../shared/ids";
@@ -35,6 +38,7 @@ import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
 import { errorResponse } from "../lib/http";
 import { createRepo } from "../repo/factory";
+import { draftDecisionFeedback } from "../integrations/decisionFeedback";
 import { AirtableRepo } from "../repo/airtable/airtableRepo";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -338,6 +342,8 @@ api.get("/docs", (c) =>
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "GET", path: "/events/:slug/submissions.csv", auth: "organizer", purpose: "Submissions export as CSV (Excel-friendly)." },
+      { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft a decision-feedback email from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Never auto-sends." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
       { method: "GET", path: "/integrations/airtable/status", auth: "organizer", purpose: "Airtable proof connectivity, rate guard, and D1 fallback status." },
@@ -539,6 +545,20 @@ api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   return c.json(body);
 });
 
+api.get("/events/:slug/submissions.csv", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const submissions = await repo.listSubmissions(bundle.event.id);
+  return new Response(submissionsToCsv(submissions), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="submissions-${bundle.event.slug}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
+});
+
 api.post("/events/:slug/submissions/:submissionId/decision", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -578,6 +598,44 @@ api.post("/events/:slug/submissions/:submissionId/decision", organizerAuth, asyn
     }
     throw error;
   }
+});
+
+api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+
+  const submission = await repo.getSubmissionById(c.req.param("submissionId"));
+  if (!submission || submission.eventId !== bundle.event.id) {
+    return errorResponse(404, "submission_not_found", "No submission with that id for this event.");
+  }
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = FeedbackDraftRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Feedback request is invalid.", parsed.error.issues);
+  }
+
+  const primary = submission.speakers[0];
+  const draft = await draftDecisionFeedback(
+    {
+      eventName: bundle.event.name,
+      speakerName: primary?.name ?? "there",
+      talkTitle: submission.title,
+      talkAbstract: submission.abstract,
+      decision: parsed.data.decision,
+      reasoning: parsed.data.reasoning,
+    },
+    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+  );
+
+  const body: FeedbackDraftResponse = draft;
+  return c.json(body);
 });
 
 api.get("/events/:slug/counts", organizerAuth, async (c) => {

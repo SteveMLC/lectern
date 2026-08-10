@@ -14,4 +14,8 @@ export interface Env {
   /** Secrets for the Airtable proof adapter; never exposed client-side. */
   AIRTABLE_TOKEN?: string;
   AIRTABLE_BASE_ID?: string;
+  /** Secret. Enables AI-assisted decision-feedback drafting; template fallback without it. */
+  ANTHROPIC_API_KEY?: string;
+  /** Optional model override for feedback drafting (default claude-sonnet-5). */
+  ANTHROPIC_MODEL?: string;
 }

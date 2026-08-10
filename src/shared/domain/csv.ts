@@ -1,0 +1,50 @@
+import type { SubmissionListItem } from "../contracts";
+
+/**
+ * CSV building, pure and RFC-4180-shaped: fields containing commas, quotes,
+ * or newlines are quoted, quotes double. Excel-friendly CRLF row endings.
+ * Never regex a delimited format — build it, don't parse it.
+ */
+
+function escapeField(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replaceAll('"', '""')}"`;
+  }
+  return value;
+}
+
+export function toCsv(rows: readonly (readonly string[])[]): string {
+  return rows.map((row) => row.map(escapeField).join(",")).join("\r\n") + "\r\n";
+}
+
+/** The organizer-facing export: one row per submission, speakers flattened. */
+export function submissionsToCsv(submissions: readonly SubmissionListItem[]): string {
+  const header = [
+    "Title",
+    "Status",
+    "Track",
+    "Format",
+    "Speakers",
+    "Speaker emails",
+    "Companies",
+    "Submitted at",
+    "Abstract",
+    "SpeakerOps ID",
+  ];
+  const rows = submissions.map((s) => [
+    s.title,
+    s.status,
+    s.trackName ?? "",
+    s.format,
+    s.speakers.map((sp) => sp.name).join("; "),
+    s.speakers.map((sp) => sp.email).join("; "),
+    s.speakers
+      .map((sp) => sp.company ?? "")
+      .filter(Boolean)
+      .join("; "),
+    s.submittedAt ?? "",
+    s.abstract,
+    s.id,
+  ]);
+  return toCsv([header, ...rows]);
+}

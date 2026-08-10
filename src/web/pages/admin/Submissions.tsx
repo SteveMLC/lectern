@@ -18,7 +18,7 @@ import {
   cn,
 } from "../../components/ui";
 import { DecisionControls } from "../../components/DecisionControls";
-import { ApiRequestError, apiClient } from "../../lib/api";
+import { ApiRequestError, apiClient, getPasscode } from "../../lib/api";
 import { STATUS_LABEL, STATUS_TONE, formatDateTime } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
@@ -26,6 +26,7 @@ import { useAdminContext } from "./AdminLayout";
 type Filter = "all" | SubmissionStatusType;
 
 interface DecisionState {
+  eventSlug: string;
   busyId: string | null;
   decide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
 }
@@ -102,7 +103,24 @@ export function Submissions() {
     (submission) => getCompleteness(submission).percent === 100,
   ).length;
 
-  const decisionState: DecisionState = { busyId, decide };
+  const decisionState: DecisionState = { eventSlug, busyId, decide };
+
+  async function exportCsv() {
+    const res = await fetch(`/api/events/${encodeURIComponent(eventSlug)}/submissions.csv`, {
+      headers: { authorization: `Bearer ${getPasscode() ?? ""}` },
+    });
+    if (!res.ok) {
+      setActionError("CSV export failed.");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `submissions-${eventSlug}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div>
@@ -117,6 +135,9 @@ export function Submissions() {
             >
               Review queue
             </Link>
+            <Button variant="secondary" onClick={() => void exportCsv()}>
+              Export CSV
+            </Button>
             <Button variant="secondary" onClick={reload}>
               Refresh
             </Button>
@@ -268,6 +289,7 @@ function SubmissionRow({
       </td>
       <td className="px-4 py-4">
         <DecisionControls
+            eventSlug={decisionState.eventSlug}
           submission={submission}
           busy={decisionState.busyId === submission.id}
           anyBusy={decisionState.busyId !== null}
@@ -317,6 +339,7 @@ function SubmissionMobileCard({
       </div>
       <div className="mt-4 border-t border-zinc-100 pt-3">
         <DecisionControls
+            eventSlug={decisionState.eventSlug}
           submission={submission}
           busy={decisionState.busyId === submission.id}
           anyBusy={decisionState.busyId !== null}

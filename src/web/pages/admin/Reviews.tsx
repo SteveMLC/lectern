@@ -133,6 +133,7 @@ export function Reviews() {
             <ReviewCard
               key={submission.id}
               submission={submission}
+              eventSlug={eventSlug}
               busy={busyId === submission.id}
               anyBusy={busyId !== null}
               onDecide={decide}
@@ -166,11 +167,13 @@ export function answerFacts(answers: Record<string, unknown>): string[] {
 
 function ReviewCard({
   submission,
+  eventSlug,
   busy,
   anyBusy,
   onDecide,
 }: {
   submission: SubmissionListItem;
+  eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
   onDecide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
@@ -246,6 +249,7 @@ function ReviewCard({
       <div className="mt-4 border-t border-zinc-100 pt-4">
         <div className="flex flex-wrap items-center gap-2">
           <DecisionControls
+            eventSlug={eventSlug}
             submission={submission}
             busy={busy}
             anyBusy={anyBusy}
