@@ -40,12 +40,14 @@ await check("Worker, D1, and R2 health", async () => {
 });
 
 await check("Landing page and agent-readable handoff", async () => {
-  const [home, llms] = await Promise.all([
+  const [home, llms, demo] = await Promise.all([
     get("/", { kind: "text" }),
     get("/llms.txt", { kind: "text" }),
+    get("/demo", { kind: "text" }),
   ]);
   assert(home.includes("SpeakerOps"), "landing page is missing the product name");
   assert(llms.includes("SpeakerOps") && llms.includes("horizon-2026"), "/llms.txt is missing the judging handoff");
+  assert(demo.includes('id="passcode-form"'), "demo passcode is not wrapped in a semantic form");
 });
 
 await check("Public schedule, sessions, and speakers", async () => {

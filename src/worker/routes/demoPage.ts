@@ -74,10 +74,10 @@ function headers() {
 function gate(message) {
   root.innerHTML =
     (message ? '<div class="err">' + esc(message) + "</div>" : "") +
-    '<div class="card"><p class="name">Organizer passcode</p>' +
+    '<form class="card" id="passcode-form"><label class="name" for="pc">Organizer passcode</label>' +
     '<p class="meta">Loading demo data changes the database, so this page is gated.</p>' +
     '<div style="margin-top:14px"><input id="pc" type="password" placeholder="Passcode" autofocus></div>' +
-    '<div class="actions"><button class="primary" id="unlock">Unlock</button></div></div>';
+    '<div class="actions"><button class="primary" type="submit">Unlock</button></div></form>';
   const go = async () => {
     const v = document.getElementById("pc").value;
     if (!v) return;
@@ -86,8 +86,7 @@ function gate(message) {
     sessionStorage.setItem(KEY, v);
     load();
   };
-  document.getElementById("unlock").onclick = go;
-  document.getElementById("pc").onkeydown = (e) => { if (e.key === "Enter") go(); };
+  document.getElementById("passcode-form").onsubmit = (e) => { e.preventDefault(); go(); };
 }
 
 function render(datasets) {
