@@ -307,7 +307,7 @@ Welcome to Horizon Dev Summit 2026. Everything you need before the event:
 - **Slides:** 16:9, PDF or Keynote. Upload a draft by October 1.
 - **Recording:** all Main Hall sessions are recorded. Sign the release in your portal.
 - **AV:** HDMI and USB-C at the podium. Confidence monitor with timer.',
- '<iframe src="https://example.com/venue-map" title="Venue map" width="100%" height="360" loading="lazy"></iframe>',
+ '<iframe src="https://example.com/" title="Speaker reference example" width="100%" height="360" loading="lazy"></iframe>',
  1, '2026-08-02T12:00:00Z');
 
 INSERT INTO integration_connections (id, event_id, system, status, config_json, updated_at) VALUES

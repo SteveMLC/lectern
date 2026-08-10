@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { sanitizeEmbedHtml } from "./sanitizeEmbedHtml";
 
 describe("sanitizeEmbedHtml", () => {
-  it("keeps the seeded venue-map iframe working, with a forced sandbox", () => {
+  it("keeps the seeded reference iframe working, with a forced sandbox", () => {
     const out = sanitizeEmbedHtml(
-      '<iframe src="https://example.com/venue-map" title="Venue map" width="100%" height="360" loading="lazy"></iframe>',
+      '<iframe src="https://example.com/" title="Speaker reference example" width="100%" height="360" loading="lazy"></iframe>',
     );
-    expect(out).toContain('src="https://example.com/venue-map"');
-    expect(out).toContain('title="Venue map"');
+    expect(out).toContain('src="https://example.com/"');
+    expect(out).toContain('title="Speaker reference example"');
     expect(out).toContain('sandbox="allow-scripts allow-same-origin allow-popups"');
     expect(out).toContain('referrerpolicy="no-referrer"');
   });
