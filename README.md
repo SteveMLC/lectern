@@ -10,7 +10,7 @@ Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worke
 
 **https://speakerops.speakerops-go7.workers.dev**
 
-Organizer passcode: **`speakerops-dev`** — a deliberately public demo passcode, not a credential. Rotate it with `wrangler secret put ORGANIZER_PASSCODE` on your own deploy.
+Organizer passcode: **`speakerops-judge-2026`** — a deliberately public demo passcode, not a credential. It is distinct from the local development default, so a checkout of this repo never shares a passcode with the hosted demo. On your own deploy, set your own with `wrangler secret put ORGANIZER_PASSCODE`.
 
 A five-minute tour, in order:
 
