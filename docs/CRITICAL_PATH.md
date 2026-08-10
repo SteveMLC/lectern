@@ -5,6 +5,7 @@ The judging-critical product path is implemented on `main`. All six feature issu
 ## Implemented and Verified
 
 - Review queue with organizer Approve / Maybe / Deny decisions.
+- Formula-safe submissions CSV export plus editable deny/waitlist feedback drafts; without an AI key, the safe template never copies blunt internal notes into the speaker email.
 - Idempotent acceptance: repeated approval reuses the one session derived from the submission.
 - Direct invited/sponsor sessions with `origin=direct` and no source submission.
 - Drag-and-drop room scheduling with day, track, room, and list projections; exact room/time controls remain available, and room/speaker conflicts recompute immediately.
@@ -42,6 +43,6 @@ Do not flip the full judging demo to Airtable. D1 is the complete backend; Airta
 
 ## Optional, Not MVP
 
-- Accelevents mapping/CSV handoff.
+- Accelevents-specific field mapping/import; the generic organizer CSV handoff is implemented.
 - Real Resend delivery (simulated delivery is intentional and persisted).
 - Dark mode and exhaustive mobile admin polish.

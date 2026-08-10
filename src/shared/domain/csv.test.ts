@@ -13,6 +13,11 @@ describe("toCsv", () => {
   it("leaves clean fields unquoted", () => {
     expect(toCsv([["a", "b", "c"]])).toBe("a,b,c\r\n");
   });
+
+  it("neutralizes spreadsheet formulas in user-controlled cells", () => {
+    expect(toCsv([["=WEBSERVICE(\"https://example.invalid\")", "+1+1", " @SUM(A1:A2)", "-2+3"]]))
+      .toBe('"\'=WEBSERVICE(""https://example.invalid"")",\'+1+1,\' @SUM(A1:A2),\'-2+3\r\n');
+  });
 });
 
 describe("submissionsToCsv", () => {

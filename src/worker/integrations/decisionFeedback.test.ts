@@ -25,14 +25,15 @@ function fakeAnthropic(responder: () => { status?: number; body?: unknown }) {
 }
 
 describe("deterministicDraft", () => {
-  it("carries the organizer's reasons as bullets and states the decision plainly", () => {
+  it("states the decision plainly without leaking blunt internal reasoning", () => {
     const draft = deterministicDraft(INPUT);
     expect(draft.aiUsed).toBe(false);
     expect(draft.subject).toContain("Microservices Were a Mistake");
     expect(draft.bodyMd).toContain("not able to include it");
-    expect(draft.bodyMd).toContain("- we ran a nearly identical talk last year");
-    expect(draft.bodyMd).toContain("- abstract has no numbers");
+    expect(draft.bodyMd).not.toContain("we ran a nearly identical talk last year");
+    expect(draft.bodyMd).not.toContain("abstract has no numbers");
     expect(draft.bodyMd).toContain("future event");
+    expect(draft.note).toContain("internal reasoning was not copied");
   });
 
   it("waitlist wording is a genuine hold, not a soft rejection", () => {
@@ -52,7 +53,7 @@ describe("draftDecisionFeedback", () => {
   it("uses the deterministic template when no key is configured", async () => {
     const draft = await draftDecisionFeedback(INPUT, {});
     expect(draft.aiUsed).toBe(false);
-    expect(draft.note).toContain("ANTHROPIC_API_KEY");
+    expect(draft.note).toContain("internal reasoning was not copied");
   });
 
   it("returns the AI draft from a forced tool_use response", async () => {
@@ -87,7 +88,7 @@ describe("draftDecisionFeedback", () => {
     const draft = await draftDecisionFeedback(INPUT, { apiKey: "sk-ant-test", fetcher });
     expect(draft.aiUsed).toBe(false);
     expect(draft.note).toContain("AI drafting unavailable");
-    expect(draft.bodyMd).toContain("- single data point");
+    expect(draft.bodyMd).not.toContain("single data point");
   });
 
   it("falls back when the response has no usable draft", async () => {

@@ -69,5 +69,6 @@ Run `pnpm submission:preflight` immediately before upload. It re-runs the releas
 
 - D1 is the full backend. Airtable mirrors the eight judging-relevant operational tables, but it is intentionally not in the request path.
 - Email delivery is simulated and persisted; no external email is sent without credentials.
+- Decision-feedback drafting is optional seasoning: the organizer always edits the draft, and the no-key/failure template deliberately excludes blunt internal notes.
 - Agenda supports drag-and-drop room scheduling plus day, track, room, and list projections; explicit room/time controls remain as the precise keyboard/mobile fallback.
 - Speaker portal links use stable demo tokens; expiring production magic links are not claimed.

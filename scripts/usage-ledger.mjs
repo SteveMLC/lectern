@@ -1,4 +1,5 @@
 import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { basename, resolve } from "node:path";
@@ -23,6 +24,56 @@ function parseJsonl(text, label) {
     try { return JSON.parse(line); }
     catch (error) { throw new Error(`${label}:${index}: ${error.message}`); }
   });
+}
+
+function lineCanAffectUsage(line, format) {
+  if (format === "claude") return /"type"\s*:\s*"assistant"/.test(line);
+  if (format === "openclaw") return /"type"\s*:\s*"message"/.test(line);
+  if (format === "codex") {
+    return /"type"\s*:\s*"session_meta"/.test(line)
+      || /"type"\s*:\s*"turn_context"/.test(line)
+      || (/"type"\s*:\s*"event_msg"/.test(line) && /"type"\s*:\s*"token_count"/.test(line));
+  }
+  return true;
+}
+
+export async function readJsonlEvidence(filePath, label, options = {}) {
+  const digest = createHash("sha256");
+  const records = [];
+  let carry = Buffer.alloc(0);
+  let lineCount = 0;
+  let physicalLine = 0;
+
+  const processLine = (bytes) => {
+    physicalLine += 1;
+    const normalized = bytes.at(-1) === 13 ? bytes.subarray(0, -1) : bytes;
+    if (normalized.length === 0) return;
+    lineCount += 1;
+    const line = normalized.toString("utf8");
+    const timestamp = line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1];
+    if (timestamp && !inWindow(timestamp, options)) return;
+    if ((options.since || options.until) && !timestamp && options.sessionId) return;
+    if (!lineCanAffectUsage(line, options.format)) return;
+    try {
+      records.push(JSON.parse(line));
+    } catch (error) {
+      throw new Error(`${label}:${physicalLine}: ${error.message}`);
+    }
+  };
+
+  for await (const chunk of createReadStream(filePath)) {
+    digest.update(chunk);
+    const data = carry.length ? Buffer.concat([carry, chunk]) : chunk;
+    let start = 0;
+    for (let newline = data.indexOf(10, start); newline !== -1; newline = data.indexOf(10, start)) {
+      processLine(data.subarray(start, newline));
+      start = newline + 1;
+    }
+    carry = start < data.length ? Buffer.from(data.subarray(start)) : Buffer.alloc(0);
+  }
+  if (carry.length) processLine(carry);
+
+  return { records, sha256: digest.digest("hex"), lineCount };
 }
 
 async function readLedger() {
@@ -313,8 +364,8 @@ export function parseOpenClaw(records, options = {}) {
 async function snapshot(options) {
   if (!options.format || !options.file || !options.actor || !options.surface || !options.description || !options.category) throw new Error("snapshot requires --format, --file, --actor, --surface, --description, and --category");
   const filePath = expandLocalPath(options.file);
-  const raw = await readFile(filePath, "utf8");
-  const records = parseJsonl(raw, basename(options.file));
+  const evidence = await readJsonlEvidence(filePath, basename(options.file), options);
+  const records = evidence.records;
   const parsers = { claude: parseClaude, codex: parseCodex, openclaw: parseOpenClaw };
   const parser = parsers[options.format];
   if (!parser) throw new Error("--format must be claude, codex, or openclaw");
@@ -327,8 +378,8 @@ async function snapshot(options) {
   const pricing = await readPricing();
   const parsed = parser(records, options);
   const now = new Date().toISOString();
-  const sha256 = sourceDigest(raw);
-  const lineCount = raw.split(/\r?\n/).filter(Boolean).length;
+  const sha256 = evidence.sha256;
+  const lineCount = evidence.lineCount;
   const commits = options.commits ? options.commits.split(",").filter(Boolean) : [];
   const artifacts = options.artifacts ? options.artifacts.split(",").filter(Boolean) : [];
   const entries = [];
@@ -409,15 +460,7 @@ async function sync(options = {}) {
       captured.push(...entries);
     } catch (error) {
       if (source.required === false && error.code === "ENOENT") continue;
-      // Telemetry must never block a commit. Oversized session logs (V8's
-      // string limit surfaces as "Invalid string length") and other read
-      // failures skip the source with a warning; the ledger keeps its last
-      // good entry for it and the next successful sync catches up.
-      console.warn(
-        `Usage source ${source.name ?? source.file} skipped: ${error.message}. ` +
-          `Snapshot it manually once readable.`,
-      );
-      continue;
+      throw new Error(`Usage source ${source.name ?? source.file}: ${error.message}`);
     }
   }
   if (!options.dryRun && captured.length) await renderReport();

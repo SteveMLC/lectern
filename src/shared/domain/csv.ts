@@ -6,7 +6,11 @@ import type { SubmissionListItem } from "../contracts";
  * Never regex a delimited format — build it, don't parse it.
  */
 
-function escapeField(value: string): string {
+function escapeField(rawValue: string): string {
+  // Spreadsheet apps can evaluate user-controlled CSV cells beginning with
+  // =, +, -, or @ as formulas. Prefix an apostrophe before RFC-4180 escaping
+  // so proposal titles, abstracts, and speaker fields remain inert text.
+  const value = /^\s*[=+\-@]/.test(rawValue) ? `'${rawValue}` : rawValue;
   if (/[",\r\n]/.test(value)) {
     return `"${value.replaceAll('"', '""')}"`;
   }

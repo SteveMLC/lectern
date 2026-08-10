@@ -30,7 +30,7 @@ The complete judging path is deployed and production-proven:
 
 - Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
-- Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
+- Organizer console (passcode-gated): dashboard counts, searchable submissions, formula-safe CSV export, Approve/Maybe/Deny decisions with editable feedback drafts, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
 - **Airtable mirror**: all eight operational tables, idempotent record mapping, schema adoption, 5 req/s protection, 429 retries, guarded reset/deduplication, explicit D1 fallback, and an organizer status screen.
@@ -51,7 +51,7 @@ Latest organizer FAQ from Discord:
 - Decision email from inside the app is a bonus, especially when it can carry feedback or change requests.
 - Day/room scheduling with drag-and-drop and conflict detection is enough.
 - Email/calendar workflows should exist at MVP depth through preview/simulated send, with Resend or Cloudflare email wiring when a key is available.
-- Accelevents is optional and may be skipped. A mapping preview or CSV handoff is sufficient if we include anything.
+- Accelevents is optional. SpeakerOps includes a generic, Excel-friendly submissions CSV handoff; an Accelevents-specific field mapper is deliberately out of scope.
 - Admin UI is the highest-priority surface.
 
 ## Stack
@@ -163,6 +163,8 @@ The JSON API the app uses is the public API.
 | PUT | `/api/speaker-portal/:token/tasks/:taskId` | Speaker link | Complete or reopen an onboarding task |
 | POST | `/api/speaker-portal/:token/assets` | Speaker link | Upload headshot, slides, or document to R2 |
 | GET | `/api/events/:slug/submissions` | Bearer passcode | Organizer submissions list |
+| GET | `/api/events/:slug/submissions.csv` | Bearer passcode | Formula-safe, Excel-friendly submissions CSV export |
+| POST | `/api/events/:slug/submissions/:submissionId/feedback-draft` | Bearer passcode | Editable deny/waitlist feedback draft; AI-assisted only when configured, safe template otherwise |
 | POST | `/api/events/:slug/submissions/:submissionId/decision` | Bearer passcode | Approve, maybe, or deny a proposal |
 | GET | `/api/events/:slug/counts` | Bearer passcode | Dashboard counts |
 | GET | `/api/events/:slug/agenda` | Bearer passcode | Sessions, placements, and live conflicts |
@@ -246,7 +248,7 @@ That idempotency is covered by tests rather than asserted: a second sync of unch
 
 - Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.
 - Real email delivery; previews, calendar attachments, and persisted simulated delivery work without third-party credentials.
-- Optional Accelevents CSV/mapping handoff, dark mode, and exhaustive mobile admin polish.
+- Accelevents-specific field mapping/import, dark mode, and exhaustive mobile admin polish. A generic submissions CSV export is already included.
 
 ## Contributing
 

@@ -1,6 +1,10 @@
 // @ts-nocheck -- exercises the repository's JavaScript CLI module directly.
+import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -46,6 +50,29 @@ describe("usage ledger", () => {
     const [result] = parseClaude([record, record]);
     expect(result.calls).toBe(1);
     expect(result.tokens.providerTotal).toBe(35);
+  });
+
+  it("streams and hashes large bounded evidence without retaining irrelevant records", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "speakerops-usage-"));
+    const file = join(directory, "claude.jsonl");
+    const old = JSON.stringify({ type: "assistant", timestamp: "2026-08-01T00:00:00Z", message: { id: "old", model: "claude-opus-5", usage: { input_tokens: 1 } } });
+    const irrelevant = JSON.stringify({ type: "attachment", timestamp: "2026-08-01T00:00:01Z", payload: "x".repeat(1_000_000) });
+    const current = JSON.stringify({ type: "assistant", timestamp: "2026-08-10T00:00:00Z", message: { id: "current", model: "claude-opus-5", usage: { input_tokens: 2 } } });
+    const raw = `${old}\n${irrelevant}\n${current}\n`;
+    try {
+      await writeFile(file, raw);
+      const evidence = await readJsonlEvidence(file, "fixture", {
+        format: "claude",
+        sessionId: "fixture-session",
+        since: "2026-08-09T00:00:00Z",
+      });
+      expect(evidence.lineCount).toBe(3);
+      expect(evidence.sha256).toBe(createHash("sha256").update(raw).digest("hex"));
+      expect(evidence.records).toHaveLength(1);
+      expect(evidence.records[0].message.id).toBe("current");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("normalizes cumulative Codex input counters", () => {

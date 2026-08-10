@@ -11,8 +11,9 @@ import type { ReviewDecision } from "../../shared/contracts";
  * or contacts a speaker.
  *
  * Without an ANTHROPIC_API_KEY the flow still works: a deterministic template
- * carries the organizer's reasons verbatim, clearly labeled as not
- * AI-assisted. The demo can never break on a missing or failing key.
+ * deliberately leaves blunt internal reasoning out of the speaker-facing
+ * body and tells the organizer to add safe feedback manually. The demo can
+ * never break — or leak reviewer notes — on a missing or failing key.
  */
 
 export interface FeedbackDraftInput {
@@ -34,18 +35,11 @@ export interface FeedbackDraft {
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic fallback — always available, carries the reasoning verbatim
+// Deterministic fallback — always available, never copies internal reasoning
 // ---------------------------------------------------------------------------
 
 export function deterministicDraft(input: FeedbackDraftInput): FeedbackDraft {
   const firstName = input.speakerName.split(/\s+/)[0] ?? input.speakerName;
-  const reasons = input.reasoning
-    .split(/\r?\n|;/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => `- ${line}`)
-    .join("\n");
-
   const opening =
     input.decision === "deny"
       ? `Thank you for proposing “${input.talkTitle}” for ${input.eventName}. After review, we are not able to include it in this year's program.`
@@ -64,14 +58,15 @@ export function deterministicDraft(input: FeedbackDraftInput): FeedbackDraft {
     bodyMd: `Hi ${firstName},
 
 ${opening}
-${reasons ? `\nFeedback from the committee:\n\n${reasons}\n` : ""}
 ${closing}
 
 Thanks again for taking the time to submit.
 
 The ${input.eventName} program team`,
     aiUsed: false,
-    note: "Template draft — set ANTHROPIC_API_KEY to enable AI-assisted drafting.",
+    note: input.reasoning.trim()
+      ? "Template draft — your internal reasoning was not copied into this email. Add speaker-safe feedback manually, or configure AI-assisted drafting."
+      : "Template draft — set ANTHROPIC_API_KEY to enable AI-assisted drafting.",
   };
 }
 

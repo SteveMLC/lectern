@@ -31,6 +31,8 @@ The logger finds those sessions below the standard Codex, Claude, or OpenClaw di
 
 The tracked `.githooks/pre-commit` hook runs `usage:sync` before every commit, appends only provider-counter deltas, regenerates the tamper-evident report, stages both files, and validates them. Source configuration and raw logs stay in `usage/private/` and never enter git. Staged file paths are attached automatically as artifact provenance.
 
+Provider JSONL is streamed and hashed line by line, retaining only the record types needed for token accounting. Very large, long-lived Claude/Fable/Opus logs therefore keep the same full-file SHA-256 and line-count evidence without crossing the JavaScript string limit or weakening the commit gate. Missing optional sources may be absent; a configured source that exists but cannot be parsed still fails closed.
+
 Model pricing is configuration-driven: the logger selects the newest `pricing.json` record whose provider/model matches the session and whose effective date is not later than the usage. Supporting a new model or price change requires a dated pricing record, not a code edit.
 
 Use `AI_USAGE_SKIP=1 git commit ...` only for an emergency when the provider log is unavailable; run `pnpm usage:sync` before the next commit to close the gap.

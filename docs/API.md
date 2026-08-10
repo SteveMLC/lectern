@@ -26,6 +26,8 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/events/:slug/submissions` | Organizer submissions list |
+| GET | `/api/events/:slug/submissions.csv` | Formula-safe, Excel-friendly organizer submissions export |
+| POST | `/api/events/:slug/submissions/:submissionId/feedback-draft` | Draft editable deny/waitlist feedback; AI-assisted when configured, safe deterministic template otherwise |
 | POST | `/api/events/:slug/submissions/:submissionId/decision` | Approve, maybe, or deny; approval creates/reuses one session |
 | GET | `/api/events/:slug/counts` | Dashboard counts |
 | GET | `/api/events/:slug/agenda` | Sessions, room placements, and computed conflicts |
@@ -56,7 +58,7 @@ Build API coverage in this order:
 5. Speaker tasks, asset uploads, reminder/calendar previews.
 6. Public schedule/session/speaker embeds.
 7. Airtable persistence proof.
-8. Optional Accelevents mapping/CSV handoff.
+8. Generic submissions CSV handoff. Accelevents-specific field mapping remains optional.
 
 ## Iframe Embeds
 

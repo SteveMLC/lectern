@@ -1,15 +1,15 @@
 # AI usage reimbursement audit
 
-Generated 2026-08-10 21:32 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
+Generated 2026-08-10 21:39 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
 
-Ledger digest: `4450b3ba8bf2a607b704d840af7c6515c43bd40e5e06f919f70c72b13a0e9be9` (51 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
+Ledger digest: `644af476436a8322bfe5aad6878e04e03aa998f0fc9b32b186efab3682503583` (53 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
 Receipt-allocation digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
-2. **API-equivalent estimate — $425.32** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 50 usage entries remain uncovered by a recorded receipt.
+2. **API-equivalent estimate — $431.05** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
+3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 52 usage entries remain uncovered by a recorded receipt.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -17,11 +17,11 @@ The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhm
 
 | Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| anthropic/claude-fable-5 | 22 | 288 | 574 | 179,749,049 | 3,988,719 | 416,537 | $280.36 |
+| anthropic/claude-fable-5 | 23 | 290 | 578 | 181,660,378 | 3,989,502 | 417,748 | $282.34 |
 | anthropic/claude-opus-5 | 1 | 126 | 252 | 49,152,905 | 2,409,204 | 148,940 | $52.39 |
-| openai/gpt-5.6-sol | 27 | — | 2,761,973 | 134,666,240 | 0 | 371,162 | $92.28 |
+| openai/gpt-5.6-sol | 28 | — | 2,827,938 | 140,579,968 | 0 | 386,405 | $96.02 |
 | openai/gpt-5.5 | 1 | 6 | 5,393 | 516,096 | 0 | 137 | $0.29 |
-| **Total** | **51** | | | | | | **$425.32** |
+| **Total** | **53** | | | | | | **$431.05** |
 
 ## Evidence inventory
 
@@ -80,6 +80,8 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 23,420,265 | $25.90 | `1644c2007504…` (2121 lines) | `.dev.vars` `src/share` `src/share` `src/share` `src/web/c` `src/web/l` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` |
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 3,816,389 | $3.99 | `5f3e389bc207…` (2137 lines) | — |
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 955,711 | $0.99 | `b4294ae16fa1…` (2139 lines) | `scripts/u` `usage/REP` `usage/led` |
+| 2026-08-10 | Codex engineering task | gpt-5.6-sol | engineering qa release | 5,994,936 | $3.74 | `644e0b12cf0f…` (5344 lines) | `README.md` `docs/API.` `docs/CRIT` `docs/SUBM` `scripts/u` `src/share` `src/share` `src/share` `src/worke` `src/worke` `usage/REA` |
+| 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 1,913,327 | $1.99 | `5a7cd75e883b…` (2144 lines) | `README.md` `docs/API.` `docs/CRIT` `docs/SUBM` `scripts/u` `src/share` `src/share` `src/share` `src/worke` `src/worke` `usage/REA` |
 
 ## Receipt allocations
 
