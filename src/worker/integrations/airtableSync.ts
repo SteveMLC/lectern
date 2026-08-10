@@ -17,7 +17,7 @@ import {
   type MirrorTable,
 } from "../../shared/domain/airtableMirror";
 import { randomId } from "../../shared/ids";
-import { AirtableClient } from "./airtableClient";
+import { AirtableClient, AirtableError } from "./airtableClient";
 
 /**
  * Mirrors an event's operational records from D1 into Airtable.
@@ -38,6 +38,10 @@ export interface SyncResult {
   created: number;
   updated: number;
   orphans: number;
+  /** Mappings repaired by matching SpeakerOps ID against live records. */
+  relinked: number;
+  /** Rows in the base that carry no SpeakerOps ID; never touched. */
+  foreignRows: number;
   airtableRequests: number;
   report: string[];
   error?: string;
@@ -202,7 +206,16 @@ export async function syncEventToAirtable(options: {
 
     const known = await loadExternalIds(db, connectionId);
 
-    // Read every source table first so the plan is decided before any write.
+    // Reconcile before planning: the base is the truth about which records
+    // exist. Stored mappings can be stale in both directions — a database
+    // reseed wipes them while the records live on, and someone clearing the
+    // base deletes records our mappings still point to. Listing each table's
+    // SpeakerOps IDs heals both: live records win, dead mappings are dropped,
+    // and rows without our join key are counted but never touched.
+    let relinked = 0;
+    let foreignRows = 0;
+    let readScopeMissing = false;
+    const relinkStatements: D1PreparedStatement[] = [];
     const plans = [];
     for (const table of MIRROR_TABLES) {
       const query = SOURCE_QUERIES[table];
@@ -211,8 +224,63 @@ export async function syncEventToAirtable(options: {
         .bind(eventId)
         .all<MirrorSourceRow>();
       const rows = results.map(query.map);
-      plans.push(planTable(table, rows, known.get(table) ?? new Map()));
+
+      const stored = known.get(table) ?? new Map<string, string>();
+
+      // Reconciliation needs data.records:read. A token scoped write-only is a
+      // legitimate configuration, so a 403 here downgrades to trusting the
+      // stored mappings rather than failing the sync.
+      let keys: { recordId: string; speakerOpsId: string | null }[] | null = null;
+      if (!readScopeMissing) {
+        try {
+          keys = await client.listRecordKeys(table);
+        } catch (error) {
+          if (error instanceof AirtableError && error.status === 403) {
+            readScopeMissing = true;
+          } else {
+            throw error;
+          }
+        }
+      }
+      if (keys === null) {
+        plans.push(planTable(table, rows, stored));
+        continue;
+      }
+
+      const live = new Map<string, string>();
+      for (const key of keys) {
+        if (key.speakerOpsId === null) {
+          foreignRows += 1;
+        } else if (!live.has(key.speakerOpsId)) {
+          live.set(key.speakerOpsId, key.recordId);
+        }
+      }
+
+      const effective = new Map<string, string>();
+      for (const row of rows) {
+        const liveId = live.get(row.internalId);
+        if (liveId !== undefined) {
+          effective.set(row.internalId, liveId);
+          if (stored.get(row.internalId) !== liveId) {
+            relinked += 1;
+            relinkStatements.push(
+              db
+                .prepare(
+                  `INSERT INTO external_id_map (id, connection_id, entity_type, internal_id, external_id, last_synced_at)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                   ON CONFLICT(connection_id, entity_type, internal_id)
+                   DO UPDATE SET external_id = excluded.external_id, last_synced_at = excluded.last_synced_at`,
+                )
+                .bind(randomId("ext"), connectionId, table, row.internalId, liveId, now),
+            );
+          }
+        }
+        // No live record: fall through to create, even if a stale mapping
+        // exists — its target is gone and the create will remap it.
+      }
+      plans.push(planTable(table, rows, effective));
     }
+    if (relinkStatements.length > 0) await db.batch(relinkStatements);
     const plan = mergePlans(plans);
 
     report.push(
@@ -252,6 +320,20 @@ export async function syncEventToAirtable(options: {
       if (touched > 0) report.push(`${table}: ${creates.length} created, ${updates.length} updated`);
     }
 
+    if (readScopeMissing) {
+      report.push(
+        "Reconciliation skipped: token lacks data.records:read; trusting stored mappings. " +
+          "Add that scope to make sync self-healing after resets.",
+      );
+    }
+    if (relinked > 0) {
+      report.push(`Reconciled ${relinked} mapping(s) against live records by SpeakerOps ID.`);
+    }
+    if (foreignRows > 0) {
+      report.push(
+        `${foreignRows} row(s) in the base carry no SpeakerOps ID (template or hand-added); left untouched.`,
+      );
+    }
     if (plan.orphans.length > 0) {
       report.push(
         `${plan.orphans.length} record(s) in Airtable no longer exist in SpeakerOps and were left in place.`,
@@ -266,6 +348,8 @@ export async function syncEventToAirtable(options: {
       created,
       updated,
       orphans: plan.orphans.length,
+      relinked,
+      foreignRows,
       airtableRequests: client.requestCount,
       report,
     });
@@ -278,6 +362,8 @@ export async function syncEventToAirtable(options: {
       created: 0,
       updated: 0,
       orphans: 0,
+      relinked: 0,
+      foreignRows: 0,
       airtableRequests: client.requestCount,
       report,
       error: message,

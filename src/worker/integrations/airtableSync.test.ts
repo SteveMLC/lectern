@@ -63,11 +63,18 @@ function fakeDb(seed: {
         const run = syncRuns.find((r) => r.id === args[0]);
         if (run) run.status = String(args[2]);
       } else if (sql.includes("INSERT INTO external_id_map")) {
-        externalIds.push({
+        // Mirror the real schema's UNIQUE(connection_id, entity_type,
+        // internal_id) upsert: replace in place, never duplicate.
+        const entry = {
           entity_type: String(args[2]),
           internal_id: String(args[3]),
           external_id: String(args[4]),
-        });
+        };
+        const existing = externalIds.find(
+          (r) => r.entity_type === entry.entity_type && r.internal_id === entry.internal_id,
+        );
+        if (existing) existing.external_id = entry.external_id;
+        else externalIds.push(entry);
       }
       return { success: true };
     },
@@ -87,7 +94,10 @@ function fakeDb(seed: {
 }
 
 /** Fake Airtable that hands out sequential record ids and remembers writes. */
-function fakeAirtable(existingTables: string[] = []) {
+function fakeAirtable(
+  existingTables: string[] = [],
+  liveRecords: Record<string, { id: string; speakerOpsId: string | null }[]> = {},
+) {
   const posts: { table: string; count: number }[] = [];
   const patches: { table: string; ids: string[] }[] = [];
   let counter = 0;
@@ -117,6 +127,15 @@ function fakeAirtable(existingTables: string[] = []) {
     if (u.includes("/meta/bases/") && method === "POST") {
       existingTables.push(body.name);
       return new Response(JSON.stringify({ id: "tbl" }), { status: 200 });
+    }
+
+    if (method === "GET" && u.includes("pageSize=100")) {
+      const listTable = decodeURIComponent(new URL(u).pathname.split("/").pop() ?? "");
+      const records = (liveRecords[listTable] ?? []).map((r) => ({
+        id: r.id,
+        fields: r.speakerOpsId === null ? {} : { "SpeakerOps ID": r.speakerOpsId },
+      }));
+      return new Response(JSON.stringify({ records }), { status: 200 });
     }
 
     const table = decodeURIComponent(u.split("/").pop() ?? "");
@@ -202,7 +221,19 @@ describe("syncEventToAirtable", () => {
     expect(first.created).toBe(5);
     expect(first.updated).toBe(0);
 
-    const secondAirtable = fakeAirtable(["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"]);
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const live = {
+      Events: [{ id: "rec0", speakerOpsId: "evt_1" }],
+      Speakers: [
+        { id: "rec1", speakerOpsId: "spk_a" },
+        { id: "rec2", speakerOpsId: "spk_b" },
+      ],
+      Sessions: [
+        { id: "rec3", speakerOpsId: "ses_1" },
+        { id: "rec4", speakerOpsId: "ses_2" },
+      ],
+    };
+    const secondAirtable = fakeAirtable(allTables, live);
     const second = await syncEventToAirtable({
       db,
       client: secondAirtable.client,
@@ -215,6 +246,148 @@ describe("syncEventToAirtable", () => {
     expect(secondAirtable.posts).toEqual([]);
     // Still five mappings, not ten.
     expect(externalIds).toHaveLength(5);
+  });
+
+  it("recovers from lost mappings (database reseed) by relinking on SpeakerOps ID", async () => {
+    // Fresh db: no mappings at all — but the base already holds the records.
+    const { db, externalIds } = fakeDb(SEED);
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const airtable = fakeAirtable(allTables, {
+      Events: [{ id: "recOLD0", speakerOpsId: "evt_1" }],
+      Speakers: [
+        { id: "recOLD1", speakerOpsId: "spk_a" },
+        { id: "recOLD2", speakerOpsId: "spk_b" },
+      ],
+      Sessions: [
+        { id: "recOLD3", speakerOpsId: "ses_1" },
+        { id: "recOLD4", speakerOpsId: "ses_2" },
+      ],
+    });
+
+    const result = await syncEventToAirtable({
+      db,
+      client: airtable.client,
+      eventId: "evt_1",
+      now: "2026-08-10T01:00:00Z",
+    });
+
+    // Nothing duplicated: every row matched a live record by SpeakerOps ID.
+    expect(result.created).toBe(0);
+    expect(result.updated).toBe(5);
+    expect(result.relinked).toBe(5);
+    expect(airtable.posts).toEqual([]);
+    // Mappings rebuilt against the live record ids.
+    expect(externalIds).toHaveLength(5);
+    expect(externalIds.every((r) => String(r.external_id).startsWith("recOLD"))).toBe(true);
+  });
+
+  it("recovers from a cleared base (records deleted) by recreating and remapping", async () => {
+    const { db, externalIds } = fakeDb(SEED);
+
+    // First sync establishes mappings.
+    await syncEventToAirtable({
+      db,
+      client: fakeAirtable().client,
+      eventId: "evt_1",
+      now: "2026-08-10T00:00:00Z",
+    });
+    expect(externalIds).toHaveLength(5);
+
+    // Someone empties the base: tables exist, records gone, mappings stale.
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const emptyBase = fakeAirtable(allTables, {});
+    const result = await syncEventToAirtable({
+      db,
+      client: emptyBase.client,
+      eventId: "evt_1",
+      now: "2026-08-10T02:00:00Z",
+    });
+
+    // Stale mappings are ignored; everything is recreated, nothing 404s.
+    expect(result.ok).toBe(true);
+    expect(result.created).toBe(5);
+    expect(result.updated).toBe(0);
+    expect(emptyBase.patches).toEqual([]);
+    // Mappings overwritten to the new record ids, still five.
+    expect(externalIds).toHaveLength(5);
+  });
+
+  it("degrades to stored mappings when the token cannot read records", async () => {
+    const { db, externalIds } = fakeDb(SEED);
+
+    // Establish mappings with a full-capability fake.
+    await syncEventToAirtable({
+      db,
+      client: fakeAirtable().client,
+      eventId: "evt_1",
+      now: "2026-08-10T00:00:00Z",
+    });
+    expect(externalIds).toHaveLength(5);
+
+    // Now a fake that 403s every record LIST but allows writes.
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    let now = 0;
+    const fetcher = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      const method = init?.method ?? "GET";
+      if (u.includes("/meta/bases/") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            tables: allTables.map((name) => ({
+              id: `tbl_${name}`,
+              name,
+              fields: (TABLE_SCHEMA[name as keyof typeof TABLE_SCHEMA] ?? []).map((f) => ({ name: f.name })),
+            })),
+          }),
+          { status: 200 },
+        );
+      }
+      if (method === "GET") {
+        return new Response(JSON.stringify({ error: { type: "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND" } }), {
+          status: 403,
+        });
+      }
+      return new Response(JSON.stringify({ records: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = new AirtableClient({
+      token: "pat_writeonly",
+      baseId: "appFAKE",
+      fetcher,
+      clock: () => now,
+      sleep: async (ms) => {
+        now += ms;
+      },
+    });
+
+    const result = await syncEventToAirtable({ db, client, eventId: "evt_1", now: "2026-08-10T04:00:00Z" });
+
+    expect(result.ok).toBe(true);
+    expect(result.created).toBe(0);
+    expect(result.updated).toBe(5);
+    expect(result.relinked).toBe(0);
+    expect(result.report.some((line) => line.includes("Reconciliation skipped"))).toBe(true);
+  });
+
+  it("counts foreign rows without touching them", async () => {
+    const { db } = fakeDb(SEED);
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const airtable = fakeAirtable(allTables, {
+      Speakers: [
+        { id: "recTPL1", speakerOpsId: null },
+        { id: "recTPL2", speakerOpsId: null },
+      ],
+    });
+
+    const result = await syncEventToAirtable({
+      db,
+      client: airtable.client,
+      eventId: "evt_1",
+      now: "2026-08-10T03:00:00Z",
+    });
+
+    expect(result.foreignRows).toBe(2);
+    // Template rows never appear in any PATCH.
+    expect(airtable.patches.flatMap((p) => p.ids)).not.toContain("recTPL1");
   });
 
   it("marks the run failed and reports the reason when Airtable rejects the token", async () => {

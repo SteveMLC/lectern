@@ -176,6 +176,37 @@ export class AirtableClient {
   // Records
   // -------------------------------------------------------------------------
 
+  /**
+   * Every record's Airtable id and SpeakerOps ID join key, for reconciliation.
+   * Rows without a SpeakerOps ID (template samples, hand-added rows) come back
+   * with null so the sync can count them without ever touching them.
+   */
+  async listRecordKeys(
+    table: MirrorTable,
+  ): Promise<{ recordId: string; speakerOpsId: string | null }[]> {
+    const out: { recordId: string; speakerOpsId: string | null }[] = [];
+    let offset: string | undefined;
+    do {
+      const url = new URL(this.dataUrl(table));
+      url.searchParams.set("pageSize", "100");
+      url.searchParams.append("fields[]", "SpeakerOps ID");
+      if (offset) url.searchParams.set("offset", offset);
+      const body = (await this.request(url.toString(), { method: "GET" })) as {
+        records?: { id: string; fields?: Record<string, unknown> }[];
+        offset?: string;
+      };
+      for (const record of body.records ?? []) {
+        const raw = record.fields?.["SpeakerOps ID"];
+        out.push({
+          recordId: record.id,
+          speakerOpsId: typeof raw === "string" && raw.trim() ? raw : null,
+        });
+      }
+      offset = body.offset;
+    } while (offset);
+    return out;
+  }
+
   /** One batch of at most 10 creates. Returns internalId -> Airtable record id. */
   async createRecords(table: MirrorTable, items: readonly MirrorCreate[]): Promise<Map<string, string>> {
     if (items.length === 0) return new Map();
