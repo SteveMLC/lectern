@@ -205,6 +205,21 @@ export const CreateSubmissionResponse = z.object({
 });
 export type CreateSubmissionResponse = z.infer<typeof CreateSubmissionResponse>;
 
+export const ReviewDecision = z.enum(["approve", "maybe", "deny"]);
+export type ReviewDecision = z.infer<typeof ReviewDecision>;
+
+export const SubmissionDecisionRequest = z.object({
+  decision: ReviewDecision,
+});
+export type SubmissionDecisionRequest = z.infer<typeof SubmissionDecisionRequest>;
+
+export const SubmissionDecisionResponse = z.object({
+  submission: SubmissionListItem,
+  session: Session.nullable(),
+  reusedSession: z.boolean(),
+});
+export type SubmissionDecisionResponse = z.infer<typeof SubmissionDecisionResponse>;
+
 // ---------------------------------------------------------------------------
 // Dashboard counts (organizer)
 // ---------------------------------------------------------------------------

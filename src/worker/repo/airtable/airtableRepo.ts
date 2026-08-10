@@ -12,8 +12,10 @@ import type {
 import type {
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
+  DecideSubmissionInput,
   SpeakerPortalBundle,
   SpeakerOpsRepo,
+  SubmissionDecisionResult,
 } from "../types";
 
 /**
@@ -109,6 +111,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async getSubmissionById(_id: string): Promise<SubmissionListItem | null> {
     throw new AirtableNotWiredError("getSubmissionById");
+  }
+
+  async decideSubmission(_input: DecideSubmissionInput): Promise<SubmissionDecisionResult> {
+    throw new AirtableNotWiredError("decideSubmission");
   }
 
   async countsForEvent(_eventId: string): Promise<EventCounts> {

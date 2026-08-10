@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
+import { Reviews } from "./pages/admin/Reviews";
 import { Submissions } from "./pages/admin/Submissions";
 import { ApiDocs } from "./pages/ApiDocs";
 import { CfpPage } from "./pages/CfpPage";
@@ -25,16 +26,7 @@ export function App() {
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="submissions" element={<Submissions />} />
-        <Route
-          path="reviews"
-          element={
-            <ComingSoon
-              title="Reviews"
-              lane="Lane A"
-              body="Reviewer assignments, two scoring rounds against the rubric, comments, and accept/reject decisions land here."
-            />
-          }
-        />
+        <Route path="reviews" element={<Reviews />} />
         <Route
           path="agenda"
           element={

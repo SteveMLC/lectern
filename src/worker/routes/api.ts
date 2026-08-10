@@ -10,6 +10,8 @@ import {
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
+  SubmissionDecisionRequest,
+  type SubmissionDecisionResponse,
   type SubmissionsListResponse,
   type UploadAssetResponse,
 } from "../../shared/contracts";
@@ -270,6 +272,7 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "public", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "public", purpose: "Stream a stored asset." },
@@ -376,6 +379,47 @@ api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   const submissions = await repo.listSubmissions(bundle.event.id);
   const body: SubmissionsListResponse = { submissions };
   return c.json(body);
+});
+
+api.post("/events/:slug/submissions/:submissionId/decision", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+
+  const submission = await repo.getSubmissionById(c.req.param("submissionId"));
+  if (!submission || submission.eventId !== bundle.event.id) {
+    return errorResponse(404, "submission_not_found", "No submission with that id for this event.");
+  }
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SubmissionDecisionRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Decision is invalid.", parsed.error.issues);
+  }
+
+  try {
+    const result = await repo.decideSubmission({
+      submissionId: submission.id,
+      decision: parsed.data.decision,
+      now: new Date().toISOString(),
+    });
+    const body: SubmissionDecisionResponse = result;
+    return c.json(body);
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_decision_transition") {
+      return errorResponse(
+        409,
+        "invalid_decision_transition",
+        "Accepted proposals can only be approved again. Cancel the live session before changing the decision.",
+      );
+    }
+    throw error;
+  }
 });
 
 api.get("/events/:slug/counts", organizerAuth, async (c) => {

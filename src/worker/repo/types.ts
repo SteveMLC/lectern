@@ -7,6 +7,7 @@ import type {
   PublicSessionsResponse,
   PublicSpeakersResponse,
   ResourcePage,
+  Session,
   SessionFormat,
   Speaker,
   SpeakerAsset,
@@ -43,12 +44,25 @@ export interface SpeakerOpsRepo {
   createCfpSubmission(input: CreateCfpSubmissionInput): Promise<SubmissionListItem>;
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
+  decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
   countsForEvent(eventId: string): Promise<EventCounts>;
 
   getSpeakerById(id: string): Promise<Speaker | null>;
   getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
+}
+
+export interface DecideSubmissionInput {
+  submissionId: string;
+  decision: "approve" | "maybe" | "deny";
+  now: string;
+}
+
+export interface SubmissionDecisionResult {
+  submission: SubmissionListItem;
+  session: Session | null;
+  reusedSession: boolean;
 }
 
 export interface SpeakerPortalBundle {

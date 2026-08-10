@@ -16,6 +16,8 @@ import {
   Speaker,
   SpeakerAsset,
   SpeakerTask,
+  SubmissionDecisionRequest,
+  SubmissionDecisionResponse,
   SubmissionsListResponse,
   TaskDefinition,
 } from "../../shared/contracts";
@@ -141,6 +143,14 @@ export const apiClient = {
       SubmissionsListResponse,
       `/api/events/${encodeURIComponent(slug)}/submissions`,
       undefined,
+      { auth: true },
+    ),
+
+  decideSubmission: (slug: string, submissionId: string, body: SubmissionDecisionRequest) =>
+    request(
+      SubmissionDecisionResponse,
+      `/api/events/${encodeURIComponent(slug)}/submissions/${encodeURIComponent(submissionId)}/decision`,
+      { method: "POST", body: JSON.stringify(body) },
       { auth: true },
     ),
 

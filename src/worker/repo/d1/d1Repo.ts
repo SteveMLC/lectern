@@ -14,6 +14,7 @@ import type {
   PublicSpeakersResponse,
   ResourcePage,
   Room,
+  Session,
   Speaker,
   SpeakerAsset,
   SpeakerTask,
@@ -26,10 +27,14 @@ import type {
 import type {
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
+  DecideSubmissionInput,
   SpeakerPortalBundle,
   SpeakerPortalSession,
   SpeakerOpsRepo,
+  SubmissionDecisionResult,
 } from "../types";
+import { buildSessionFromSubmission } from "../../../shared/domain/acceptance";
+import { canApplyDecision, statusForDecision } from "../../../shared/domain/decisions";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -142,6 +147,20 @@ interface SubmissionSpeakerLinkRow {
   name: string;
   email: string;
   company: string | null;
+}
+
+interface SessionRow {
+  id: string;
+  event_id: string;
+  source_submission_id: string | null;
+  track_id: string | null;
+  title: string;
+  abstract: string;
+  format: string;
+  status: string;
+  origin: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface SpeakerAssetRow {
@@ -474,6 +493,22 @@ function mapSubmissionListItem(
     updatedAt: r.updated_at,
     speakers,
     trackName: r.track_name,
+  };
+}
+
+function mapSession(r: SessionRow): Session {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    sourceSubmissionId: r.source_submission_id,
+    trackId: r.track_id,
+    title: r.title,
+    abstract: r.abstract,
+    format: r.format as Session["format"],
+    status: r.status as Session["status"],
+    origin: r.origin as Session["origin"],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -818,6 +853,90 @@ export class D1Repo implements SpeakerOpsRepo {
     }));
 
     return mapSubmissionListItem(row, speakers);
+  }
+
+  async decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult> {
+    const submission = await this.getSubmissionById(input.submissionId);
+    if (!submission) throw new Error("submission_not_found");
+    if (!canApplyDecision(submission.status, input.decision)) {
+      throw new Error("invalid_decision_transition");
+    }
+
+    const targetStatus = statusForDecision(input.decision);
+    if (input.decision !== "approve") {
+      await this.db
+        .prepare("UPDATE submissions SET status = ?1, updated_at = ?2 WHERE id = ?3")
+        .bind(targetStatus, input.now, submission.id)
+        .run();
+      const updated = await this.getSubmissionById(submission.id);
+      if (!updated) throw new Error("Submission disappeared after decision.");
+      return { submission: updated, session: null, reusedSession: false };
+    }
+
+    const existing = await this.db
+      .prepare("SELECT * FROM sessions WHERE source_submission_id = ?")
+      .bind(submission.id)
+      .first<SessionRow>();
+    const built = buildSessionFromSubmission({
+      submission,
+      submissionSpeakers: submission.speakers.map((speaker) => ({
+        submissionId: submission.id,
+        speakerId: speaker.speakerId,
+        role: speaker.role,
+        sortOrder: speaker.sortOrder,
+      })),
+      now: input.now,
+    });
+
+    const statements = [
+      this.db
+        .prepare(
+          `INSERT INTO sessions
+             (id, event_id, source_submission_id, track_id, title, abstract, format, status, origin, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+           ON CONFLICT(source_submission_id) DO NOTHING`,
+        )
+        .bind(
+          built.session.id,
+          built.session.eventId,
+          built.session.sourceSubmissionId,
+          built.session.trackId,
+          built.session.title,
+          built.session.abstract,
+          built.session.format,
+          built.session.status,
+          built.session.origin,
+          built.session.createdAt,
+          built.session.updatedAt,
+        ),
+      ...built.sessionSpeakers.map((speaker) =>
+        this.db
+          .prepare(
+            `INSERT INTO session_speakers (session_id, speaker_id, role, sort_order)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(session_id, speaker_id) DO NOTHING`,
+          )
+          .bind(speaker.sessionId, speaker.speakerId, speaker.role, speaker.sortOrder),
+      ),
+      this.db
+        .prepare("UPDATE submissions SET status = 'accepted', updated_at = ?1 WHERE id = ?2")
+        .bind(input.now, submission.id),
+    ];
+    await this.db.batch(statements);
+
+    const [updated, sessionRow] = await Promise.all([
+      this.getSubmissionById(submission.id),
+      this.db
+        .prepare("SELECT * FROM sessions WHERE source_submission_id = ?")
+        .bind(submission.id)
+        .first<SessionRow>(),
+    ]);
+    if (!updated || !sessionRow) throw new Error("Acceptance did not create its session.");
+    return {
+      submission: updated,
+      session: mapSession(sessionRow),
+      reusedSession: existing !== null,
+    };
   }
 
   async countsForEvent(eventId: string): Promise<EventCounts> {
