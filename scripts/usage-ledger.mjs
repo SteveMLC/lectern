@@ -126,7 +126,7 @@ function expandLocalPath(path) {
   return resolve(root, path);
 }
 
-async function findSessionFile(directory, sessionId) {
+async function findSessionFile(directory, sessionId, format) {
   const matches = [];
   const visit = async (current) => {
     let entries;
@@ -138,7 +138,9 @@ async function findSessionFile(directory, sessionId) {
     for (const entry of entries) {
       const path = resolve(current, entry.name);
       if (entry.isDirectory()) await visit(path);
-      else if (entry.name.includes(sessionId) && entry.name.includes(".jsonl")) matches.push(path);
+      else if (entry.name.includes(sessionId) && entry.name.includes(".jsonl")) {
+        if (format !== "openclaw" || !entry.name.includes(".trajectory")) matches.push(path);
+      }
     }
   };
   await visit(directory);
@@ -146,6 +148,14 @@ async function findSessionFile(directory, sessionId) {
     const error = new Error(`No local JSONL file found for session ${sessionId} under ${directory}.`);
     error.code = "ENOENT";
     throw error;
+  }
+  if (format === "openclaw") {
+    const live = matches.find((path) => basename(path) === `${sessionId}.jsonl`);
+    if (live) return live;
+    const reset = matches
+      .filter((path) => basename(path).includes(".jsonl.reset."))
+      .sort((left, right) => right.localeCompare(left))[0];
+    if (reset) return reset;
   }
   if (matches.length > 1) throw new Error(`Multiple local JSONL files match session ${sessionId}; set an explicit private file path.`);
   return matches[0];
@@ -156,7 +166,7 @@ async function resolveSourceFile(source) {
   if (!source.sessionId) throw new Error("A source needs either file or sessionId.");
   const sourceRoot = source.searchRoot ?? defaultSourceRoots[source.format];
   if (!sourceRoot) throw new Error(`No default search root for format ${source.format}; set searchRoot or file.`);
-  return findSessionFile(expandLocalPath(sourceRoot), source.sessionId);
+  return findSessionFile(expandLocalPath(sourceRoot), source.sessionId, source.format);
 }
 
 function stagedArtifacts() {

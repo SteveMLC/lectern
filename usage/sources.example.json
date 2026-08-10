@@ -22,6 +22,17 @@
       "description": "AI-assisted planning, design, implementation, and handoff work.",
       "includeStagedArtifacts": true,
       "required": false
+    },
+    {
+      "name": "current-openclaw-task",
+      "format": "openclaw",
+      "sessionId": "openclaw-session-uuid",
+      "actor": "OpenClaw coordination task",
+      "surface": "OpenClaw",
+      "category": "planning_handoff",
+      "description": "AI-assisted planning, coordination, and handoff work.",
+      "includeStagedArtifacts": true,
+      "required": false
     }
   ]
 }

@@ -26,7 +26,7 @@ pnpm usage:install-hooks
 pnpm usage:sync -- --dry-run
 ```
 
-The logger finds those sessions below the standard Codex, Claude, or OpenClaw directories, so dated folders and machine paths are not committed or hardcoded. An explicit private `file` or `searchRoot` remains available for nonstandard installations.
+The logger finds those sessions below the standard Codex, Claude, or OpenClaw directories, so dated folders and machine paths are not committed or hardcoded. For OpenClaw it prefers the live session and falls back to the newest reset log after rotation. An explicit private `file` or `searchRoot` remains available for nonstandard installations.
 
 The tracked `.githooks/pre-commit` hook runs `usage:sync` before every commit, appends only provider-counter deltas, regenerates the tamper-evident report, stages both files, and validates them. Source configuration and raw logs stay in `usage/private/` and never enter git. Staged file paths are attached automatically as artifact provenance.
 
