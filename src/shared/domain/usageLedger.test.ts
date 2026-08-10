@@ -1,10 +1,10 @@
 // @ts-nocheck -- exercises the repository's JavaScript CLI module directly.
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, runtimeEventToEntry, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -188,6 +188,42 @@ describe("usage ledger", () => {
       coversEntryIds: ["usage-1"],
     };
     expect(validateReceipt(receipt, [entry])).toEqual([]);
+  });
+
+  it("refuses to ingest an unrelated receipt outside the private evidence directory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "speakerops-receipt-boundary-"));
+    const privateDirectory = join(directory, "usage", "private");
+    const outsideReceipt = join(directory, "unrelated-invoice.pdf");
+    const privateReceipt = join(privateDirectory, "provider-receipt.pdf");
+    try {
+      await mkdir(privateDirectory, { recursive: true });
+      await Promise.all([
+        writeFile(outsideReceipt, "not provider evidence"),
+        writeFile(privateReceipt, "provider evidence"),
+      ]);
+      await expect(requirePrivateEvidenceFile(outsideReceipt, privateDirectory))
+        .rejects.toThrow("explicitly placed inside usage/private/");
+      await expect(requirePrivateEvidenceFile(privateReceipt, privateDirectory))
+        .resolves.toBe(await realpath(privateReceipt));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a private-directory symlink that resolves to an outside receipt", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "speakerops-receipt-symlink-"));
+    const privateDirectory = join(directory, "usage", "private");
+    const outsideReceipt = join(directory, "outside.pdf");
+    const linkedReceipt = join(privateDirectory, "linked.pdf");
+    try {
+      await mkdir(privateDirectory, { recursive: true });
+      await writeFile(outsideReceipt, "outside evidence");
+      await symlink(outsideReceipt, linkedReceipt);
+      await expect(requirePrivateEvidenceFile(linkedReceipt, privateDirectory))
+        .rejects.toThrow("explicitly placed inside usage/private/");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("rejects double-covered usage across receipt records", () => {

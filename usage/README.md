@@ -76,7 +76,7 @@ pnpm usage:summary
 
 ## Record actual billed spend
 
-Keep the invoice or subscription receipt in `usage/private/`, then append a sanitized allocation record:
+Explicitly copy the AI provider invoice or subscription receipt into `usage/private/`, then append a sanitized allocation record:
 
 ```bash
 pnpm usage:receipt -- \
@@ -89,6 +89,8 @@ pnpm usage:receipt -- \
 ```
 
 By default the command covers all uncovered entries from that provider whose work period overlaps the billing period. Use `--covers usage-id-1,usage-id-2` only when a receipt needs a narrower allocation. The command hashes the raw file, appends `receipts.jsonl`, and regenerates the report. It rejects duplicate receipt files, unknown entries, provider mismatches, and double-covered work. Use `--dry-run` to inspect the allocation first.
+
+The command fails closed for files outside `usage/private/`, including symlinks that resolve outside it. This prevents broad local searches or unrelated billing documents from entering the reimbursement workflow accidentally.
 
 Never revise an earlier usage entry to add billed spend. Corrections and receipts are new immutable records, preserving the original provider evidence and git history.
 
