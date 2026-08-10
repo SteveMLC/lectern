@@ -394,6 +394,8 @@ export type AirtableStatusResponse = z.infer<typeof AirtableStatusResponse>;
 export const AirtableMirrorStatusResponse = z.object({
   configured: z.boolean(),
   reachable: z.boolean(),
+  recordReadAvailable: z.boolean(),
+  recordReadError: z.string().optional(),
   error: z.string().optional(),
   baseTables: z.array(z.string()).optional().default([]),
   tables: z.array(z.string()),

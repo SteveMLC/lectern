@@ -239,6 +239,14 @@ export class AirtableClient {
     });
   }
 
+  /** Delete an explicit batch of at most 10 app-owned duplicate record ids. */
+  async deleteRecords(table: MirrorTable, recordIds: readonly string[]): Promise<void> {
+    if (recordIds.length === 0) return;
+    const url = new URL(this.dataUrl(table));
+    for (const recordId of recordIds) url.searchParams.append("records[]", recordId);
+    await this.request(url.toString(), { method: "DELETE" });
+  }
+
   /** Cheap connectivity probe that does not depend on any table existing. */
   async verify(): Promise<{ ok: boolean; tables: string[]; error?: string }> {
     try {

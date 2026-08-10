@@ -155,6 +155,7 @@ describe("writes", () => {
     const { client, calls } = harness(() => ({ body: {} }));
     await client.createRecords("Speakers", []);
     await client.updateRecords("Speakers", []);
+    await client.deleteRecords("Speakers", []);
     expect(calls).toHaveLength(0);
   });
 
@@ -168,6 +169,14 @@ describe("writes", () => {
     expect(calls[0]!.body).toMatchObject({
       records: [{ id: "recAAA", fields: { Name: "Ada" } }],
     });
+  });
+
+  it("deletes only the explicit record ids with DELETE", async () => {
+    const { client, calls } = harness(() => ({ body: { records: [] } }));
+    await client.deleteRecords("Speakers", ["recDUP1", "recDUP2"]);
+    expect(calls[0]!.method).toBe("DELETE");
+    const url = new URL(calls[0]!.url);
+    expect(url.searchParams.getAll("records[]")).toEqual(["recDUP1", "recDUP2"]);
   });
 });
 

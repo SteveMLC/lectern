@@ -89,10 +89,16 @@ if (!passcode) {
     const missingTables = (airtable.tables ?? []).filter((table) => !(airtable.baseTables ?? []).includes(table));
     const issues = [
       ...(!airtable.reachable ? [`unreachable${airtable.error ? ` (${airtable.error})` : ""}`] : []),
+      ...(!airtable.recordReadAvailable ? ["token lacks data.records:read reconciliation scope"] : []),
       ...(missingTables.length ? [`missing tables: ${missingTables.join(", ")}`] : []),
       ...(airtable.lastRun?.status !== "success" ? [`last sync: ${airtable.lastRun?.status ?? "none"}`] : []),
-      ...(airtable.lastRun?.stats?.reconciliationReadAvailable === false
-        ? ["token lacks data.records:read reconciliation scope"]
+      ...(Number(airtable.lastRun?.stats?.duplicatesFound ?? 0) >
+      Number(airtable.lastRun?.stats?.duplicatesRemoved ?? 0)
+        ? ["duplicate Airtable rows remain"]
+        : []),
+      ...(Number(airtable.lastRun?.stats?.orphans ?? 0) >
+      Number(airtable.lastRun?.stats?.orphansRemoved ?? 0)
+        ? ["orphan Airtable rows remain"]
         : []),
     ];
     if (issues.length > 0) {

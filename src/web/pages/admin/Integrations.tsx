@@ -27,8 +27,14 @@ export function Integrations() {
                 <h2 className="text-base font-semibold text-zinc-900">Airtable operational mirror</h2>
                 <p className="mt-1 text-sm leading-6 text-zinc-500">Mirrors the event, program, agenda, speakers, and outstanding tasks.</p>
               </div>
-              <Badge tone={data.reachable ? "emerald" : data.configured ? "rose" : "amber"}>
-                {data.reachable ? "Connected" : data.configured ? "Connection failed" : "Credentials needed"}
+              <Badge tone={data.reachable && data.recordReadAvailable ? "emerald" : data.configured ? "amber" : "rose"}>
+                {data.reachable && data.recordReadAvailable
+                  ? "Connected"
+                  : data.reachable
+                    ? "Read scope needed"
+                    : data.configured
+                      ? "Connection failed"
+                      : "Credentials needed"}
               </Badge>
             </div>
 
@@ -36,10 +42,12 @@ export function Integrations() {
               <Fact label="Mirror tables" value={`${mirrorTables}/${data.tables.length} ready`} />
               <Fact label="Mirrored records" value={String(mirroredRecords)} />
               <Fact label="Last sync" value={data.lastRun?.status ?? "Not run"} />
+              <Fact label="Reset safety" value={data.recordReadAvailable ? "Reconciliation ready" : "Read scope missing"} />
               <Fact label="Rate safety" value="210 ms + Retry-After" />
             </dl>
 
             {data.error ? <p className="mt-4 text-sm text-rose-700">{data.error}</p> : null}
+            {data.recordReadError ? <p className="mt-4 text-sm text-amber-700">Add Airtable data.records:read so resets can reconcile safely.</p> : null}
 
             <a
               href="https://github.com/SteveMLC/speakerops/blob/main/docs/AIRTABLE.md"

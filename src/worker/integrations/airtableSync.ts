@@ -38,12 +38,18 @@ export interface SyncResult {
   created: number;
   updated: number;
   orphans: number;
+  /** App-owned orphan rows removed only when explicitly requested. */
+  orphansRemoved: number;
   /** Mappings repaired by matching SpeakerOps ID against live records. */
   relinked: number;
   /** Rows in the base that carry no SpeakerOps ID; never touched. */
   foreignRows: number;
   /** Whether this run could read live keys and self-heal stale D1 mappings. */
   reconciliationReadAvailable: boolean;
+  /** Extra app-owned rows carrying a duplicate SpeakerOps ID found this run. */
+  duplicatesFound: number;
+  /** Duplicate rows removed only when the caller explicitly requested deduplication. */
+  duplicatesRemoved: number;
   airtableRequests: number;
   report: string[];
   error?: string;
@@ -157,8 +163,10 @@ export async function syncEventToAirtable(options: {
   client: AirtableClient;
   eventId: string;
   now: string;
+  deduplicate?: boolean;
+  pruneOrphans?: boolean;
 }): Promise<SyncResult> {
-  const { db, client, eventId, now } = options;
+  const { db, client, eventId, now, deduplicate = false, pruneOrphans = false } = options;
   const report: string[] = [];
   const runId = randomId("sync");
   const connectionId = await ensureConnection(db, eventId, now);
@@ -184,9 +192,12 @@ export async function syncEventToAirtable(options: {
           created: result.created,
           updated: result.updated,
           orphans: result.orphans,
+          orphansRemoved: result.orphansRemoved,
           relinked: result.relinked,
           foreignRows: result.foreignRows,
           reconciliationReadAvailable: result.reconciliationReadAvailable,
+          duplicatesFound: result.duplicatesFound,
+          duplicatesRemoved: result.duplicatesRemoved,
           airtableRequests: result.airtableRequests,
         }),
         JSON.stringify(result.report),
@@ -220,6 +231,8 @@ export async function syncEventToAirtable(options: {
     let relinked = 0;
     let foreignRows = 0;
     let readScopeMissing = false;
+    const duplicateRecordIds = new Map<MirrorTable, string[]>();
+    const orphanRecordIds = new Map<MirrorTable, string[]>();
     const relinkStatements: D1PreparedStatement[] = [];
     const plans = [];
     for (const table of MIRROR_TABLES) {
@@ -252,21 +265,33 @@ export async function syncEventToAirtable(options: {
         continue;
       }
 
-      const live = new Map<string, string>();
+      const live = new Map<string, string[]>();
       for (const key of keys) {
         if (key.speakerOpsId === null) {
           foreignRows += 1;
-        } else if (!live.has(key.speakerOpsId)) {
-          live.set(key.speakerOpsId, key.recordId);
+        } else {
+          const recordIds = live.get(key.speakerOpsId) ?? [];
+          recordIds.push(key.recordId);
+          live.set(key.speakerOpsId, recordIds);
         }
+      }
+      const sourceIds = new Set(rows.map((row) => row.internalId));
+      for (const [speakerOpsId, recordIds] of live) {
+        if (!sourceIds.has(speakerOpsId)) orphanRecordIds.set(table, recordIds);
       }
 
       const effective = new Map<string, string>();
       for (const row of rows) {
-        const liveId = live.get(row.internalId);
-        if (liveId !== undefined) {
+        const liveIds = live.get(row.internalId) ?? [];
+        const storedId = stored.get(row.internalId);
+        const liveId = storedId && liveIds.includes(storedId) ? storedId : liveIds[0];
+        if (liveId) {
           effective.set(row.internalId, liveId);
-          if (stored.get(row.internalId) !== liveId) {
+          const duplicates = liveIds.filter((recordId) => recordId !== liveId);
+          if (duplicates.length > 0) {
+            duplicateRecordIds.set(table, [...(duplicateRecordIds.get(table) ?? []), ...duplicates]);
+          }
+          if (storedId !== liveId) {
             relinked += 1;
             relinkStatements.push(
               db
@@ -296,6 +321,8 @@ export async function syncEventToAirtable(options: {
     // Writes, batched to Airtable's 10-record limit, table by table.
     let created = 0;
     let updated = 0;
+    let duplicatesRemoved = 0;
+    let orphansRemoved = 0;
 
     for (const table of MIRROR_TABLES) {
       const creates = plan.creates.filter((c) => c.table === table);
@@ -325,6 +352,37 @@ export async function syncEventToAirtable(options: {
       if (touched > 0) report.push(`${table}: ${creates.length} created, ${updates.length} updated`);
     }
 
+    const duplicatesFound = [...duplicateRecordIds.values()].reduce((sum, ids) => sum + ids.length, 0);
+    const liveOrphansFound = [...orphanRecordIds.values()].reduce((sum, ids) => sum + ids.length, 0);
+    const orphansFound = readScopeMissing ? plan.orphans.length : liveOrphansFound;
+    if (duplicatesFound > 0 && deduplicate) {
+      for (const table of MIRROR_TABLES) {
+        for (const chunk of batch(duplicateRecordIds.get(table) ?? [])) {
+          await client.deleteRecords(table, chunk);
+          duplicatesRemoved += chunk.length;
+        }
+      }
+      report.push(`Removed ${duplicatesRemoved} duplicate app-owned row(s) by SpeakerOps ID.`);
+    } else if (duplicatesFound > 0) {
+      report.push(
+        `Found ${duplicatesFound} duplicate app-owned row(s); rerun with dedupe=1 to remove only the extras.`,
+      );
+    }
+
+    if (liveOrphansFound > 0 && pruneOrphans) {
+      for (const table of MIRROR_TABLES) {
+        for (const chunk of batch(orphanRecordIds.get(table) ?? [])) {
+          await client.deleteRecords(table, chunk);
+          orphansRemoved += chunk.length;
+        }
+      }
+      report.push(`Removed ${orphansRemoved} app-owned orphan row(s) absent from the reset source.`);
+    } else if (orphansFound > 0) {
+      report.push(
+        `Found ${orphansFound} app-owned orphan row(s); rerun with prune=1 to remove them explicitly.`,
+      );
+    }
+
     if (readScopeMissing) {
       report.push(
         "Reconciliation skipped: token lacks data.records:read; trusting stored mappings. " +
@@ -339,12 +397,6 @@ export async function syncEventToAirtable(options: {
         `${foreignRows} row(s) in the base carry no SpeakerOps ID (template or hand-added); left untouched.`,
       );
     }
-    if (plan.orphans.length > 0) {
-      report.push(
-        `${plan.orphans.length} record(s) in Airtable no longer exist in SpeakerOps and were left in place.`,
-      );
-    }
-
     report.push(`Done in ${client.requestCount} Airtable request(s).`);
 
     return await finish({
@@ -352,10 +404,13 @@ export async function syncEventToAirtable(options: {
       tablesCreated,
       created,
       updated,
-      orphans: plan.orphans.length,
+      orphans: orphansFound,
+      orphansRemoved,
       relinked,
       foreignRows,
       reconciliationReadAvailable: !readScopeMissing,
+      duplicatesFound,
+      duplicatesRemoved,
       airtableRequests: client.requestCount,
       report,
     });
@@ -368,9 +423,12 @@ export async function syncEventToAirtable(options: {
       created: 0,
       updated: 0,
       orphans: 0,
+      orphansRemoved: 0,
       relinked: 0,
       foreignRows: 0,
       reconciliationReadAvailable: false,
+      duplicatesFound: 0,
+      duplicatesRemoved: 0,
       airtableRequests: client.requestCount,
       report,
       error: message,

@@ -51,8 +51,8 @@ Both endpoints require the organizer passcode.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/airtable/status` | Reports whether the Worker has Airtable secrets, whether the base is reachable, existing base tables, and the latest sync summary. |
-| POST | `/api/airtable/events/:slug/sync` | Pushes one event's operational records to Airtable. Safe to run repeatedly. |
+| GET | `/api/airtable/status` | Reports whether the Worker has Airtable secrets, whether schema and record reads work, existing base tables, and the latest sync summary. |
+| POST | `/api/airtable/events/:slug/sync` | Pushes one event's operational records to Airtable. Safe to run repeatedly. Add `?dedupe=1&prune=1` during an explicit reset to remove duplicate and source-absent app-owned rows. |
 
 Current seeded event slug:
 
@@ -63,6 +63,14 @@ horizon-2026
 ## Why Re-Syncing Is Safe
 
 SpeakerOps records every created Airtable record id in `external_id_map`. On the next sync, known rows are updated in place and only genuinely new rows are created. Re-running the same event should not create duplicates.
+
+For live demo resets, use the guarded command rather than the raw seed:
+
+```sh
+SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+```
+
+It refuses before mutating D1 unless `data.records:read` works, then reseeds, reconciles mappings, explicitly deduplicates app-owned IDs, and requires the strict production smoke gate to pass. Rows without a `SpeakerOps ID` are never deleted.
 
 The sync also:
 

@@ -1,20 +1,22 @@
 # Demo Data and Reset
 
-`seed/seed.sql` is deterministic and doubles as the reset script. It deletes child rows first, then re-inserts fixed ids and timestamps so every local or remote reset returns to the same demo state.
+`seed/seed.sql` is deterministic. It deletes child rows first, then re-inserts fixed ids and timestamps so every local reset returns to the same demo state. Production uses a guarded wrapper that proves Airtable record-read access before mutation, reseeds D1, reconciles live IDs, removes only duplicate app-owned rows, and runs the strict smoke gate.
 
 ## Reset Commands
 
 ```bash
 pnpm db:reset:local
-pnpm db:reset:remote
+SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm db:reset:remote
 ```
 
-Those commands currently alias the seed commands:
+The local reset aliases the local seed. The raw remote seed remains available for first-time provisioning only:
 
 ```bash
 pnpm db:seed:local
 pnpm db:seed:remote
 ```
+
+Do not use the raw remote seed for a live judging reset; it intentionally knows nothing about external mirror state.
 
 ## Seeded Story
 

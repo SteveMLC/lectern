@@ -130,6 +130,14 @@ pnpm deploy                        # vite build && wrangler deploy
 
 The deployed URL serves the app, the API, and the seeded demo event immediately.
 
+After Airtable is configured, use the guarded reset for rehearsals and recording:
+
+```bash
+SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+```
+
+It fails before mutation unless Airtable record reconciliation is available, then restores D1, reconciles the mirror, removes only duplicate app-owned rows, and requires the strict production gate to pass.
+
 After deploy, replace the host in any iframe snippet with the deployed Worker URL.
 
 ## API

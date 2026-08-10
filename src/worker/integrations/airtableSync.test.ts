@@ -100,6 +100,7 @@ function fakeAirtable(
 ) {
   const posts: { table: string; count: number }[] = [];
   const patches: { table: string; ids: string[] }[] = [];
+  const deletes: { table: string; ids: string[] }[] = [];
   let counter = 0;
   let now = 0;
 
@@ -138,6 +139,13 @@ function fakeAirtable(
       return new Response(JSON.stringify({ records }), { status: 200 });
     }
 
+    if (method === "DELETE") {
+      const url = new URL(u);
+      const table = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+      deletes.push({ table, ids: url.searchParams.getAll("records[]") });
+      return new Response(JSON.stringify({ records: [] }), { status: 200 });
+    }
+
     const table = decodeURIComponent(u.split("/").pop() ?? "");
     if (method === "POST") {
       const records = body.records.map(() => ({ id: `rec${counter++}`, fields: {} }));
@@ -161,7 +169,7 @@ function fakeAirtable(
     },
   });
 
-  return { client, posts, patches };
+  return { client, posts, patches, deletes };
 }
 
 const SEED = {
@@ -388,6 +396,70 @@ describe("syncEventToAirtable", () => {
     expect(result.foreignRows).toBe(2);
     // Template rows never appear in any PATCH.
     expect(airtable.patches.flatMap((p) => p.ids)).not.toContain("recTPL1");
+  });
+
+  it("removes only duplicate rows with the same SpeakerOps ID when explicitly requested", async () => {
+    const { db } = fakeDb(SEED);
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const airtable = fakeAirtable(allTables, {
+      Events: [
+        { id: "recKEEP", speakerOpsId: "evt_1" },
+        { id: "recDUP", speakerOpsId: "evt_1" },
+      ],
+      Speakers: [
+        { id: "recA", speakerOpsId: "spk_a" },
+        { id: "recB", speakerOpsId: "spk_b" },
+      ],
+      Sessions: [
+        { id: "recS1", speakerOpsId: "ses_1" },
+        { id: "recS2", speakerOpsId: "ses_2" },
+      ],
+    });
+
+    const result = await syncEventToAirtable({
+      db,
+      client: airtable.client,
+      eventId: "evt_1",
+      now: "2026-08-10T05:00:00Z",
+      deduplicate: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.duplicatesFound).toBe(1);
+    expect(result.duplicatesRemoved).toBe(1);
+    expect(airtable.deletes).toEqual([{ table: "Events", ids: ["recDUP"] }]);
+  });
+
+  it("prunes source-absent app rows but never template rows without a SpeakerOps ID", async () => {
+    const { db } = fakeDb(SEED);
+    const allTables = ["Events", "Tracks", "Rooms", "Speakers", "Submissions", "Sessions", "Agenda", "Tasks"];
+    const airtable = fakeAirtable(allTables, {
+      Events: [{ id: "recEVENT", speakerOpsId: "evt_1" }],
+      Speakers: [
+        { id: "recA", speakerOpsId: "spk_a" },
+        { id: "recB", speakerOpsId: "spk_b" },
+        { id: "recQA", speakerOpsId: "spk_removed_qa" },
+        { id: "recTEMPLATE", speakerOpsId: null },
+      ],
+      Sessions: [
+        { id: "recS1", speakerOpsId: "ses_1" },
+        { id: "recS2", speakerOpsId: "ses_2" },
+      ],
+    });
+
+    const result = await syncEventToAirtable({
+      db,
+      client: airtable.client,
+      eventId: "evt_1",
+      now: "2026-08-10T06:00:00Z",
+      pruneOrphans: true,
+    });
+
+    expect(result.orphans).toBe(1);
+    expect(result.orphansRemoved).toBe(1);
+    expect(result.foreignRows).toBe(1);
+    expect(airtable.deletes).toEqual([{ table: "Speakers", ids: ["recQA"] }]);
+    expect(airtable.deletes.flatMap((entry) => entry.ids)).not.toContain("recTEMPLATE");
   });
 
   it("marks the run failed and reports the reason when Airtable rejects the token", async () => {

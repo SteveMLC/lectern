@@ -8,7 +8,8 @@ then show the product removing it. Never name competitors.
 
 ```bash
 cd workspace/repos/speakerops
-pnpm db:seed:remote        # pristine 10-submission seed with both staged conflicts
+SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+# Fails before mutation unless Airtable can reconcile, then restores the pristine seed and strict 6/6 proof.
 ```
 
 - Open tabs in order, left to right: ①`https://speakerops.speakerops-go7.workers.dev` ②an
@@ -96,7 +97,8 @@ Stop recording.
 ## After recording
 
 ```bash
-pnpm db:seed:remote        # return prod to pristine for judges
+SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+# Returns prod to pristine and removes only duplicate app-owned Airtable rows.
 ```
 
 Watch it back once at 1.5×: no dead air over 3 seconds, no console visible, passcode

@@ -55,9 +55,10 @@ airtableApi.get("/status", async (c) => {
     return c.json({
       configured: false,
       reachable: false,
+      recordReadAvailable: false,
       message:
         "Set AIRTABLE_TOKEN and AIRTABLE_BASE_ID as Worker secrets to enable the mirror. " +
-        "The token needs data.records:write and schema.bases:write so the mirror can build its own tables.",
+        "The token needs schema.bases:read/write and data.records:read/write so the mirror can build, reconcile, and update its tables.",
       tables: MIRROR_TABLES,
       mirrored: {},
       lastRun: null,
@@ -66,10 +67,22 @@ airtableApi.get("/status", async (c) => {
 
   const client = clientFor(c.env)!;
   const probe = await client.verify();
+  let recordReadAvailable = false;
+  let recordReadError: string | undefined;
+  if (probe.ok) {
+    try {
+      await client.listRecordKeys("Events");
+      recordReadAvailable = true;
+    } catch (error) {
+      recordReadError = error instanceof Error ? error.message : String(error);
+    }
+  }
 
   return c.json({
     configured: true,
     reachable: probe.ok,
+    recordReadAvailable,
+    recordReadError,
     error: probe.error,
     baseTables: probe.tables,
     tables: MIRROR_TABLES,
@@ -107,6 +120,8 @@ airtableApi.post("/events/:slug/sync", async (c) => {
     client,
     eventId: event.id,
     now: new Date().toISOString(),
+    deduplicate: c.req.query("dedupe") === "1",
+    pruneOrphans: c.req.query("prune") === "1",
   });
 
   return c.json(result, result.ok ? 200 : 502);
