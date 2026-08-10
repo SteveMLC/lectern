@@ -72,7 +72,7 @@ pnpm usage:check
 pnpm usage:summary
 ```
 
-`pnpm verify` includes ledger validation, so duplicate ids, broken evidence hashes, negative counters, and stale cost calculations fail CI.
+`pnpm verify` includes ledger validation, so duplicate ids, broken evidence hashes, inconsistent provider/cumulative totals, reversed periods, absolute local paths, stale cost calculations, and any force-added file under `usage/private/` fail CI.
 
 ## Record actual billed spend
 

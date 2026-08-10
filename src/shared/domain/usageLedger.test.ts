@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, selectRateId, unexpectedTrackedPrivatePaths, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -159,14 +159,70 @@ describe("usage ledger", () => {
       category: "test",
       description: "test",
       measurement: "provider_reported",
+      calls: null,
       tokens: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, cacheWrite5m: 0, cacheWrite1h: 0, output: 0, reasoningOutput: 0, providerTotal: 0 },
-      cost: { rateId: "rate", estimatedUsd: 0, actualBilledUsd: null },
-      source: { kind: "test", sessionId: "session", sha256: "a".repeat(64), lineCount: 1, rawEvidence: "retained_privately" },
+      cost: { kind: "api_list_price_estimate", rateId: "rate", estimatedUsd: 0, actualBilledUsd: null, receiptStatus: "pending_subscription_receipt" },
+      source: {
+        kind: "test",
+        sessionId: "session",
+        sha256: "a".repeat(64),
+        lineCount: 1,
+        rawEvidence: "retained_privately",
+        cumulative: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, cacheWrite5m: 0, cacheWrite1h: 0, output: 0, reasoningOutput: 0, providerTotal: 0 },
+      },
+      commits: [],
+      artifacts: [],
+      notes: [],
     };
     const rates = { rate: { provider: "openai", model: "gpt-5.5" } };
     const seen = new Set();
     expect(validateEntry(entry, rates, seen)).toEqual([]);
     expect(validateEntry(entry, rates, seen)).toContain("duplicate id same");
+  });
+
+  it("rejects inconsistent totals, reversed periods, and leaked absolute paths", () => {
+    const entry = {
+      schemaVersion: 1,
+      id: "tampered",
+      recordedAt: "2026-08-10T00:00:00Z",
+      period: { start: "2026-08-10T00:00:02Z", end: "2026-08-10T00:00:01Z" },
+      actor: { name: "Agent", surface: "Tool" },
+      provider: "openai",
+      model: "gpt-5.5",
+      category: "test",
+      description: "test",
+      measurement: "provider_reported",
+      calls: 1,
+      tokens: { uncachedInput: 3, cacheRead: 2, cacheWrite: 0, cacheWrite5m: 0, cacheWrite1h: 0, output: 1, reasoningOutput: 1, providerTotal: 99 },
+      cost: { kind: "api_list_price_estimate", rateId: "rate", estimatedUsd: 0, actualBilledUsd: null, receiptStatus: "pending_subscription_receipt" },
+      source: {
+        kind: "test",
+        sessionId: "session",
+        sha256: "a".repeat(64),
+        lineCount: 1,
+        rawEvidence: "retained_privately",
+        cumulative: { uncachedInput: 3, cacheRead: 2, cacheWrite: 0, cacheWrite5m: 0, cacheWrite1h: 0, output: 1, reasoningOutput: 1, providerTotal: 6 },
+      },
+      commits: [],
+      artifacts: ["/Users/example/private/session.jsonl"],
+      notes: [],
+    };
+    const errors = validateEntry(entry, { rate: { provider: "openai", model: "gpt-5.5" } });
+    expect(errors).toContain("period end must not precede period start");
+    expect(errors).toContain("tokens.providerTotal 99 does not match normalized categories 6");
+    expect(errors).toContain("artifacts must not contain absolute local paths");
+  });
+
+  it("allows only the tracked instruction file under private evidence", () => {
+    expect(unexpectedTrackedPrivatePaths([
+      "usage/private/README.md",
+      "usage/private/provider-receipt.pdf",
+      "usage/private/session.jsonl",
+      "usage/REPORT.md",
+    ])).toEqual([
+      "usage/private/provider-receipt.pdf",
+      "usage/private/session.jsonl",
+    ]);
   });
 
   it("validates an immutable private-receipt allocation", () => {
