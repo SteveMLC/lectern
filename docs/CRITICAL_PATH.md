@@ -20,6 +20,7 @@ Verification evidence:
 
 - `pnpm verify` passes typecheck, tests, production build, and Worker deployment dry-run.
 - `SPEAKEROPS_ORGANIZER_PASSCODE=... pnpm smoke:production` verifies the deployed Worker, D1/R2 health, public program data, embeds, calendar handoff, organizer data, and Airtable safety state without mutating judge data. Add `REQUIRE_AIRTABLE=1` for the strict bonus gate.
+- The production smoke gate requires the full Groundwork judging dataset: 10 scheduled sessions, at least one direct invited/sponsor session, and public speakers. The guarded remote reset reloads Groundwork automatically after reseeding D1 so the documented walkthrough cannot silently disappear.
 - Production deployment: https://speakerops.speakerops-go7.workers.dev
 - Production `/api/health` reports `ok: true`, D1 healthy, and R2 bound.
 - The full automated suite passes across domain, agenda drag placement, demo-loader, calendar, timezone, Airtable adapter, reimbursement integrity, guarded reset, and embed sanitization coverage; the current count is reported by `pnpm test` rather than frozen in this document.

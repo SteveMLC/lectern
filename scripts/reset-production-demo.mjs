@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 const baseUrl = (process.env.SPEAKEROPS_BASE_URL ?? "https://speakerops.speakerops-go7.workers.dev").replace(/\/$/, "");
 const passcode = process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
 const eventSlug = process.env.SPEAKEROPS_EVENT_SLUG ?? "horizon-2026";
+const judgingDatasetKey = process.env.SPEAKEROPS_JUDGING_DATASET_KEY ?? "groundwork-2026";
 
 if (!passcode) {
   throw new Error("Set SPEAKEROPS_ORGANIZER_PASSCODE before resetting production.");
@@ -47,6 +48,13 @@ if (!before.configured || !before.reachable || !before.recordReadAvailable) {
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 run(pnpm, ["db:seed:remote"]);
 
+const judgingDataset = await request(`/api/demo/${encodeURIComponent(judgingDatasetKey)}/load`, {
+  method: "POST",
+});
+if (!judgingDataset.dataset?.loaded) {
+  throw new Error(`Judging dataset ${judgingDatasetKey} did not load after the remote seed.`);
+}
+
 const sync = await request(`/api/airtable/events/${encodeURIComponent(eventSlug)}/sync?dedupe=1&prune=1`, {
   method: "POST",
 });
@@ -62,6 +70,7 @@ run(process.execPath, ["scripts/smoke-production.mjs"], {
 });
 
 console.log(
-  `Production demo reset is clean: ${sync.updated} mirrored, ${sync.relinked} relinked, ` +
+  `Production demo reset is clean with ${judgingDataset.dataset.label} loaded: ` +
+    `${sync.updated} mirrored, ${sync.relinked} relinked, ` +
     `${sync.duplicatesRemoved} duplicate and ${sync.orphansRemoved} orphan Airtable row(s) removed.`,
 );

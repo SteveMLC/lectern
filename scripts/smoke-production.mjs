@@ -63,6 +63,19 @@ await check("Public schedule, sessions, and speakers", async () => {
   assert(!JSON.stringify(speakers).includes("@"), "public speaker payload appears to expose an email address");
 });
 
+await check("Groundwork judging dataset", async () => {
+  const [schedule, sessions, speakers] = await Promise.all([
+    get("/api/public/events/groundwork-2026/schedule"),
+    get("/api/public/events/groundwork-2026/sessions"),
+    get("/api/public/events/groundwork-2026/speakers"),
+  ]);
+  assert(schedule.event?.slug === "groundwork-2026", "Groundwork is not loaded in production");
+  assert(schedule.slots?.length === 10, `Groundwork has ${schedule.slots?.length ?? 0} schedule slots, expected 10`);
+  assert(sessions.sessions?.length === 10, `Groundwork has ${sessions.sessions?.length ?? 0} sessions, expected 10`);
+  assert(sessions.sessions.some((session) => session.origin === "direct"), "Groundwork is missing its direct sponsor/invited session");
+  assert(speakers.speakers?.length > 0, "Groundwork public speakers are empty");
+});
+
 await check("Embeds and calendar handoff", async () => {
   const [schedule, sessions, speakers, calendar] = await Promise.all([
     get("/api/embeds/events/horizon-2026/schedule", { kind: "text" }),
