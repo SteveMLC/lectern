@@ -34,7 +34,10 @@ Everything is walkable right now:
    conditionally required field appears; the API enforces the same rule.
 2. Open /admin -> Reviews: your proposal is there with the speaker's bio and
    form answers. Approve it — exactly one session is created, idempotently,
-   with source lineage.
+   with source lineage. Deny another one with blunt notes: Claude
+   (claude-sonnet-5) drafts the speaker-facing feedback email from them for
+   your review and edit — AI proposes, the human approves, nothing
+   auto-sends; an honest template takes over when no key is configured.
 3. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
 4. /admin -> add a direct sponsor session — no submission behind it, by design.

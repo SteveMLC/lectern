@@ -33,6 +33,7 @@ The complete judging path is deployed and production-proven:
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, formula-safe CSV export, Approve/Maybe/Deny decisions with editable feedback drafts, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
+- **AI decision feedback**: denying or waitlisting opens a reasoning box; Claude (`claude-sonnet-5`) turns the organizer's blunt internal notes into a thoughtful, editable speaker email — AI proposes, the human approves, nothing auto-sends, and an honest template takes over when no key is configured.
 - **Airtable mirror**: all eight operational tables, idempotent record mapping, schema adoption, 5 req/s protection, 429 retries, guarded reset/deduplication, explicit D1 fallback, and an organizer status screen.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
 - **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.

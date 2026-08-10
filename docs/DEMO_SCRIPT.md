@@ -1,4 +1,4 @@
-# Demo recording script — ~3 minutes
+# Demo recording script — ~3.5 minutes
 
 One take, screen + voice, no slides. Chrome at a normal window size, bookmarks bar hidden.
 The through-line: **the whole lifecycle, live, with no login** — say what hurts for organizers,
@@ -55,7 +55,21 @@ Click **Approve** on the new proposal. Point at the toast.
 > "Approving doesn't just flip a status — it creates exactly one session, idempotently,
 > with lineage back to the submission. The queue just dropped by one."
 
-**1:35 — Agenda**
+**1:25 — AI decision feedback (the standout beat — slow down here)**
+Click **Deny** on a weaker proposal. The reasoning box opens.
+> "Now the part every organizer dreads — saying no. I don't get a form letter. I write
+> why, bluntly, the way I'd say it in the committee room…"
+
+Type on camera: `ran this topic last year; abstract has no real numbers; would love a workshop version instead`
+Click **Draft feedback email**. Wait the ~2 seconds. Point at the badge.
+> "…and Claude turns my blunt notes into a thoughtful, specific email — the decision
+> stays unmistakable, my reasons become feedback the speaker can actually use. I can
+> edit every word. AI proposes, I approve, the system commits — nothing is ever
+> auto-sent. And without an API key this degrades to an honest template, never an error."
+
+Change one word to prove it's editable, then click **Send (simulated) & deny**.
+
+**2:00 — Agenda**
 > "The agenda knows things a spreadsheet never will."
 
 Point at the red banner reading the two conflicts aloud, short:
@@ -71,26 +85,26 @@ Click **Add direct session**, create "Sponsor Keynote" with a speaker, place it.
 > "Sponsor keynotes never went through the CFP — that's a first-class path, not a fake
 > submission."
 
-**2:05 — Speaker portal (Speakers → Open speaker portal on the new speaker)**
+**2:30 — Speaker portal (Speakers → Open speaker portal on the new speaker)**
 > "The speaker I just accepted already has an onboarding checklist — derived the moment
 > they joined the program."
 
 Complete one task. Upload any small image as a headshot.
 > "That's a real file in R2, not a URL field."
 
-**2:25 — Communications**
+**2:50 — Communications**
 Pick the accepted speaker, show the preview.
 > "Reminders merge their actual outstanding tasks. Sends are simulated by default with a
 > receipt — flip one env var for real email — and the calendar invite is a real .ics."
 
 Download the .ics, show it in the downloads shelf.
 
-**2:40 — Embeds (/embed-preview)**
+**3:05 — Embeds (/embed-preview)**
 > "Schedule, sessions, speaker gallery — iframe-ready for the event site, mobile-first."
 
 Narrow the window briefly.
 
-**2:50 — /demo, then close**
+**3:15 — /demo, then close**
 > "Judges will break things, so the demo expects it: this second, hand-authored
 > conference loads in one click and resets to its files in one click. The repo is MIT,
 > the API is public and documented, there's an llms.txt if your agent is doing the
