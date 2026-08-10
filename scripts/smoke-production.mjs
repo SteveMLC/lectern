@@ -48,6 +48,7 @@ await check("Landing page and agent-readable handoff", async () => {
   assert(home.includes("SpeakerOps"), "landing page is missing the product name");
   assert(llms.includes("SpeakerOps") && llms.includes("horizon-2026"), "/llms.txt is missing the judging handoff");
   assert(demo.includes('id="passcode-form"'), "demo passcode is not wrapped in a semantic form");
+  assert(demo.includes('autocomplete="current-password"'), "demo passcode is missing autocomplete metadata");
 });
 
 await check("Public schedule, sessions, and speakers", async () => {
