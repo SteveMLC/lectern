@@ -87,8 +87,13 @@ if (!passcode) {
   await check("Airtable integration status", async () => {
     const airtable = await get("/api/airtable/status", { auth: true });
     const missingTables = (airtable.tables ?? []).filter((table) => !(airtable.baseTables ?? []).includes(table));
-    if (!airtable.reachable || missingTables.length > 0 || airtable.lastRun?.status !== "success") {
-      const message = "Airtable is not connected in production; add AIRTABLE_TOKEN and AIRTABLE_BASE_ID before bonus judging.";
+    const issues = [
+      ...(!airtable.reachable ? [`unreachable${airtable.error ? ` (${airtable.error})` : ""}`] : []),
+      ...(missingTables.length ? [`missing tables: ${missingTables.join(", ")}`] : []),
+      ...(airtable.lastRun?.status !== "success" ? [`last sync: ${airtable.lastRun?.status ?? "none"}`] : []),
+    ];
+    if (issues.length > 0) {
+      const message = `Airtable proof incomplete — ${issues.join("; ")}.`;
       if (requireAirtable) throw new Error(message);
       warnings.push(message);
     }

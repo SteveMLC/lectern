@@ -47,9 +47,9 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - [x] `ORGANIZER_PASSCODE` is set as a Worker secret.
 - [x] Migrations and deterministic seed applied remotely.
 - [x] Deploy succeeds and `/api/health` reports DB + R2 healthy.
-- [ ] Load Groundwork at `/demo`, choose it in the admin event switcher, and rehearse the path above.
+- [x] Load Groundwork at `/demo`, choose it in the admin event switcher, and rehearse the path above.
 - [ ] Test a fresh CFP submission and one speaker file upload on production.
-- [ ] Verify `.ics` downloads with `Content-Type: text/calendar`.
+- [x] Verify `.ics` downloads with `Content-Type: text/calendar`.
 - [ ] Check browser console and mobile-width admin navigation.
 - [x] Add deployed URL here.
 - [ ] Record video from a clean reset; submit with buffer.

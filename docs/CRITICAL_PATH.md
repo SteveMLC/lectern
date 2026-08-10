@@ -1,6 +1,6 @@
 # SpeakerOps Critical Path
 
-The judging-critical product path is implemented on `main`. Five feature issues are production-proven and closed; the Airtable issue remains open until live credentials are connected. The Cloudflare production deployment is live.
+The judging-critical product path is implemented on `main`. All six feature issues are production-proven, and the Cloudflare production deployment is live.
 
 ## Implemented and Verified
 
@@ -10,7 +10,7 @@ The judging-critical product path is implemented on `main`. Five feature issues 
 - Room-based agenda placement with immediate room and speaker conflict detection.
 - Editable speaker portal: profile, task completion/reopen, and speaker-facing R2 uploads.
 - Reminder and session-update previews, persisted simulated deliveries, and `.ics` downloads.
-- Airtable proof adapter: Events/Speakers reads, Messages write, cache, 5 req/s protection, 429 retry, and D1 fallback.
+- Live Airtable mirror: eight SpeakerOps tables, idempotent record mapping, 210 ms request spacing, 429 retry, and D1 as the authoritative fallback.
 - Public event, CFP, schedule/session/speaker embeds, API docs, deterministic seed, and Liam's Groundwork demo loader.
 - Persistent organizer event switcher so the loaded Groundwork dataset is reachable from every admin screen.
 
@@ -20,10 +20,11 @@ Verification evidence:
 - `SPEAKEROPS_ORGANIZER_PASSCODE=... pnpm smoke:production` verifies the deployed Worker, D1/R2 health, public program data, embeds, calendar handoff, organizer data, and Airtable safety state without mutating judge data. Add `REQUIRE_AIRTABLE=1` for the strict bonus gate.
 - Production deployment: https://speakerops.speakerops-go7.workers.dev
 - Production `/api/health` reports `ok: true`, D1 healthy, and R2 bound.
-- 120 tests pass across domain, demo-loader, calendar, timezone, Airtable adapter, reimbursement integrity, and embed sanitization coverage.
+- 121 tests pass across domain, demo-loader, calendar, timezone, Airtable adapter, reimbursement integrity, and embed sanitization coverage.
 - Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
 - A fresh headed Groundwork walkthrough verified Reviews, Agenda, Speakers, Speaker Portal, Communications, Integrations, and persistent event switching with no console errors.
 - An August 10 production walkthrough approved a seeded proposal, added and placed a direct sponsor session, surfaced the new conflict immediately, edited a speaker profile, completed a task, uploaded/downloaded an R2 asset, persisted a simulated send, and downloaded a valid `.ics`; the exact R2 test object was deleted and the deterministic remote seed restored afterward.
+- The strict production gate passes 6/6 with Airtable required: 8/8 mirror tables ready, 53 records mirrored, latest sync successful, and zero orphans.
 
 ## Production Cloudflare Placement
 
