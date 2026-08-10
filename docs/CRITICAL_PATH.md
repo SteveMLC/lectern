@@ -1,6 +1,6 @@
 # SpeakerOps Critical Path
 
-The judging-critical product path is implemented on `main`. Six feature issues are closed; deployment remains blocked only by Cloudflare account authentication and the real D1 database id.
+The judging-critical product path is implemented on `main`. Six feature issues are closed, and the Cloudflare production deployment is live.
 
 ## Implemented and Verified
 
@@ -17,21 +17,22 @@ The judging-critical product path is implemented on `main`. Six feature issues a
 Verification evidence:
 
 - `pnpm verify` passes typecheck, tests, production build, and Worker deployment dry-run.
+- Production deployment: https://speakerops.speakerops-go7.workers.dev
+- Production `/api/health` reports `ok: true`, D1 healthy, and R2 bound.
 - 67 tests pass across domain, demo-loader, calendar, timezone, and Airtable adapter coverage.
 - Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
 - A fresh headed Groundwork walkthrough verified Reviews, Agenda, Speakers, Speaker Portal, Communications, Integrations, and persistent event switching with no console errors.
 
-## Remaining External Blocker
+## Production Cloudflare Placement
 
-`pnpm exec wrangler whoami` reports unauthenticated and `wrangler.jsonc` still contains the local-only placeholder D1 id. Deployment requires:
+Wrangler is authenticated as `sgovoni@gmail.com` against Cloudflare account `Sgovoni@gmail.com's Account`. SpeakerOps currently uses this account for:
 
-1. `pnpm exec wrangler login`
-2. Provision or identify the production D1 database and R2 bucket.
-3. Replace the placeholder D1 id in `wrangler.jsonc`.
-4. Set `ORGANIZER_PASSCODE` (and optional Airtable credentials) as Worker secrets.
-5. Apply migrations/seed, deploy, and run the production walkthrough.
+- Worker: `speakerops`
+- workers.dev subdomain: `speakerops-go7.workers.dev`
+- D1 database: `speakerops-db`
+- R2 bucket: `speakerops-assets`
 
-Run `pnpm release:preflight` at any point for an executable check of the local release gates, Wrangler authentication, and D1/R2 configuration.
+This keeps the hackathon deployment isolated from Nealac/Qualora infrastructure. If SpeakerOps becomes a long-term product, it can be migrated into a consolidated Cloudflare account by exporting/importing D1 data and copying R2 objects.
 
 Do not flip the full judging demo to Airtable. D1 is the complete backend; Airtable is a documented bonus proof.
 

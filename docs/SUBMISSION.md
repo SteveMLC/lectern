@@ -10,7 +10,7 @@
 
 **Repository:** https://github.com/SteveMLC/speakerops
 
-**Demo URL:** _Add after Cloudflare deployment._
+**Demo URL:** https://speakerops.speakerops-go7.workers.dev
 
 ## What to Lead With
 
@@ -40,18 +40,18 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 
 ## Production Checklist
 
-- [ ] Wrangler authenticated.
-- [ ] `pnpm release:preflight` passes.
-- [ ] Real D1 id replaces the placeholder.
-- [ ] R2 bucket exists.
-- [ ] `ORGANIZER_PASSCODE` is set as a Worker secret.
-- [ ] Migrations and deterministic seed applied remotely.
-- [ ] Deploy succeeds and `/api/health` reports DB + R2 healthy.
+- [x] Wrangler authenticated.
+- [x] `pnpm release:preflight` passes.
+- [x] Real D1 id replaces the placeholder.
+- [x] R2 bucket exists.
+- [x] `ORGANIZER_PASSCODE` is set as a Worker secret.
+- [x] Migrations and deterministic seed applied remotely.
+- [x] Deploy succeeds and `/api/health` reports DB + R2 healthy.
 - [ ] Load Groundwork at `/demo`, choose it in the admin event switcher, and rehearse the path above.
 - [ ] Test a fresh CFP submission and one speaker file upload on production.
 - [ ] Verify `.ics` downloads with `Content-Type: text/calendar`.
 - [ ] Check browser console and mobile-width admin navigation.
-- [ ] Add deployed URL here and to the submission form.
+- [x] Add deployed URL here.
 - [ ] Record video from a clean reset; submit with buffer.
 
 ## Known Intentional Limits
