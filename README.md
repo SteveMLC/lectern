@@ -21,6 +21,8 @@ Scaffold + golden path. Working today:
 
 The remaining workflows (reviews UI, agenda board, deeper speaker portal polish, communications, Airtable proof, and optional Accelevents handoff) build on these contracts — see Roadmap.
 
+Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
+
 ## Hackathon scope clarifications
 
 Latest organizer FAQ from Discord:
