@@ -4,7 +4,7 @@
 
 SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, room/time agenda controls with conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
-Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe Airtable proof adapter reads event/speaker operations and writes communication receipts behind the same repository boundary.
+Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe, idempotent Airtable mirror pushes the operational record into the organizer's base.
 
 ## Try it live
 
@@ -40,8 +40,6 @@ Scaffold + golden path. Working today:
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
 The judging-critical product path is live on Cloudflare Workers with D1 and R2 provisioned. Release and walkthrough status lives in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
-
-Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
 ## Hackathon scope clarifications
 
