@@ -218,7 +218,7 @@ wrangler secret put AIRTABLE_TOKEN      # personal access token
 wrangler secret put AIRTABLE_BASE_ID    # the appXXXXXXXX id from the base URL
 ```
 
-The token needs three scopes: `schema.bases:read`, `schema.bases:write` (so the mirror can create the tables), and `data.records:write`. Grant it access to the one base you want mirrored.
+The token needs four scopes: `schema.bases:read`, `schema.bases:write` (so the mirror can create the tables), `data.records:read` (so resets reconcile rather than duplicate rows), and `data.records:write`. Grant it access to the one base you want mirrored.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

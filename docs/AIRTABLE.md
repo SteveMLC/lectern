@@ -16,6 +16,7 @@ The mirror creates its own Airtable tables. Start with an empty base; do not bui
 | --- | --- |
 | `schema.bases:read` | Check which mirror tables already exist. |
 | `schema.bases:write` | Create missing mirror tables automatically. |
+| `data.records:read` | Reconcile live SpeakerOps IDs after a D1 reset and prevent duplicate remote rows. |
 | `data.records:write` | Create and update mirrored records. |
 
 Set the production Worker secrets without committing them:

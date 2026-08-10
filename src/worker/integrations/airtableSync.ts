@@ -42,6 +42,8 @@ export interface SyncResult {
   relinked: number;
   /** Rows in the base that carry no SpeakerOps ID; never touched. */
   foreignRows: number;
+  /** Whether this run could read live keys and self-heal stale D1 mappings. */
+  reconciliationReadAvailable: boolean;
   airtableRequests: number;
   report: string[];
   error?: string;
@@ -182,6 +184,9 @@ export async function syncEventToAirtable(options: {
           created: result.created,
           updated: result.updated,
           orphans: result.orphans,
+          relinked: result.relinked,
+          foreignRows: result.foreignRows,
+          reconciliationReadAvailable: result.reconciliationReadAvailable,
           airtableRequests: result.airtableRequests,
         }),
         JSON.stringify(result.report),
@@ -350,6 +355,7 @@ export async function syncEventToAirtable(options: {
       orphans: plan.orphans.length,
       relinked,
       foreignRows,
+      reconciliationReadAvailable: !readScopeMissing,
       airtableRequests: client.requestCount,
       report,
     });
@@ -364,6 +370,7 @@ export async function syncEventToAirtable(options: {
       orphans: 0,
       relinked: 0,
       foreignRows: 0,
+      reconciliationReadAvailable: false,
       airtableRequests: client.requestCount,
       report,
       error: message,

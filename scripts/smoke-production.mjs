@@ -91,6 +91,9 @@ if (!passcode) {
       ...(!airtable.reachable ? [`unreachable${airtable.error ? ` (${airtable.error})` : ""}`] : []),
       ...(missingTables.length ? [`missing tables: ${missingTables.join(", ")}`] : []),
       ...(airtable.lastRun?.status !== "success" ? [`last sync: ${airtable.lastRun?.status ?? "none"}`] : []),
+      ...(airtable.lastRun?.stats?.reconciliationReadAvailable === false
+        ? ["token lacks data.records:read reconciliation scope"]
+        : []),
     ];
     if (issues.length > 0) {
       const message = `Airtable proof incomplete — ${issues.join("; ")}.`;
