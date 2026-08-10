@@ -20,6 +20,7 @@
     "usage:sync": "node scripts/usage-ledger.mjs sync",
     "usage:install-hooks": "node scripts/install-usage-hooks.mjs",
     "release:preflight": "pnpm verify && node scripts/release-preflight.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs",
     "demo:check": "vitest run src/shared/domain/demoData.check.test.ts --reporter=verbose",
     "db:migrate:local": "wrangler d1 migrations apply speakerops-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply speakerops-db --remote",
