@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TABLE_SCHEMA } from "../../shared/domain/airtableMirror";
 import { AirtableClient } from "./airtableClient";
 import { syncEventToAirtable } from "./airtableSync";
 
@@ -98,9 +99,20 @@ function fakeAirtable(existingTables: string[] = []) {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
 
     if (u.includes("/meta/bases/") && method === "GET") {
-      return new Response(JSON.stringify({ tables: existingTables.map((name) => ({ name })) }), {
-        status: 200,
-      });
+      // Existing tables report the full mirror field set, so ensureSchema
+      // treats them as complete and this fake stays focused on records.
+      return new Response(
+        JSON.stringify({
+          tables: existingTables.map((name) => ({
+            id: `tbl_${name}`,
+            name,
+            fields: (TABLE_SCHEMA[name as keyof typeof TABLE_SCHEMA] ?? []).map((f) => ({
+              name: f.name,
+            })),
+          })),
+        }),
+        { status: 200 },
+      );
     }
     if (u.includes("/meta/bases/") && method === "POST") {
       existingTables.push(body.name);

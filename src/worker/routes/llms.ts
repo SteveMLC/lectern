@@ -58,10 +58,11 @@ Everything is walkable right now:
 
 ## Honest limits
 
-Airtable mirror is built, tested, and rate-safe but awaits credentials; the
-agenda uses explicit room/time controls plus a live conflict engine rather
-than drag-and-drop; Accelevents was ruled optional by the organizer FAQ and
-is not built.
+The Airtable mirror is LIVE on this deployment: POST /api/airtable/events/horizon-2026/sync
+(organizer passcode) pushes the event's records into the organizer's base,
+idempotently — re-syncing updates in place. The agenda uses explicit room/time
+controls plus a live conflict engine rather than drag-and-drop; Accelevents
+was ruled optional by the organizer FAQ and is not built.
 `;
 
 llms.get("/llms.txt", (c) =>

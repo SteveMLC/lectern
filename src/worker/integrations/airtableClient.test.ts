@@ -172,22 +172,83 @@ describe("writes", () => {
 });
 
 describe("schema provisioning", () => {
+  const fullFields = (table: "Events" | "Speakers") =>
+    table === "Events"
+      ? ["SpeakerOps ID", "Name", "Slug", "Tagline", "Starts On", "Ends On", "Timezone", "Venue"].map(
+          (name) => ({ name }),
+        )
+      : ["SpeakerOps ID", "Name", "Email", "Company", "Title", "Bio", "Location"].map((name) => ({
+          name,
+        }));
+
   it("creates only the tables the base is missing", async () => {
     const { client, calls } = harness((call) => {
-      if (call.method === "GET") return { body: { tables: [{ name: "Events" }, { name: "Speakers" }] } };
+      if (call.method === "GET")
+        return {
+          body: {
+            tables: [
+              { id: "tblE", name: "Events", fields: fullFields("Events") },
+              { id: "tblS", name: "Speakers", fields: fullFields("Speakers") },
+            ],
+          },
+        };
       return { body: { id: "tblNEW" } };
     });
 
-    const created = await client.ensureTables(["Events", "Speakers", "Submissions"]);
-    expect(created).toEqual(["Submissions"]);
+    const result = await client.ensureSchema(["Events", "Speakers", "Submissions"]);
+    expect(result.createdTables).toEqual(["Submissions"]);
+    expect(result.createdFields).toEqual({});
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(1);
     expect((posts[0]!.body as { name: string }).name).toBe("Submissions");
   });
 
+  it("adopts a template-created table by adding only its missing columns", async () => {
+    // The real trigger: an Airtable event template ships a Speakers table with
+    // its own shape. The mirror must add its join key and missing columns
+    // without touching the template's fields.
+    const { client, calls } = harness((call) => {
+      if (call.method === "GET")
+        return {
+          body: {
+            tables: [
+              {
+                id: "tblTemplate",
+                name: "Speakers",
+                fields: [
+                  { name: "Name" },
+                  { name: "Bio" },
+                  { name: "Email" },
+                  { name: "Phone" },
+                  { name: "Profile Photo" },
+                ],
+              },
+            ],
+          },
+        };
+      return { body: { id: "made" } };
+    });
+
+    const result = await client.ensureSchema(["Speakers"]);
+    expect(result.createdTables).toEqual([]);
+    expect(result.createdFields).toEqual({
+      Speakers: ["SpeakerOps ID", "Company", "Title", "Location"],
+    });
+    const fieldPosts = calls.filter((c) => c.method === "POST" && c.url.includes("/tables/tblTemplate/fields"));
+    expect(fieldPosts.map((c) => (c.body as { name: string }).name)).toEqual([
+      "SpeakerOps ID",
+      "Company",
+      "Title",
+      "Location",
+    ]);
+  });
+
   it("creates nothing when the base is already complete", async () => {
-    const { client, calls } = harness(() => ({ body: { tables: [{ name: "Events" }] } }));
-    expect(await client.ensureTables(["Events"])).toEqual([]);
+    const { client, calls } = harness(() => ({
+      body: { tables: [{ id: "tblE", name: "Events", fields: fullFields("Events") }] },
+    }));
+    const result = await client.ensureSchema(["Events"]);
+    expect(result).toEqual({ createdTables: [], createdFields: {} });
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
@@ -195,7 +256,7 @@ describe("schema provisioning", () => {
     const { client, calls } = harness((call) =>
       call.method === "GET" ? { body: { tables: [] } } : { body: { id: "tbl" } },
     );
-    await client.ensureTables(["Rooms"]);
+    await client.ensureSchema(["Rooms"]);
     const body = calls.find((c) => c.method === "POST")!.body as {
       fields: { name: string; type: string; options?: { precision: number } }[];
     };

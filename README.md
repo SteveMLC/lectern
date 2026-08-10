@@ -203,7 +203,7 @@ The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions ac
 
 ## Airtable mirror
 
-Plenty of event teams already run their operations out of Airtable. SpeakerOps mirrors an event's records into a base so those people see submissions, decisions, the schedule, and outstanding speaker tasks without opening the app.
+Plenty of event teams already run their operations out of Airtable. SpeakerOps mirrors an event's records into a base so those people see submissions, decisions, the schedule, and outstanding speaker tasks without opening the app. **The hosted demo's mirror is live**: the first sync built its own tables in a template-created base (adopting the template's Speakers table by adding only its missing columns) and pushed the full seeded event — 53 records across 8 tables; re-syncing updates in place.
 
 **D1 stays authoritative.** Airtable is a mirror, not the backend, and that is a deliberate call:
 

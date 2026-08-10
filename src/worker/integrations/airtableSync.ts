@@ -191,9 +191,13 @@ export async function syncEventToAirtable(options: {
   };
 
   try {
-    const tablesCreated = await client.ensureTables(MIRROR_TABLES);
+    const schema = await client.ensureSchema(MIRROR_TABLES);
+    const tablesCreated = schema.createdTables;
     if (tablesCreated.length > 0) {
       report.push(`Created ${tablesCreated.length} table(s) in the base: ${tablesCreated.join(", ")}`);
+    }
+    for (const [table, fields] of Object.entries(schema.createdFields)) {
+      report.push(`Adopted existing "${table}" table: added ${fields.join(", ")}`);
     }
 
     const known = await loadExternalIds(db, connectionId);
