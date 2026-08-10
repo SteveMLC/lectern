@@ -6,3 +6,8 @@ dist/
 .env.*
 *.local
 .DS_Store
+
+# Raw AI transcripts, invoices, and account exports are reimbursement evidence,
+# but can contain prompts, local paths, or account details. Keep them private.
+usage/private/*
+!usage/private/README.md

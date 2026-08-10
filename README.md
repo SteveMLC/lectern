@@ -39,7 +39,7 @@ Scaffold + golden path. Working today:
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
-The judging-critical product path is complete locally. Cloudflare account authentication and production provisioning are the remaining release steps; see [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
+The judging-critical product path is live on Cloudflare Workers with D1 and R2 provisioned. Release and walkthrough status lives in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
 Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
@@ -99,6 +99,8 @@ pnpm test      # domain tests (vitest)
 pnpm build     # production SPA build
 pnpm verify    # all checks above plus a Wrangler deployment dry-run
 ```
+
+AI-assisted work is tracked for the hackathon reimbursement audit in [`usage/`](usage/README.md). `pnpm usage:check` validates the append-only evidence ledger, `pnpm usage:summary` prints the current workload/cost gauge, and `pnpm verify` refuses an invalid ledger. Raw transcripts and receipts stay private and are never committed.
 
 Reset the demo to its exact seeded state at any time:
 
