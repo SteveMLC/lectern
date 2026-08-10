@@ -1,8 +1,8 @@
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { basename, resolve } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -13,6 +13,7 @@ const pricingPath = resolve(root, "usage/pricing.json");
 const reportPath = resolve(root, "usage/REPORT.md");
 const sourcesPath = resolve(root, "usage/private/sources.json");
 const runtimeEvidencePath = resolve(root, "usage/private/runtime-ai-usage.json");
+const privateEvidenceRoot = resolve(root, "usage/private");
 const defaultRuntimeUrl = "https://speakerops.speakerops-go7.workers.dev";
 const defaultSourceRoots = {
   codex: "~/.codex/sessions",
@@ -221,6 +222,15 @@ function expandLocalPath(path) {
   if (path === "~") return homedir();
   if (path.startsWith("~/")) return resolve(homedir(), path.slice(2));
   return resolve(root, path);
+}
+
+export async function requirePrivateEvidenceFile(filePath, requiredRoot = privateEvidenceRoot) {
+  const [actualFile, actualRoot] = await Promise.all([realpath(filePath), realpath(requiredRoot)]);
+  const childPath = relative(actualRoot, actualFile);
+  if (!childPath || childPath === ".." || childPath.startsWith(`..${sep}`) || isAbsolute(childPath)) {
+    throw new Error("Receipt files must be explicitly placed inside usage/private/ before they can be recorded.");
+  }
+  return actualFile;
 }
 
 async function findSessionFile(directory, sessionId, format) {
@@ -611,8 +621,9 @@ async function receipt(options = {}) {
   const period = { start: new Date(periodStart).toISOString(), end: new Date(periodEnd).toISOString() };
   if (period.end < period.start) throw new Error("--period-end must not precede --period-start");
 
+  const receiptFilePath = await requirePrivateEvidenceFile(expandLocalPath(options.file));
   const [rawReceipt, entries, receipts] = await Promise.all([
-    readFile(expandLocalPath(options.file)),
+    readFile(receiptFilePath),
     readLedger(),
     readReceipts(),
   ]);
