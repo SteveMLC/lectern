@@ -68,6 +68,9 @@ describe("draftDecisionFeedback", () => {
             },
           },
         ],
+        id: "msg_runtime_1",
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 120, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 80 },
       },
     }));
 
@@ -75,6 +78,18 @@ describe("draftDecisionFeedback", () => {
     expect(draft.aiUsed).toBe(true);
     expect(draft.subject).toBe("Your Horizon proposal");
     expect(draft.model).toBe("claude-sonnet-5");
+    expect(draft.providerEvidence).toEqual({
+      requestId: "msg_runtime_1",
+      model: "claude-sonnet-5",
+      usage: {
+        inputTokens: 120,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        cacheReadInputTokens: 0,
+        outputTokens: 80,
+      },
+    });
 
     // The request carried the organizer's reasoning and forced the tool.
     const sent = calls[0]!.body;
@@ -92,15 +107,28 @@ describe("draftDecisionFeedback", () => {
   });
 
   it("falls back when the response has no usable draft", async () => {
-    const { fetcher } = fakeAnthropic(() => ({ body: { content: [{ type: "text" }] } }));
+    const { fetcher } = fakeAnthropic(() => ({
+      body: {
+        id: "msg_fallback",
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 11, output_tokens: 2 },
+        content: [{ type: "text" }],
+      },
+    }));
     const draft = await draftDecisionFeedback(INPUT, { apiKey: "sk-ant-test", fetcher });
     expect(draft.aiUsed).toBe(false);
     expect(draft.subject).toContain("Microservices");
+    expect(draft.providerEvidence?.requestId).toBe("msg_fallback");
   });
 
   it("honors a model override", async () => {
     const { fetcher, calls } = fakeAnthropic(() => ({
-      body: { content: [{ type: "tool_use", input: { subject: "S", body: "B" } }] },
+      body: {
+        id: "msg_override",
+        model: "claude-fable-5",
+        usage: { input_tokens: 5, output_tokens: 3 },
+        content: [{ type: "tool_use", input: { subject: "S", body: "B" } }],
+      },
     }));
     await draftDecisionFeedback(INPUT, { apiKey: "k", model: "claude-fable-5", fetcher });
     expect(calls[0]!.body.model).toBe("claude-fable-5");

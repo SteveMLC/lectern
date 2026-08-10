@@ -106,6 +106,14 @@ await check("Narration and reimbursement audit artifacts", async () => {
   run("pnpm", ["usage:check"]);
 });
 
+await check("Production AI calls are exported to the reimbursement ledger", async () => {
+  run("pnpm", ["usage:runtime", "--", "--check", "--quiet"], {
+    env: {
+      SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
+    },
+  });
+});
+
 let receiptCount = 0;
 try {
   const receipts = await readFile(resolve(root, "usage/receipts.jsonl"), "utf8");

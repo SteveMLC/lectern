@@ -107,6 +107,7 @@ The brief allows a valid submission up to $500 in AI token-cost reimbursement, s
 - `usage/ledger.jsonl` — one immutable entry per measured work period; `usage/pricing.json` pins the list prices used.
 - `pnpm usage:check` — validates every entry, recomputes every cost, and **fails if REPORT.md does not byte-match a regeneration from the ledger**, so the report can be neither stale nor hand-edited. `pnpm verify` includes this gate.
 - `pnpm usage:report` regenerates the report; `pnpm usage:snapshot` appends new entries from provider session logs and regenerates it automatically.
+- `pnpm usage:runtime` imports unseen provider-reported counters from the organizer-only production audit endpoint. The app persists those counters before responding and never stores prompts, reviewer notes, or generated text in the audit table.
 - `pnpm usage:receipt` hashes a private invoice or subscription receipt and appends a sanitized allocation record without rewriting old usage evidence or committing the receipt itself.
 
 Raw session transcripts and receipts stay private (hashes are committed, contents are not) and go to the organizer on request with the claim.
@@ -166,6 +167,7 @@ The JSON API the app uses is the public API.
 | GET | `/api/events/:slug/submissions` | Bearer passcode | Organizer submissions list |
 | GET | `/api/events/:slug/submissions.csv` | Bearer passcode | Formula-safe, Excel-friendly submissions CSV export |
 | POST | `/api/events/:slug/submissions/:submissionId/feedback-draft` | Bearer passcode | Editable deny/waitlist feedback draft; AI-assisted only when configured, safe template otherwise |
+| GET | `/api/admin/ai-usage` | Bearer passcode | Privacy-safe provider counters for runtime AI calls; no prompts, reviewer notes, or generated text |
 | POST | `/api/events/:slug/submissions/:submissionId/decision` | Bearer passcode | Approve, maybe, or deny a proposal |
 | GET | `/api/events/:slug/counts` | Bearer passcode | Dashboard counts |
 | GET | `/api/events/:slug/agenda` | Bearer passcode | Sessions, placements, and live conflicts |

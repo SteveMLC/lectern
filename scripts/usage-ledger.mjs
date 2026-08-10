@@ -1,4 +1,4 @@
-import { appendFile, readFile, readdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,8 @@ const receiptsPath = resolve(root, "usage/receipts.jsonl");
 const pricingPath = resolve(root, "usage/pricing.json");
 const reportPath = resolve(root, "usage/REPORT.md");
 const sourcesPath = resolve(root, "usage/private/sources.json");
+const runtimeEvidencePath = resolve(root, "usage/private/runtime-ai-usage.json");
+const defaultRuntimeUrl = "https://speakerops.speakerops-go7.workers.dev";
 const defaultSourceRoots = {
   codex: "~/.codex/sessions",
   claude: "~/.claude/projects",
@@ -282,6 +284,7 @@ function cliArgs(argv) {
     const key = part.slice(2);
     if (key === "dry-run") options.dryRun = true;
     else if (key === "quiet") options.quiet = true;
+    else if (key === "check") options.check = true;
     else options[key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = argv[++index];
   }
   return options;
@@ -359,6 +362,131 @@ export function parseOpenClaw(records, options = {}) {
     start: modelRows[0].timestamp,
     end: modelRows.at(-1).timestamp,
   }));
+}
+
+export function runtimeEventToEntry(event, pricing, options = {}) {
+  const provider = typeof event?.provider === "string" ? event.provider : "";
+  const model = typeof event?.model === "string" ? event.model : "";
+  const requestId = typeof event?.provider_request_id === "string" ? event.provider_request_id : "";
+  const purpose = typeof event?.purpose === "string" ? event.purpose : "";
+  const occurredAt = typeof event?.occurred_at === "string" ? event.occurred_at : "";
+  const sha256 = typeof event?.evidence_sha256 === "string" ? event.evidence_sha256 : "";
+  if (!provider || !model || !requestId || !purpose || Number.isNaN(Date.parse(occurredAt))) {
+    throw new Error("Runtime AI event is missing provider, model, request id, purpose, or a valid timestamp.");
+  }
+  if (!/^[a-f0-9]{64}$/.test(sha256)) throw new Error(`Runtime AI event ${requestId} has an invalid evidence SHA-256.`);
+  if (event.measurement !== "provider_reported") throw new Error(`Runtime AI event ${requestId} is not provider-reported evidence.`);
+
+  const input = asInt(event.input_tokens);
+  const cacheCreation = asInt(event.cache_creation_input_tokens);
+  const cacheWrite5m = asInt(event.cache_creation_5m_input_tokens);
+  const cacheWrite1h = asInt(event.cache_creation_1h_input_tokens);
+  if (cacheWrite5m + cacheWrite1h > cacheCreation) {
+    throw new Error(`Runtime AI event ${requestId} has cache-write details larger than its total.`);
+  }
+  const cacheRead = asInt(event.cache_read_input_tokens);
+  const output = asInt(event.output_tokens);
+  const tokens = normalizeTokens({
+    uncachedInput: input,
+    cacheRead,
+    cacheWrite: cacheCreation - cacheWrite5m - cacheWrite1h,
+    cacheWrite5m,
+    cacheWrite1h,
+    output,
+    providerTotal: input + cacheCreation + cacheRead + output,
+  });
+  const rateId = selectRateId(pricing, provider, model, occurredAt);
+  const idHash = createHash("sha256").update(`${provider}:${requestId}`).digest("hex").slice(0, 12);
+  return {
+    schemaVersion: 1,
+    id: `usage-${occurredAt.slice(0, 10).replaceAll("-", "")}-runtime-${idHash}`,
+    recordedAt: options.recordedAt ?? new Date().toISOString(),
+    period: { start: occurredAt, end: occurredAt },
+    actor: { name: "SpeakerOps runtime", surface: options.surface ?? defaultRuntimeUrl },
+    provider,
+    model,
+    category: "runtime_ai_feature",
+    description: purpose,
+    measurement: "provider_reported",
+    calls: 1,
+    tokens,
+    cost: {
+      kind: "api_list_price_estimate",
+      rateId,
+      estimatedUsd: estimateCost(tokens, pricing.rates[rateId]),
+      actualBilledUsd: null,
+      receiptStatus: "pending_provider_invoice",
+    },
+    source: {
+      kind: "speakerops_runtime_d1",
+      sessionId: requestId,
+      sha256,
+      lineCount: 1,
+      rawEvidence: "retained_privately",
+      cumulative: { calls: 1, ...tokens },
+    },
+    commits: options.commit ? [options.commit] : [],
+    artifacts: [options.surface ?? defaultRuntimeUrl, `runtime:${purpose}`],
+    notes: ["Exported from privacy-safe SpeakerOps D1 counters; prompts, reviewer notes, and generated content were never stored."],
+  };
+}
+
+async function runtime(options = {}) {
+  const baseUrl = (options.url ?? process.env.SPEAKEROPS_BASE_URL ?? defaultRuntimeUrl).replace(/\/$/, "");
+  const passcode = options.passcode ?? process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
+  if (!passcode) throw new Error("runtime requires --passcode or SPEAKEROPS_ORGANIZER_PASSCODE");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/api/admin/ai-usage`, {
+      headers: { Authorization: `Bearer ${passcode}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) throw new Error(`Runtime AI usage export returned HTTP ${response.status}.`);
+  const payload = await response.json();
+  if (payload?.schemaVersion !== 1 || !Array.isArray(payload.events)) {
+    throw new Error("Runtime AI usage export did not return the expected schema.");
+  }
+
+  const [existing, pricing] = await Promise.all([readLedger(), readPricing()]);
+  const existingRuntimeIds = new Set(existing
+    .filter((entry) => entry.source?.kind === "speakerops_runtime_d1")
+    .map((entry) => `${entry.provider}:${entry.source.sessionId}`));
+  const commitResult = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+  const commit = commitResult.status === 0 ? commitResult.stdout.trim() : undefined;
+  const recordedAt = new Date().toISOString();
+  const entries = payload.events
+    .filter((event) => !existingRuntimeIds.has(`${event.provider}:${event.provider_request_id}`))
+    .map((event) => runtimeEventToEntry(event, pricing, { surface: baseUrl, commit, recordedAt }));
+
+  const seen = new Set(existing.map((entry) => entry.id));
+  const failures = entries.flatMap((entry) => validateEntry(entry, pricing.rates, seen));
+  if (failures.length) throw new Error(`Runtime AI usage failed validation:\n- ${failures.join("\n- ")}`);
+
+  if (options.check) {
+    if (entries.length) throw new Error(`${entries.length} runtime AI event(s) are not exported to usage/ledger.jsonl; run pnpm usage:runtime.`);
+    if (!options.quiet) console.log(`Runtime AI usage current: ${payload.events.length} D1 event(s), all exported to the ledger.`);
+    return [];
+  }
+  if (!options.dryRun) {
+    await mkdir(resolve(root, "usage/private"), { recursive: true });
+    await writeFile(runtimeEvidencePath, `${JSON.stringify(payload, null, 2)}\n`);
+    if (entries.length) {
+      await appendFile(ledgerPath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+      await renderReport();
+    }
+  }
+  if (!options.quiet) {
+    const action = options.dryRun ? "would capture" : "captured";
+    console.log(`Runtime AI usage ${action} ${entries.length} new event(s) from ${payload.events.length} persisted D1 event(s).`);
+    if (options.dryRun && entries.length) console.log(JSON.stringify(entries, null, 2));
+  }
+  return entries;
 }
 
 async function snapshot(options) {
@@ -697,9 +825,10 @@ async function main() {
   if (command === "summary") return summary();
   if (command === "snapshot") return snapshot(cliArgs(rest));
   if (command === "sync") return sync(cliArgs(rest));
+  if (command === "runtime") return runtime(cliArgs(rest));
   if (command === "receipt") return receipt(cliArgs(rest));
   if (command === "report") return report();
-  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|receipt|report>");
+  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|runtime|receipt|report>");
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

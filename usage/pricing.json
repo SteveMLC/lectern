@@ -3,6 +3,19 @@
   "currency": "USD",
   "unit": "per_million_tokens",
   "rates": {
+    "anthropic-claude-sonnet-5-2026-06-30": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "effectiveAt": "2026-06-30",
+      "uncachedInput": 2,
+      "cacheRead": 0.2,
+      "cacheWrite": 2.5,
+      "cacheWrite5m": 2.5,
+      "cacheWrite1h": 4,
+      "output": 10,
+      "source": "https://www.anthropic.com/news/claude-sonnet-5",
+      "assumption": "Anthropic introductory global API price through 2026-08-31. Cache reads/writes use the published 0.1x, 1.25x, and 2x prompt-caching multipliers."
+    },
     "anthropic-claude-fable-5-2026-08-10": {
       "provider": "anthropic",
       "model": "claude-fable-5",

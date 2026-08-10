@@ -28,6 +28,7 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | GET | `/api/events/:slug/submissions` | Organizer submissions list |
 | GET | `/api/events/:slug/submissions.csv` | Formula-safe, Excel-friendly organizer submissions export |
 | POST | `/api/events/:slug/submissions/:submissionId/feedback-draft` | Draft editable deny/waitlist feedback; AI-assisted when configured, safe deterministic template otherwise |
+| GET | `/api/admin/ai-usage` | Export privacy-safe provider counters for runtime AI calls; never includes prompts, reviewer notes, or generated text |
 | POST | `/api/events/:slug/submissions/:submissionId/decision` | Approve, maybe, or deny; approval creates/reuses one session |
 | GET | `/api/events/:slug/counts` | Dashboard counts |
 | GET | `/api/events/:slug/agenda` | Sessions, room placements, and computed conflicts |

@@ -634,8 +634,61 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
     { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
   );
 
-  const body: FeedbackDraftResponse = draft;
+  if (draft.providerEvidence) {
+    const evidence = draft.providerEvidence;
+    const occurredAt = new Date().toISOString();
+    const canonical = JSON.stringify({
+      provider: "anthropic",
+      requestId: evidence.requestId,
+      model: evidence.model,
+      purpose: "decision_feedback_draft",
+      usage: evidence.usage,
+    });
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    const evidenceSha256 = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const usage = evidence.usage;
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO ai_usage_events (
+         id, provider, provider_request_id, model, purpose, occurred_at,
+         input_tokens, cache_creation_input_tokens, cache_creation_5m_input_tokens,
+         cache_creation_1h_input_tokens, cache_read_input_tokens, output_tokens,
+         evidence_sha256, measurement
+       ) VALUES (?1, 'anthropic', ?2, ?3, 'decision_feedback_draft', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'provider_reported')`,
+    ).bind(
+      randomId("aiu"),
+      evidence.requestId,
+      evidence.model,
+      occurredAt,
+      usage.inputTokens,
+      usage.cacheCreationInputTokens,
+      usage.cacheCreation5mInputTokens,
+      usage.cacheCreation1hInputTokens,
+      usage.cacheReadInputTokens,
+      usage.outputTokens,
+      evidenceSha256,
+    ).run();
+  }
+
+  const { providerEvidence: _privateProviderEvidence, ...publicDraft } = draft;
+  const body: FeedbackDraftResponse = publicDraft;
   return c.json(body);
+});
+
+api.get("/admin/ai-usage", organizerAuth, async (c) => {
+  const result = await c.env.DB.prepare(
+    `SELECT provider, provider_request_id, model, purpose, occurred_at,
+            input_tokens, cache_creation_input_tokens,
+            cache_creation_5m_input_tokens, cache_creation_1h_input_tokens,
+            cache_read_input_tokens, output_tokens, evidence_sha256, measurement
+       FROM ai_usage_events
+      ORDER BY occurred_at ASC, provider_request_id ASC`,
+  ).all();
+  return c.json({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    privacy: "Provider counters only; prompts, reviewer notes, and generated content are not stored.",
+    events: result.results ?? [],
+  });
 });
 
 api.get("/events/:slug/counts", organizerAuth, async (c) => {

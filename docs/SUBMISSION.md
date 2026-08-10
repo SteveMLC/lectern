@@ -54,6 +54,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - [x] Run the guarded production reset twice: 53 clean Airtable mappings, 0 remaining duplicates/orphans, strict gate 6/6.
 - [x] Add deployed URL here.
 - [x] Record and decode-validate a clean 1280×720 walkthrough; local ignored submission cut is 2:59.76, and production was reset afterward.
+- [x] Persist provider-reported counters for every runtime AI draft and export them into the append-only reimbursement ledger without request content.
 - [ ] Add narration if desired, upload the walkthrough, add the organizer form URL when it is sent in Discord, and submit with buffer.
 
 ## Submission Assets
@@ -63,7 +64,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - Narration script: `docs/WALKTHROUGH_NARRATION.txt`; run `pnpm walkthrough:narrate` on macOS to reproducibly build the narrated local fallback at `output/playwright/speakerops-walkthrough-final.mp4`.
 - The current official brief says the form will be sent out; it does not contain a submission-form URL as of August 10, 2026. Watch the organizer Discord before final submission.
 
-Run `pnpm submission:preflight` immediately before upload. It re-runs the release gate and strict production smoke test, checks the public GitHub repository, validates the local walkthrough codec/resolution/duration/audio, confirms the current commit is on `origin/main`, and reports missing organizer/video URLs or receipt evidence without inventing them. Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form and uploaded video URLs exist.
+Run `pnpm usage:runtime` after any production AI-assisted draft, then run `pnpm submission:preflight` immediately before upload. Preflight re-runs the release gate and strict production smoke test, fails if a persisted runtime event is missing from the ledger, checks the public GitHub repository, validates the local walkthrough codec/resolution/duration/audio, confirms the current commit is on `origin/main`, and reports missing organizer/video URLs or receipt evidence without inventing them. Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form and uploaded video URLs exist.
 
 ## Known Intentional Limits
 

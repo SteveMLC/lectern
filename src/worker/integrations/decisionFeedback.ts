@@ -32,6 +32,18 @@ export interface FeedbackDraft {
   aiUsed: boolean;
   model?: string;
   note?: string;
+  providerEvidence?: {
+    requestId: string;
+    model: string;
+    usage: {
+      inputTokens: number;
+      cacheCreationInputTokens: number;
+      cacheCreation5mInputTokens: number;
+      cacheCreation1hInputTokens: number;
+      cacheReadInputTokens: number;
+      outputTokens: number;
+    };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,16 +160,60 @@ export async function aiDraft(
   }
 
   const body = (await response.json()) as {
+    id?: unknown;
+    model?: unknown;
+    usage?: {
+      input_tokens?: unknown;
+      cache_creation_input_tokens?: unknown;
+      cache_read_input_tokens?: unknown;
+      output_tokens?: unknown;
+      cache_creation?: {
+        ephemeral_5m_input_tokens?: unknown;
+        ephemeral_1h_input_tokens?: unknown;
+      };
+    };
     content?: { type: string; input?: { subject?: unknown; body?: unknown } }[];
   };
+  const asCounter = (value: unknown, name: string) => {
+    if (!Number.isSafeInteger(value) || Number(value) < 0) throw new Error(`Anthropic response is missing ${name}.`);
+    return Number(value);
+  };
+  if (typeof body.id !== "string" || !body.id || !body.usage) {
+    throw new Error("Anthropic response did not contain provider usage evidence.");
+  }
+  const responseModel = typeof body.model === "string" && body.model ? body.model : model;
+  const providerEvidence = {
+    requestId: body.id,
+    model: responseModel,
+    usage: {
+      inputTokens: asCounter(body.usage.input_tokens, "usage.input_tokens"),
+      cacheCreationInputTokens: asCounter(body.usage.cache_creation_input_tokens ?? 0, "usage.cache_creation_input_tokens"),
+      cacheCreation5mInputTokens: asCounter(body.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0, "usage.cache_creation.ephemeral_5m_input_tokens"),
+      cacheCreation1hInputTokens: asCounter(body.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0, "usage.cache_creation.ephemeral_1h_input_tokens"),
+      cacheReadInputTokens: asCounter(body.usage.cache_read_input_tokens ?? 0, "usage.cache_read_input_tokens"),
+      outputTokens: asCounter(body.usage.output_tokens, "usage.output_tokens"),
+    },
+  };
+
   const toolUse = (body.content ?? []).find((block) => block.type === "tool_use");
   const subject = toolUse?.input?.subject;
   const draftBody = toolUse?.input?.body;
   if (typeof subject !== "string" || typeof draftBody !== "string" || !subject.trim() || !draftBody.trim()) {
-    throw new Error("Anthropic response did not contain a usable draft.");
+    return {
+      ...deterministicDraft(input),
+      model: responseModel,
+      note: "AI drafting returned no usable draft, so SpeakerOps used the safe template.",
+      providerEvidence,
+    };
   }
 
-  return { subject: subject.trim(), bodyMd: draftBody.trim(), aiUsed: true, model };
+  return {
+    subject: subject.trim(),
+    bodyMd: draftBody.trim(),
+    aiUsed: true,
+    model: responseModel,
+    providerEvidence,
+  };
 }
 
 /**

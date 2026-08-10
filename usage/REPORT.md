@@ -1,15 +1,15 @@
 # AI usage reimbursement audit
 
-Generated 2026-08-10 21:44 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
+Generated 2026-08-10 21:54 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
 
-Ledger digest: `096dadd74f743166689528851d3bffb3257494312795a58dc0664a80777e4ad6` (55 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
+Ledger digest: `e39b705dc83cb65bd05e17233092661e422c5bfa1e6b9276087d39d659a00d06` (57 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
 Receipt-allocation digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
-2. **API-equivalent estimate — $462.90** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 54 usage entries remain uncovered by a recorded receipt.
+2. **API-equivalent estimate — $465.22** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
+3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 56 usage entries remain uncovered by a recorded receipt.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -17,11 +17,11 @@ The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhm
 
 | Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| anthropic/claude-fable-5 | 24 | 300 | 598 | 190,419,313 | 4,931,654 | 429,402 | $310.53 |
+| anthropic/claude-fable-5 | 25 | 301 | 600 | 191,397,231 | 4,932,637 | 430,396 | $311.58 |
 | anthropic/claude-opus-5 | 1 | 126 | 252 | 49,152,905 | 2,409,204 | 148,940 | $52.39 |
-| openai/gpt-5.6-sol | 29 | — | 2,873,345 | 147,070,336 | 0 | 392,889 | $99.69 |
+| openai/gpt-5.6-sol | 30 | — | 2,937,268 | 148,052,736 | 0 | 408,358 | $100.96 |
 | openai/gpt-5.5 | 1 | 6 | 5,393 | 516,096 | 0 | 137 | $0.29 |
-| **Total** | **55** | | | | | | **$462.90** |
+| **Total** | **57** | | | | | | **$465.22** |
 
 ## Evidence inventory
 
@@ -84,6 +84,8 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 1,913,327 | $1.99 | `5a7cd75e883b…` (2144 lines) | `README.md` `docs/API.` `docs/CRIT` `docs/SUBM` `scripts/u` `src/share` `src/share` `src/share` `src/worke` `src/worke` `usage/REA` |
 | 2026-08-10 | Codex engineering task | gpt-5.6-sol | engineering qa release | 6,542,259 | $3.67 | `c7a80f2c9f2d…` (5488 lines) | `README.md` `docs/DEMO` `docs/LIAM` `src/worke` |
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 9,712,761 | $28.18 | `365bce3b54d9…` (2199 lines) | `README.md` `docs/DEMO` `docs/LIAM` `src/worke` |
+| 2026-08-10 | Codex engineering task | gpt-5.6-sol | engineering qa release | 1,061,792 | $1.27 | `73446c2d8d56…` (5602 lines) | `README.md` `docs/API.` `docs/CRIT` `docs/SUBM` `migration` `package.j` `scripts/s` `scripts/u` `src/share` `src/worke` `src/worke` `src/worke` `usage/REA` `usage/pri` |
+| 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 979,897 | $1.05 | `48834cbcbb53…` (2202 lines) | `README.md` `docs/API.` `docs/CRIT` `docs/SUBM` `migration` `package.j` `scripts/s` `scripts/u` `src/share` `src/worke` `src/worke` `src/worke` `usage/REA` `usage/pri` |
 
 ## Receipt allocations
 

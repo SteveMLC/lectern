@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, runtimeEventToEntry, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -93,6 +93,58 @@ describe("usage ledger", () => {
     ]);
     expect(result.model).toBe("gpt-5.5");
     expect(result.calls).toBe(1);
+  });
+
+  it("converts persisted runtime counters without storing request content", () => {
+    const pricing = {
+      rates: {
+        sonnet: {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          effectiveAt: "2026-06-30",
+          uncachedInput: 2,
+          cacheRead: 0.2,
+          cacheWrite: 2.5,
+          cacheWrite5m: 2.5,
+          cacheWrite1h: 4,
+          output: 10,
+        },
+      },
+    };
+    const entry = runtimeEventToEntry({
+      provider: "anthropic",
+      provider_request_id: "msg_runtime_1",
+      model: "claude-sonnet-5",
+      purpose: "decision_feedback_draft",
+      occurred_at: "2026-08-10T17:00:00.000Z",
+      input_tokens: 100,
+      cache_creation_input_tokens: 30,
+      cache_creation_5m_input_tokens: 10,
+      cache_creation_1h_input_tokens: 15,
+      cache_read_input_tokens: 40,
+      output_tokens: 20,
+      evidence_sha256: "e".repeat(64),
+      measurement: "provider_reported",
+    }, pricing, {
+      surface: "https://speakerops.example",
+      commit: "abc123",
+      recordedAt: "2026-08-10T17:01:00.000Z",
+    });
+    expect(entry.tokens).toEqual({
+      uncachedInput: 100,
+      cacheRead: 40,
+      cacheWrite: 5,
+      cacheWrite5m: 10,
+      cacheWrite1h: 15,
+      output: 20,
+      reasoningOutput: 0,
+      providerTotal: 190,
+    });
+    expect(entry.source).toMatchObject({ kind: "speakerops_runtime_d1", sessionId: "msg_runtime_1" });
+    expect(entry.cost).toMatchObject({ rateId: "sonnet", receiptStatus: "pending_provider_invoice" });
+    expect(entry).not.toHaveProperty("prompt");
+    expect(entry).not.toHaveProperty("reviewerNotes");
+    expect(entry).not.toHaveProperty("generatedContent");
   });
 
   it("rejects duplicate evidence ids", () => {

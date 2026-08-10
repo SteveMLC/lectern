@@ -6,6 +6,7 @@ The judging-critical product path is implemented on `main`. All six feature issu
 
 - Review queue with organizer Approve / Maybe / Deny decisions.
 - Formula-safe submissions CSV export plus editable deny/waitlist feedback drafts; without an AI key, the safe template never copies blunt internal notes into the speaker email.
+- Runtime AI drafts persist provider-reported counters before responding and export idempotently into the reimbursement ledger; prompts, reviewer notes, and generated text are excluded.
 - Idempotent acceptance: repeated approval reuses the one session derived from the submission.
 - Direct invited/sponsor sessions with `origin=direct` and no source submission.
 - Drag-and-drop room scheduling with day, track, room, and list projections; exact room/time controls remain available, and room/speaker conflicts recompute immediately.

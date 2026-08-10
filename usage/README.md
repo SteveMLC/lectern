@@ -19,6 +19,16 @@ The ledger distinguishes three things that must not be conflated:
 
 ## Automatic logging
 
+There are two automatic capture paths. Development agents are imported from their provider session logs by the pre-commit hook. AI calls made by the deployed SpeakerOps app are written to D1 before the API response is returned, using the provider request id and provider-reported input/cache/output counters. The runtime table deliberately never stores prompts, internal reviewer reasoning, or generated email text.
+
+Export any new production events into the same append-only ledger with:
+
+```bash
+SPEAKEROPS_ORGANIZER_PASSCODE=... pnpm usage:runtime
+```
+
+The command fetches the organizer-only `/api/admin/ai-usage` counter feed, saves its sanitized raw response in ignored `usage/private/`, deduplicates by provider request id, selects pricing from `pricing.json`, appends only unseen events, and regenerates `REPORT.md`. `pnpm usage:runtime -- --check` is read-only and fails when a production event has not yet reached the ledger; the submission preflight runs this check.
+
 Copy the safe template to the gitignored local configuration and add the stable session IDs used for this repository:
 
 ```bash
