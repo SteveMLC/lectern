@@ -11,20 +11,11 @@ import {
   Spinner,
   cn,
 } from "../../components/ui";
+import { DecisionControls } from "../../components/DecisionControls";
 import { ApiRequestError, apiClient } from "../../lib/api";
 import { STATUS_LABEL, STATUS_TONE } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
-
-const ACTIONS: readonly {
-  decision: ReviewDecision;
-  label: string;
-  className: string;
-}[] = [
-  { decision: "approve", label: "Approve", className: "bg-emerald-600 hover:bg-emerald-700" },
-  { decision: "maybe", label: "Maybe", className: "bg-amber-500 hover:bg-amber-600" },
-  { decision: "deny", label: "Deny", className: "bg-rose-600 hover:bg-rose-700" },
-];
 
 /** Queue order: everything awaiting a call first, decided last. */
 const STATUS_RANK: Record<SubmissionStatus, number> = {
@@ -184,8 +175,6 @@ function ReviewCard({
   anyBusy: boolean;
   onDecide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
 }) {
-  const accepted = submission.status === "accepted";
-  const locked = submission.status === "draft" || submission.status === "withdrawn";
   const primary = submission.speakers[0];
   const facts = answerFacts(submission.answers);
 
@@ -255,27 +244,14 @@ function ReviewCard({
       </div>
 
       <div className="mt-4 border-t border-zinc-100 pt-4">
-        {accepted ? (
-          <p className="mb-3 text-xs text-zinc-500">
-            This proposal owns a live session. Re-approval safely reuses it.
-          </p>
-        ) : null}
-        <div
-          className="flex flex-wrap items-center gap-2"
-          aria-label={`Decision for ${submission.title}`}
-        >
-          {ACTIONS.map((action) => (
-            <Button
-              key={action.decision}
-              type="button"
-              className={action.className}
-              disabled={anyBusy || locked || (accepted && action.decision !== "approve")}
-              onClick={() => void onDecide(submission, action.decision)}
-            >
-              {busy ? "Saving…" : action.label}
-            </Button>
-          ))}
-          {primary && !locked ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <DecisionControls
+            submission={submission}
+            busy={busy}
+            anyBusy={anyBusy}
+            onDecide={(target, decision) => onDecide(target, decision)}
+          />
+          {primary && submission.status !== "draft" && submission.status !== "withdrawn" ? (
             <Link
               to={`/admin/communications?speaker=${encodeURIComponent(primary.speakerId)}`}
               className="ml-auto text-sm font-medium text-accent hover:underline"

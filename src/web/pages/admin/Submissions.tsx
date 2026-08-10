@@ -17,18 +17,13 @@ import {
   Spinner,
   cn,
 } from "../../components/ui";
+import { DecisionControls } from "../../components/DecisionControls";
 import { ApiRequestError, apiClient } from "../../lib/api";
 import { STATUS_LABEL, STATUS_TONE, formatDateTime } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
 type Filter = "all" | SubmissionStatusType;
-
-const DECISIONS: readonly { decision: ReviewDecision; label: string; className: string }[] = [
-  { decision: "approve", label: "Approve", className: "bg-emerald-600 hover:bg-emerald-700" },
-  { decision: "maybe", label: "Maybe", className: "bg-amber-500 hover:bg-amber-600" },
-  { decision: "deny", label: "Deny", className: "bg-rose-600 hover:bg-rose-700" },
-];
 
 interface DecisionState {
   busyId: string | null;
@@ -231,54 +226,6 @@ export function Submissions() {
   );
 }
 
-/**
- * The same transition rules the API enforces: drafts and withdrawn proposals
- * are locked, and an accepted proposal can only be re-approved (which safely
- * reuses its session).
- */
-function decisionAvailability(submission: SubmissionListItem, decision: ReviewDecision): boolean {
-  if (submission.status === "draft" || submission.status === "withdrawn") return false;
-  if (submission.status === "accepted") return decision === "approve";
-  return true;
-}
-
-function DecisionButtons({
-  submission,
-  decisionState,
-  compact,
-}: {
-  submission: SubmissionListItem;
-  decisionState: DecisionState;
-  compact?: boolean;
-}) {
-  const { busyId, decide } = decisionState;
-  const busy = busyId === submission.id;
-  const locked = submission.status === "draft" || submission.status === "withdrawn";
-
-  if (locked) {
-    return <p className="text-xs text-zinc-400">Locked ({STATUS_LABEL[submission.status]})</p>;
-  }
-
-  return (
-    <div
-      className={cn("flex flex-wrap items-center gap-1.5", compact && "flex-nowrap")}
-      aria-label={`Decision for ${submission.title}`}
-    >
-      {DECISIONS.map((action) => (
-        <Button
-          key={action.decision}
-          type="button"
-          className={cn(action.className, compact ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-xs")}
-          disabled={busyId !== null || !decisionAvailability(submission, action.decision)}
-          onClick={() => void decide(submission, action.decision)}
-        >
-          {busy ? "…" : action.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
 function SubmissionRow({
   submission,
   decisionState,
@@ -320,7 +267,13 @@ function SubmissionRow({
         {formatDateTime(submission.submittedAt)}
       </td>
       <td className="px-4 py-4">
-        <DecisionButtons submission={submission} decisionState={decisionState} compact />
+        <DecisionControls
+          submission={submission}
+          busy={decisionState.busyId === submission.id}
+          anyBusy={decisionState.busyId !== null}
+          onDecide={decisionState.decide}
+          compact
+        />
       </td>
     </tr>
   );
@@ -363,7 +316,12 @@ function SubmissionMobileCard({
         </div>
       </div>
       <div className="mt-4 border-t border-zinc-100 pt-3">
-        <DecisionButtons submission={submission} decisionState={decisionState} />
+        <DecisionControls
+          submission={submission}
+          busy={decisionState.busyId === submission.id}
+          anyBusy={decisionState.busyId !== null}
+          onDecide={decisionState.decide}
+        />
       </div>
     </Card>
   );

@@ -100,7 +100,16 @@ pnpm build     # production SPA build
 pnpm verify    # all checks above plus a Wrangler deployment dry-run
 ```
 
-AI-assisted work is tracked for the hackathon reimbursement audit in [`usage/`](usage/README.md). `pnpm usage:check` validates the append-only evidence ledger, `pnpm usage:summary` prints the current workload/cost gauge, and `pnpm verify` refuses an invalid ledger. Raw transcripts and receipts stay private and are never committed.
+## Reimbursement audit
+
+The brief allows a valid submission up to $500 in AI token-cost reimbursement, subject to proof. Every AI work session on this project is logged in an append-only evidence ledger, and the whole trail is designed to be auditable in minutes:
+
+- **[`usage/REPORT.md`](usage/REPORT.md)** — the audit document: workload by model, an evidence inventory tying every ledger entry to its session-log SHA-256 and commits, and the gauge-versus-claim distinction kept explicit.
+- `usage/ledger.jsonl` — one immutable entry per measured work period; `usage/pricing.json` pins the list prices used.
+- `pnpm usage:check` — validates every entry, recomputes every cost, and **fails if REPORT.md does not byte-match a regeneration from the ledger**, so the report can be neither stale nor hand-edited. `pnpm verify` includes this gate.
+- `pnpm usage:report` regenerates the report; `pnpm usage:snapshot` appends new entries from provider session logs and regenerates it automatically.
+
+Raw session transcripts and receipts stay private (hashes are committed, contents are not) and go to the organizer on request with the claim.
 
 Reset the demo to its exact seeded state at any time:
 
