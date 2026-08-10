@@ -1,0 +1,141 @@
+import { access, readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const requiredUrls = process.env.REQUIRE_SUBMISSION_URLS === "1";
+const requireReceipts = process.env.REQUIRE_RECEIPTS === "1";
+const checks = [];
+const warnings = [];
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    encoding: "utf8",
+    timeout: options.timeout ?? 120_000,
+    env: { ...process.env, ...options.env },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim().split(/\r?\n/).slice(-12).join("\n");
+    throw new Error(`${command} ${args.join(" ")} failed${output ? `:\n${output}` : ""}`);
+  }
+  return result.stdout.trim();
+}
+
+async function check(name, task) {
+  try {
+    await task();
+    checks.push({ name, ok: true });
+  } catch (error) {
+    checks.push({ name, ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+await check("Release verification and Cloudflare configuration", async () => {
+  run("pnpm", ["release:preflight"]);
+});
+
+await check("Strict production and Airtable smoke test", async () => {
+  run("pnpm", ["smoke:production"], {
+    env: {
+      REQUIRE_AIRTABLE: "1",
+      SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
+    },
+  });
+});
+
+await check("Public GitHub repository and MIT license", async () => {
+  const response = await fetch("https://api.github.com/repos/SteveMLC/speakerops", {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "speakerops-submission-preflight" },
+  });
+  assert(response.ok, `GitHub repository lookup returned HTTP ${response.status}`);
+  const repository = await response.json();
+  assert(repository.private === false, "GitHub repository is not public");
+  assert(repository.default_branch === "main", "GitHub default branch is not main");
+  assert(repository.license?.spdx_id === "MIT", "GitHub does not detect an MIT license");
+});
+
+await check("Clean tree and current commit published on main", async () => {
+  const dirty = run("git", ["status", "--porcelain"]);
+  if (dirty && process.env.SUBMISSION_ALLOW_DIRTY === "1") warnings.push("Working-tree cleanliness was bypassed for local preflight development.");
+  else assert(dirty === "", "working tree is not clean");
+  const head = run("git", ["rev-parse", "HEAD"]);
+  const remote = run("git", ["ls-remote", "origin", "refs/heads/main"], { timeout: 20_000 }).split(/\s+/)[0];
+  assert(head === remote, `HEAD ${head.slice(0, 12)} is not origin/main ${remote.slice(0, 12)}`);
+});
+
+await check("Walkthrough media is submission-ready", async () => {
+  const candidates = [
+    process.env.SPEAKEROPS_WALKTHROUGH_FILE,
+    "output/playwright/speakerops-walkthrough-final.mp4",
+    "output/playwright/speakerops-walkthrough-submission.mp4",
+  ].filter(Boolean);
+  let video;
+  for (const candidate of candidates) {
+    try {
+      await access(resolve(root, candidate));
+      video = candidate;
+      break;
+    } catch {}
+  }
+  assert(video, "no local walkthrough file was found");
+  const probe = JSON.parse(run("ffprobe", [
+    "-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name,width,height", "-of", "json", video,
+  ], { timeout: 20_000 }));
+  const visual = probe.streams?.find((stream) => stream.codec_type === "video");
+  const audio = probe.streams?.find((stream) => stream.codec_type === "audio");
+  const duration = Number(probe.format?.duration);
+  assert(visual?.codec_name === "h264", `walkthrough video codec is ${visual?.codec_name ?? "missing"}, expected h264`);
+  assert(visual.width >= 1280 && visual.height >= 720, `walkthrough is ${visual.width}x${visual.height}, expected at least 1280x720`);
+  assert(Number.isFinite(duration) && duration > 30 && duration <= 180, `walkthrough duration is ${duration}s, expected 30–180s`);
+  if (!audio) warnings.push(`Walkthrough ${video} has no audio; use the narrated final or record a human voiceover.`);
+});
+
+await check("Narration and reimbursement audit artifacts", async () => {
+  await Promise.all([
+    access(resolve(root, "docs/WALKTHROUGH_NARRATION.txt")),
+    access(resolve(root, "usage/REPORT.md")),
+    access(resolve(root, "usage/ledger.jsonl")),
+  ]);
+  run("pnpm", ["usage:check"]);
+});
+
+let receiptCount = 0;
+try {
+  const receipts = await readFile(resolve(root, "usage/receipts.jsonl"), "utf8");
+  receiptCount = receipts.split(/\r?\n/).filter((line) => line.trim()).length;
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
+}
+if (receiptCount === 0) {
+  const message = "No provider receipt allocation is recorded; actual reimbursement evidence remains $0 until `pnpm usage:receipt` is run with a real private receipt.";
+  if (requireReceipts) checks.push({ name: "Receipt evidence", ok: false, error: message });
+  else warnings.push(message);
+}
+
+for (const [name, value] of [
+  ["organizer submission form", process.env.SPEAKEROPS_SUBMISSION_FORM_URL],
+  ["uploaded walkthrough", process.env.SPEAKEROPS_VIDEO_URL],
+]) {
+  if (!value) {
+    const message = `Missing ${name} URL; provide it as ${name === "organizer submission form" ? "SPEAKEROPS_SUBMISSION_FORM_URL" : "SPEAKEROPS_VIDEO_URL"}.`;
+    if (requiredUrls) checks.push({ name: `${name} URL`, ok: false, error: message });
+    else warnings.push(message);
+  } else {
+    try { new URL(value); }
+    catch { checks.push({ name: `${name} URL`, ok: false, error: `${value} is not a valid URL` }); }
+  }
+}
+
+for (const item of checks) console.log(`${item.ok ? "PASS" : "FAIL"}  ${item.name}${item.error ? ` — ${item.error}` : ""}`);
+for (const warning of warnings) console.log(`WARN  ${warning}`);
+
+const failures = checks.filter((item) => !item.ok);
+console.log(`\n${checks.length - failures.length}/${checks.length} submission checks passed; ${warnings.length} warning(s).`);
+if (failures.length) process.exit(1);

@@ -1,0 +1,15 @@
+SpeakerOps is the open-source program side of Sessionboard. It covers the operational job from call for speakers through a published agenda, and it runs as one Cloudflare Worker with D1 and R2. The product is intentionally straightforward: reliable conference operations first, with no AI workflow required.
+
+We start on the public call for speakers. The form is generated from event configuration, and choosing Workshop reveals a workshop-length question that is both visible and required. Switching formats removes it. The browser and API share the same conditional rules, so hidden fields never become accidental blockers. Submitting creates the speaker and proposal in D1 and confirms the public-to-organizer round trip.
+
+Inside the organizer console, the new proposal is immediately available for review. Approve, Maybe, and Deny are guarded decisions, not cosmetic buttons. Approving the proposal creates its program session while preserving CFP lineage. Repeating approval reuses that same session, so retries cannot duplicate the agenda.
+
+The agenda begins with deliberately planted room and speaker conflicts. They are described in plain language and recompute as sessions move. Dragging a session to Workshop Studio persists the new room and immediately lowers the conflict count.
+
+Not every program item begins as a proposal. A sponsor keynote can be added directly from the agenda with no source submission. SpeakerOps stores that distinction explicitly and marks the session Direct, which covers invited talks, sponsor commitments, and last-minute additions without corrupting the CFP model.
+
+The speaker-facing portal is a real workflow rather than a read-only profile. The speaker can update their public bio, complete onboarding tasks, and see progress change immediately. Headshots, slides, and documents upload through the portal into R2 and appear as first-class asset records that can be downloaded again.
+
+Communications are tied to live program data. The organizer previews a reminder or session update, downloads a standards-based calendar file, and records a simulated delivery receipt. The calendar includes the scheduled UTC start and end, title, description, room, and confirmed status. External email credentials are optional, so judging never depends on a third-party sender.
+
+Finally, the Integrations screen proves the live Airtable mirror: eight operational tables and fifty-three reconciled records, with safe retries, rate limiting, and idempotent mappings. D1 remains authoritative, so Airtable cannot take down the demo. Public schedule, session, and speaker embeds publish the same program data. SpeakerOps is open source, deployable, and ready to clone.

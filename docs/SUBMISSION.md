@@ -60,11 +60,14 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 
 - Local full walkthrough: `output/playwright/speakerops-walkthrough-draft.webm` (5:23, ignored by git).
 - Local submission cut: `output/playwright/speakerops-walkthrough-submission.mp4` (2:59.76, H.264, 1280×720, ignored by git).
+- Narration script: `docs/WALKTHROUGH_NARRATION.txt`; run `pnpm walkthrough:narrate` on macOS to reproducibly build the narrated local fallback at `output/playwright/speakerops-walkthrough-final.mp4`.
 - The current official brief says the form will be sent out; it does not contain a submission-form URL as of August 10, 2026. Watch the organizer Discord before final submission.
+
+Run `pnpm submission:preflight` immediately before upload. It re-runs the release gate and strict production smoke test, checks the public GitHub repository, validates the local walkthrough codec/resolution/duration/audio, confirms the current commit is on `origin/main`, and reports missing organizer/video URLs or receipt evidence without inventing them. Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form and uploaded video URLs exist.
 
 ## Known Intentional Limits
 
-- D1 is the full backend. Airtable proves a read/write operational slice rather than mirroring every table.
+- D1 is the full backend. Airtable mirrors the eight judging-relevant operational tables, but it is intentionally not in the request path.
 - Email delivery is simulated and persisted; no external email is sent without credentials.
 - Agenda supports drag-and-drop room scheduling plus day, track, room, and list projections; explicit room/time controls remain as the precise keyboard/mobile fallback.
 - Speaker portal links use stable demo tokens; expiring production magic links are not claimed.

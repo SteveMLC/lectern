@@ -26,14 +26,14 @@ Break the demo on purpose. **Reset** on `/demo` restores the loaded conference t
 
 ## Status
 
-Scaffold + golden path. Working today:
+The complete judging path is deployed and production-proven:
 
 - Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
-- **Airtable proof**: cached Events/Speakers reads, Messages writes, 5 req/s protection, 429 retries, explicit D1 fallback, and an organizer status screen.
+- **Airtable mirror**: all eight operational tables, idempotent record mapping, schema adoption, 5 req/s protection, 429 retries, guarded reset/deduplication, explicit D1 fallback, and an organizer status screen.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
 - **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.
 - Deterministic demo seed and one-command reset.
@@ -106,6 +106,7 @@ The brief allows a valid submission up to $500 in AI token-cost reimbursement, s
 - `usage/ledger.jsonl` — one immutable entry per measured work period; `usage/pricing.json` pins the list prices used.
 - `pnpm usage:check` — validates every entry, recomputes every cost, and **fails if REPORT.md does not byte-match a regeneration from the ledger**, so the report can be neither stale nor hand-edited. `pnpm verify` includes this gate.
 - `pnpm usage:report` regenerates the report; `pnpm usage:snapshot` appends new entries from provider session logs and regenerates it automatically.
+- `pnpm usage:receipt` hashes a private invoice or subscription receipt and appends a sanitized allocation record without rewriting old usage evidence or committing the receipt itself.
 
 Raw session transcripts and receipts stay private (hashes are committed, contents are not) and go to the organizer on request with the claim.
 
@@ -245,7 +246,6 @@ That idempotency is covered by tests rather than asserted: a second sync of unch
 
 - Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.
 - Real email delivery; previews, calendar attachments, and persisted simulated delivery work without third-party credentials.
-- Full Airtable mirroring; the adapter proves rate-safe Events/Speakers reads and Messages writes while D1 remains the complete backend.
 - Optional Accelevents CSV/mapping handoff, dark mode, and exhaustive mobile admin polish.
 
 ## Contributing
