@@ -36,7 +36,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 | Reliable scheduling | Pure tested conflict engine and visible live room/speaker overlaps |
 | Real speaker operations | Profile/task D1 writes and R2 upload/download from the speaker link |
 | Calendar handoff | Tested RFC 5545-style generator and downloadable `text/calendar` attachment |
-| Airtable bonus | Documented base, tested read/write adapter, 210 ms throttling, 429 retry, guarded reset/deduplication, D1 fallback; live strict proof resumes after the token gains record-read scope |
+| Airtable bonus | Live read/write mirror, 210 ms throttling, 429 retry, guarded reset/deduplication, 53 clean mapped records, and D1 fallback; strict production proof passes 6/6 |
 
 ## Production Checklist
 
@@ -51,6 +51,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - [x] Test a fresh CFP submission and one speaker file upload on production.
 - [x] Verify `.ics` downloads with `Content-Type: text/calendar`.
 - [x] Check browser console and mobile-width admin navigation.
+- [x] Run the guarded production reset twice: 53 clean Airtable mappings, 0 remaining duplicates/orphans, strict gate 6/6.
 - [x] Add deployed URL here.
 - [ ] Record video from a clean reset; submit with buffer.
 

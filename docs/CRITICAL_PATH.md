@@ -24,7 +24,7 @@ Verification evidence:
 - Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
 - A fresh headed Groundwork walkthrough verified Reviews, Agenda, Speakers, Speaker Portal, Communications, Integrations, and persistent event switching with no console errors.
 - An August 10 production walkthrough approved a seeded proposal, added and placed a direct sponsor session, surfaced the new conflict immediately, edited a speaker profile, completed a task, uploaded/downloaded an R2 asset, persisted a simulated send, and downloaded a valid `.ics`; the exact R2 test object was deleted and the deterministic remote seed restored afterward.
-- The strict Airtable gate is intentionally fail-closed after the clean D1 reset until the deployed token gains `data.records:read`; the guarded reset then reconciles live IDs, removes duplicate app-owned rows, and must restore 6/6 before recording.
+- The guarded production reset is live and idempotent: it proved record-read scope before mutation, reconciled 53 live mappings, removed 53 duplicate and 2 stale QA rows on its cleanup run, preserved 15 template/hand-added rows, then passed a second reset with 0 duplicates, 0 orphans, and the strict production gate at 6/6.
 
 ## Production Cloudflare Placement
 
