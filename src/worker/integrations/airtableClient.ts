@@ -51,7 +51,7 @@ export class AirtableClient {
   requestCount = 0;
 
   constructor(private readonly cfg: AirtableClientConfig) {
-    this.fetcher = cfg.fetcher ?? fetch;
+    this.fetcher = cfg.fetcher ?? globalThis.fetch.bind(globalThis);
     this.clock = cfg.clock ?? Date.now;
     this.sleep = cfg.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
@@ -103,20 +103,37 @@ export class AirtableClient {
   // Schema (Meta API) — lets the mirror create its own base layout
   // -------------------------------------------------------------------------
 
-  async listTableNames(): Promise<string[]> {
+  async listTables(): Promise<{ id: string; name: string; fields: string[] }[]> {
     const body = (await this.request(
       `https://api.airtable.com/v0/meta/bases/${encodeURIComponent(this.cfg.baseId)}/tables`,
       { method: "GET" },
-    )) as { tables?: { name: string }[] };
-    return (body.tables ?? []).map((t) => t.name);
+    )) as { tables?: { id: string; name: string; fields?: { name: string }[] }[] };
+    return (body.tables ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      fields: (t.fields ?? []).map((f) => f.name),
+    }));
+  }
+
+  async listTableNames(): Promise<string[]> {
+    return (await this.listTables()).map((t) => t.name);
+  }
+
+  private fieldPayload(field: { name: string; type: string }): Record<string, unknown> {
+    return field.type === "number"
+      ? { name: field.name, type: "number", options: { precision: 0 } }
+      : { name: field.name, type: field.type };
+  }
+
+  async createField(tableId: string, field: { name: string; type: string }): Promise<void> {
+    await this.request(
+      `https://api.airtable.com/v0/meta/bases/${encodeURIComponent(this.cfg.baseId)}/tables/${encodeURIComponent(tableId)}/fields`,
+      { method: "POST", body: JSON.stringify(this.fieldPayload(field)) },
+    );
   }
 
   async createTable(table: MirrorTable): Promise<void> {
-    const fields = TABLE_SCHEMA[table].map((f) =>
-      f.type === "number"
-        ? { name: f.name, type: "number", options: { precision: 0 } }
-        : { name: f.name, type: f.type },
-    );
+    const fields = TABLE_SCHEMA[table].map((f) => this.fieldPayload(f));
     await this.request(
       `https://api.airtable.com/v0/meta/bases/${encodeURIComponent(this.cfg.baseId)}/tables`,
       { method: "POST", body: JSON.stringify({ name: table, fields }) },
@@ -124,18 +141,35 @@ export class AirtableClient {
   }
 
   /**
-   * Create any mirror table the base is missing. Returns the tables created,
-   * so a first run can report "I built your base" rather than staying silent.
+   * Make the base fit the mirror without owning it: create any mirror table
+   * that is missing, and on tables that already exist — including ones a
+   * template created with its own shape — add only the mirror's missing
+   * columns. Existing tables, fields, and data are never touched, so the
+   * mirror adopts a lived-in base instead of demanding an empty one.
    */
-  async ensureTables(tables: readonly MirrorTable[]): Promise<MirrorTable[]> {
-    const existing = new Set(await this.listTableNames());
-    const created: MirrorTable[] = [];
+  async ensureSchema(tables: readonly MirrorTable[]): Promise<{
+    createdTables: MirrorTable[];
+    createdFields: Record<string, string[]>;
+  }> {
+    const existing = new Map((await this.listTables()).map((t) => [t.name, t]));
+    const createdTables: MirrorTable[] = [];
+    const createdFields: Record<string, string[]> = {};
+
     for (const table of tables) {
-      if (existing.has(table)) continue;
-      await this.createTable(table);
-      created.push(table);
+      const current = existing.get(table);
+      if (!current) {
+        await this.createTable(table);
+        createdTables.push(table);
+        continue;
+      }
+      const present = new Set(current.fields);
+      for (const field of TABLE_SCHEMA[table]) {
+        if (present.has(field.name)) continue;
+        await this.createField(current.id, field);
+        (createdFields[table] ??= []).push(field.name);
+      }
     }
-    return created;
+    return { createdTables, createdFields };
   }
 
   // -------------------------------------------------------------------------

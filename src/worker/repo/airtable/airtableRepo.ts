@@ -104,7 +104,7 @@ export class AirtableRepo implements SpeakerOpsRepo {
   private readonly cache = new Map<string, { expiresAt: number; records: AirtableRecord[] }>();
 
   constructor(private readonly cfg: AirtableConfig) {
-    this.fetcher = cfg.fetcher ?? fetch;
+    this.fetcher = cfg.fetcher ?? globalThis.fetch.bind(globalThis);
     this.clock = cfg.clock ?? Date.now;
     this.sleep = cfg.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
