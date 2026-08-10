@@ -18,6 +18,7 @@ import type {
   DecideSubmissionInput,
   SpeakerPortalBundle,
   SpeakerOpsRepo,
+  SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
@@ -153,6 +154,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async updateSpeakerTask(_input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle> {
     throw new AirtableNotWiredError("updateSpeakerTask");
+  }
+
+  async simulateCommunication(_input: SimulateCommunicationInput): Promise<void> {
+    throw new AirtableNotWiredError("simulateCommunication");
   }
 
   async createSpeakerAsset(_input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

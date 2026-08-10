@@ -4,6 +4,8 @@ import {
   AgendaSlotRequest,
   AssetKind,
   CfpSubmissionRequest,
+  CommunicationKind,
+  CommunicationPreviewResponse,
   CreateDirectSessionRequest,
   CreateDirectSessionResponse,
   CreateSubmissionResponse,
@@ -16,6 +18,8 @@ import {
   PublicSessionsResponse,
   PublicSpeakersResponse,
   SpeakerPortalResponse,
+  SimulateCommunicationRequest,
+  SimulateCommunicationResponse,
   SubmissionDecisionRequest,
   SubmissionDecisionResponse,
   SubmissionsListResponse,
@@ -156,6 +160,24 @@ export const apiClient = {
       OrganizerAgendaResponse,
       `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/slot`,
       { method: "PUT", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  communicationPreview: (slug: string, speakerId: string, kind: CommunicationKind) => {
+    const query = new URLSearchParams({ speakerId, kind });
+    return request(
+      CommunicationPreviewResponse,
+      `/api/events/${encodeURIComponent(slug)}/communications/preview?${query.toString()}`,
+      undefined,
+      { auth: true },
+    );
+  },
+
+  simulateCommunication: (slug: string, body: SimulateCommunicationRequest) =>
+    request(
+      SimulateCommunicationResponse,
+      `/api/events/${encodeURIComponent(slug)}/communications/simulate`,
+      { method: "POST", body: JSON.stringify(body) },
       { auth: true },
     ),
 

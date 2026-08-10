@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { Agenda } from "./pages/admin/Agenda";
+import { Communications } from "./pages/admin/Communications";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Reviews } from "./pages/admin/Reviews";
@@ -39,16 +40,7 @@ export function App() {
             />
           }
         />
-        <Route
-          path="communications"
-          element={
-            <ComingSoon
-              title="Communications"
-              lane="Lane C"
-              body="Templated reminders and calendar invites with real .ics files — simulated outbox by default, Resend behind a secret."
-            />
-          }
-        />
+        <Route path="communications" element={<Communications />} />
         <Route
           path="resources"
           element={

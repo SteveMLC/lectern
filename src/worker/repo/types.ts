@@ -56,6 +56,7 @@ export interface SpeakerOpsRepo {
   getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null>;
   updateSpeakerProfile(input: UpdateSpeakerProfileInput): Promise<SpeakerPortalBundle>;
   updateSpeakerTask(input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle>;
+  simulateCommunication(input: SimulateCommunicationInput): Promise<void>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
 }
@@ -108,6 +109,17 @@ export interface UpdateSpeakerTaskInput {
   speakerId: string;
   taskId: string;
   status: "pending" | "complete";
+  now: string;
+}
+
+export interface SimulateCommunicationInput {
+  messageId: string;
+  attemptId: string;
+  eventId: string;
+  speakerId: string;
+  toEmail: string;
+  subject: string;
+  bodyMd: string;
   now: string;
 }
 

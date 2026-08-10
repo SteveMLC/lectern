@@ -35,6 +35,7 @@ import type {
   SpeakerPortalBundle,
   SpeakerPortalSession,
   SpeakerOpsRepo,
+  SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
@@ -1286,6 +1287,33 @@ export class D1Repo implements SpeakerOpsRepo {
     const portal = await this.getSpeakerPortalByToken(input.speakerId);
     if (!portal) throw new Error("speaker_not_found");
     return portal;
+  }
+
+  async simulateCommunication(input: SimulateCommunicationInput): Promise<void> {
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO messages
+             (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
+           VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'sent_simulated', ?7)`,
+        )
+        .bind(
+          input.messageId,
+          input.eventId,
+          input.speakerId,
+          input.toEmail,
+          input.subject,
+          input.bodyMd,
+          input.now,
+        ),
+      this.db
+        .prepare(
+          `INSERT INTO delivery_attempts
+             (id, message_id, attempted_at, mode, status, provider_id, error)
+           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
+        )
+        .bind(input.attemptId, input.messageId, input.now),
+    ]);
   }
 
   async createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

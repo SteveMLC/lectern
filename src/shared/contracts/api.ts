@@ -343,3 +343,36 @@ export const UpdateSpeakerTaskRequest = z.object({
   status: z.enum(["pending", "complete"]),
 });
 export type UpdateSpeakerTaskRequest = z.infer<typeof UpdateSpeakerTaskRequest>;
+
+// ---------------------------------------------------------------------------
+// Communications
+// ---------------------------------------------------------------------------
+
+export const CommunicationKind = z.enum(["reminder", "session_update"]);
+export type CommunicationKind = z.infer<typeof CommunicationKind>;
+
+export const CommunicationPreviewResponse = z.object({
+  kind: CommunicationKind,
+  speakerId: z.string(),
+  speakerName: z.string(),
+  toEmail: z.email(),
+  subject: z.string(),
+  bodyMd: z.string(),
+  pendingTaskCount: z.number().int(),
+  icsUrl: z.string().nullable(),
+});
+export type CommunicationPreviewResponse = z.infer<typeof CommunicationPreviewResponse>;
+
+export const SimulateCommunicationRequest = z.object({
+  speakerId: z.string(),
+  subject: z.string().min(1).max(300),
+  bodyMd: z.string().min(1).max(10000),
+});
+export type SimulateCommunicationRequest = z.infer<typeof SimulateCommunicationRequest>;
+
+export const SimulateCommunicationResponse = z.object({
+  messageId: z.string(),
+  status: z.literal("sent_simulated"),
+  deliveredAt: z.iso.datetime({ offset: true }),
+});
+export type SimulateCommunicationResponse = z.infer<typeof SimulateCommunicationResponse>;

@@ -12,6 +12,7 @@ SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. P
 | GET | `/api/public/events/:slug/schedule` | Event schedule with slots, rooms, sessions, tracks, and public speakers |
 | GET | `/api/public/events/:slug/sessions` | Confirmed sessions with tracks and public speakers |
 | GET | `/api/public/events/:slug/speakers` | Public speaker gallery |
+| GET | `/api/public/events/:slug/sessions/:sessionId/calendar.ics` | Download a scheduled session calendar file |
 | POST | `/api/events/:slug/submissions` | Public CFP proposal intake |
 | GET | `/api/speaker-portal/:token` | Magic-link speaker portal bundle |
 | PATCH | `/api/speaker-portal/:token/profile` | Update the linked speaker profile |
@@ -30,6 +31,8 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | GET | `/api/events/:slug/agenda` | Sessions, room placements, and computed conflicts |
 | POST | `/api/events/:slug/sessions` | Add a direct invited/sponsor session |
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Create or move a session placement |
+| GET | `/api/events/:slug/communications/preview` | Render task-reminder or session-update email |
+| POST | `/api/events/:slug/communications/simulate` | Persist a simulated send and delivery receipt |
 | POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
 | GET | `/api/admin/ping` | Passcode verification |
 

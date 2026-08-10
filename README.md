@@ -14,12 +14,13 @@ Scaffold + golden path. Working today:
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and a room-based agenda with live room/speaker conflicts.
 - **Speaker portal**: magic-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records.
+- **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
 - **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
-The remaining workflows (deeper speaker portal polish, communications, Airtable proof, and optional Accelevents handoff) build on these contracts — see Roadmap.
+The remaining workflows (Airtable proof, deploy/polish, and optional Accelevents handoff) build on these contracts — see Roadmap.
 
 Engineering handoff status and the ordered judging-critical lane map live in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
@@ -113,6 +114,7 @@ The JSON API the app uses is the public API.
 | GET | `/api/public/events/:slug/schedule` | — | Public schedule JSON |
 | GET | `/api/public/events/:slug/sessions` | — | Public sessions JSON |
 | GET | `/api/public/events/:slug/speakers` | — | Public speaker gallery JSON |
+| GET | `/api/public/events/:slug/sessions/:sessionId/calendar.ics` | — | Download scheduled session calendar file |
 | GET | `/api/embeds/events/:slug/schedule` | — | Iframe schedule HTML |
 | GET | `/api/embeds/events/:slug/sessions` | — | Iframe sessions HTML |
 | GET | `/api/embeds/events/:slug/speakers` | — | Iframe speaker gallery HTML |
@@ -127,6 +129,8 @@ The JSON API the app uses is the public API.
 | GET | `/api/events/:slug/agenda` | Bearer passcode | Sessions, placements, and live conflicts |
 | POST | `/api/events/:slug/sessions` | Bearer passcode | Add a direct invited/sponsor session |
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Bearer passcode | Create or move an agenda placement |
+| GET | `/api/events/:slug/communications/preview` | Bearer passcode | Preview a reminder or session update |
+| POST | `/api/events/:slug/communications/simulate` | Bearer passcode | Persist a simulated delivery receipt |
 | POST | `/api/speakers/:speakerId/assets` | Bearer passcode | Upload a speaker file to R2 (multipart: `file`, `kind`) |
 | GET | `/api/assets/:assetId` | — | Download/stream a stored asset |
 | GET | `/api/admin/ping` | Bearer passcode | Passcode verification (204) |

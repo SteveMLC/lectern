@@ -4,6 +4,8 @@ import {
   AssetKind,
   AgendaSlotRequest,
   CfpSubmissionRequest,
+  CommunicationKind,
+  type CommunicationPreviewResponse,
   CreateDirectSessionRequest,
   type CreateDirectSessionResponse,
   type CreateSubmissionResponse,
@@ -17,12 +19,15 @@ import {
   SubmissionDecisionRequest,
   type SubmissionDecisionResponse,
   type SpeakerPortalResponse,
+  SimulateCommunicationRequest,
+  type SimulateCommunicationResponse,
   type SubmissionsListResponse,
   type UploadAssetResponse,
   UpdateSpeakerProfileRequest,
   UpdateSpeakerTaskRequest,
 } from "../../shared/contracts";
 import { isCfpOpen } from "../../shared/domain/cfp";
+import { buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
@@ -336,6 +341,9 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
       { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
+      { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
+      { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
+      { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "public", purpose: "Stream a stored asset." },
     ],
@@ -636,6 +644,131 @@ api.put("/events/:slug/sessions/:sessionId/slot", organizerAuth, async (c) => {
     now: new Date().toISOString(),
   });
   return c.json(body);
+});
+
+api.get("/events/:slug/communications/preview", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const kind = CommunicationKind.safeParse(c.req.query("kind") ?? "reminder");
+  if (!kind.success) {
+    return errorResponse(422, "validation_error", "Communication kind must be reminder or session_update.");
+  }
+  const speakerId = c.req.query("speakerId") ?? "";
+  const portal = await repo.getSpeakerPortalByToken(speakerId);
+  if (!portal || portal.event.id !== bundle.event.id) {
+    return errorResponse(404, "speaker_not_found", "No speaker with that id for this event.");
+  }
+
+  const pending = portal.tasks.filter((item) => item.task.status !== "complete");
+  const origin = new URL(c.req.url).origin;
+  const portalUrl = `${origin}/speaker/${encodeURIComponent(portal.speaker.id)}`;
+  const session = portal.sessions.find((item) => item.startsAt && item.endsAt) ?? portal.sessions[0];
+  let subject: string;
+  let bodyMd: string;
+  if (kind.data === "reminder") {
+    subject = `Action needed for ${bundle.event.name}: ${pending.length} item(s) outstanding`;
+    const taskLines = pending.length
+      ? pending.map((item) => `- ${item.definition.label}`).join("\n")
+      : "- Nothing outstanding — you are all set.";
+    bodyMd = `Hi ${portal.speaker.name},\n\nHere is your onboarding checklist for ${bundle.event.name}:\n\n${taskLines}\n\nReview your profile, files, and tasks in the speaker portal: ${portalUrl}\n\nThanks!\nThe ${bundle.event.name} team`;
+  } else if (session) {
+    const when = session.startsAt
+      ? new Intl.DateTimeFormat("en", {
+          dateStyle: "full",
+          timeStyle: "short",
+          timeZone: bundle.event.timezone,
+        }).format(new Date(session.startsAt))
+      : "a time to be confirmed";
+    subject = `Your session at ${bundle.event.name}: ${session.title}`;
+    bodyMd = `Hi ${portal.speaker.name},\n\nYour session **${session.title}** is scheduled for ${when}${session.roomName ? ` in ${session.roomName}` : ""}.\n\nA calendar file is ready below. Please arrive 20 minutes early for tech check.\n\nThe ${bundle.event.name} team`;
+  } else {
+    subject = `Program update from ${bundle.event.name}`;
+    bodyMd = `Hi ${portal.speaker.name},\n\nYour program details are still being finalized. We will send your session time and room as soon as they are confirmed.\n\nThe ${bundle.event.name} team`;
+  }
+
+  const body: CommunicationPreviewResponse = {
+    kind: kind.data,
+    speakerId: portal.speaker.id,
+    speakerName: portal.speaker.name,
+    toEmail: portal.speaker.email,
+    subject,
+    bodyMd,
+    pendingTaskCount: pending.length,
+    icsUrl:
+      kind.data === "session_update" && session?.startsAt && session.endsAt
+        ? `/api/public/events/${encodeURIComponent(bundle.event.slug)}/sessions/${encodeURIComponent(session.id)}/calendar.ics`
+        : null,
+  };
+  return c.json(body);
+});
+
+api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SimulateCommunicationRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Communication is invalid.", parsed.error.issues);
+  }
+  const speaker = await repo.getSpeakerById(parsed.data.speakerId);
+  if (!speaker || speaker.eventId !== bundle.event.id) {
+    return errorResponse(404, "speaker_not_found", "No speaker with that id for this event.");
+  }
+  const now = new Date().toISOString();
+  const messageId = randomId("msg");
+  await repo.simulateCommunication({
+    messageId,
+    attemptId: randomId("del"),
+    eventId: bundle.event.id,
+    speakerId: speaker.id,
+    toEmail: speaker.email,
+    subject: parsed.data.subject,
+    bodyMd: parsed.data.bodyMd,
+    now,
+  });
+  const body: SimulateCommunicationResponse = {
+    messageId,
+    status: "sent_simulated",
+    deliveredAt: now,
+  };
+  return c.json(body, 201);
+});
+
+api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {
+  const repo = createRepo(c.env);
+  const [bundle, schedule] = await Promise.all([
+    repo.getEventBySlug(c.req.param("slug")),
+    repo.getPublicSchedule(c.req.param("slug")),
+  ]);
+  if (!bundle || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const slot = schedule.slots.find((item) => item.session.id === c.req.param("sessionId"));
+  if (!slot) return errorResponse(404, "session_not_scheduled", "That session has no published placement.");
+
+  const ics = buildCalendarInvite({
+    uid: `${slot.session.id}@speakerops`,
+    eventName: bundle.event.name,
+    sessionTitle: slot.session.title,
+    description: slot.session.abstract,
+    location: slot.room?.name ?? bundle.event.venue ?? "Room TBA",
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    generatedAt: new Date().toISOString(),
+  });
+  const filename = `${slot.session.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "session"}.ics`;
+  return new Response(ics, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "public, max-age=60",
+    },
+  });
 });
 
 // ---------------------------------------------------------------------------
