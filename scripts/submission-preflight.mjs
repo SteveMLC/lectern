@@ -40,6 +40,21 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+await check("Submission manifest and deadline", async () => {
+  for (const field of ["repositoryUrl", "demoUrl", "videoUrl", "deadline"]) {
+    assert(typeof submission[field] === "string" && submission[field], `submission.json ${field} is required`);
+  }
+  const repository = new URL(submission.repositoryUrl);
+  const demo = new URL(submission.demoUrl);
+  const video = new URL(submission.videoUrl);
+  assert(repository.protocol === "https:" && repository.hostname === "github.com", "repositoryUrl must be an HTTPS GitHub URL");
+  assert(demo.protocol === "https:" && video.protocol === "https:", "demo and video URLs must use HTTPS");
+  const deadline = Date.parse(submission.deadline);
+  assert(Number.isFinite(deadline), "submission deadline must be ISO-8601");
+  assert(Date.now() < deadline, `submission deadline passed at ${submission.deadline}`);
+  assert(submission.reimbursementMaxUsd === 500, "reimbursement cap must match the organizer's $500 brief");
+});
+
 await check("Release verification and Cloudflare configuration", async () => {
   run("pnpm", ["release:preflight"]);
 });
@@ -48,13 +63,15 @@ await check("Strict production and Airtable smoke test", async () => {
   run("pnpm", ["smoke:production"], {
     env: {
       REQUIRE_AIRTABLE: "1",
+      SPEAKEROPS_BASE_URL: process.env.SPEAKEROPS_BASE_URL ?? submission.demoUrl,
       SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
     },
   });
 });
 
 await check("Public GitHub repository and MIT license", async () => {
-  const response = await fetch("https://api.github.com/repos/SteveMLC/speakerops", {
+  const repositoryPath = new URL(submission.repositoryUrl).pathname.replace(/^\/+|\/+$/g, "");
+  const response = await fetch(`https://api.github.com/repos/${repositoryPath}`, {
     headers: { Accept: "application/vnd.github+json", "User-Agent": "speakerops-submission-preflight" },
   });
   assert(response.ok, `GitHub repository lookup returned HTTP ${response.status}`);
@@ -111,6 +128,7 @@ await check("Published walkthrough URL is submission-ready", async () => {
   assert(response.ok, `published walkthrough returned HTTP ${response.status}`);
   assert(response.headers.get("content-type")?.startsWith("video/mp4"), "published walkthrough is not video/mp4");
   assert(Number(response.headers.get("content-length")) > 1_000_000, "published walkthrough content length is unexpectedly small");
+  assert(response.headers.get("etag")?.replaceAll('"', "") === submission.videoEtag, "published walkthrough ETag does not match submission.json");
 });
 
 await check("Narration and reimbursement audit artifacts", async () => {
@@ -126,6 +144,7 @@ await check("Production AI calls are exported to the reimbursement ledger", asyn
   run("pnpm", ["usage:runtime", "--", "--check", "--quiet"], {
     env: {
       SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
+      SPEAKEROPS_BASE_URL: process.env.SPEAKEROPS_BASE_URL ?? submission.demoUrl,
     },
   });
 });

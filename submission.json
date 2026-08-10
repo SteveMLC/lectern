@@ -4,6 +4,7 @@
   "demoUrl": "https://speakerops.speakerops-go7.workers.dev",
   "videoUrl": "https://speakerops.speakerops-go7.workers.dev/api/public/walkthrough.mp4",
   "videoSha256": "79a31c7d4277a4e9d48a95103b72f1db1891912420352ba56d41fa9179fecf6f",
+  "videoEtag": "190a3bebf238611f0f9e7b9d8aebfc7d",
   "videoBytes": 7803052,
   "videoDurationSeconds": 179.76,
   "submissionFormUrl": null,
