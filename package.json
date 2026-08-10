@@ -24,6 +24,7 @@
     "release:preflight": "pnpm verify && node scripts/release-preflight.mjs",
     "submission:preflight": "node scripts/submission-preflight.mjs",
     "walkthrough:narrate": "node scripts/render-walkthrough-narration.mjs",
+    "walkthrough:publish": "wrangler r2 object put speakerops-assets/submission/speakerops-walkthrough-final.mp4 --remote --file output/playwright/speakerops-walkthrough-final.mp4 --content-type video/mp4 --content-disposition inline --cache-control \"public, max-age=3600\" --force",
     "smoke:production": "node scripts/smoke-production.mjs",
     "demo:reset:remote": "node scripts/reset-production-demo.mjs",
     "demo:check": "vitest run src/shared/domain/demoData.check.test.ts --reporter=verbose",

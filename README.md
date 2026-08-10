@@ -89,6 +89,7 @@ Public docs and embeds:
 - `/docs` or `/api-docs` — endpoint reference and embed snippets.
 - `/embed-preview` — live schedule, sessions, and speakers iframes for the seeded event.
 - `/api/docs` — machine-readable endpoint index.
+- [`/api/public/walkthrough.mp4`](https://speakerops.speakerops-go7.workers.dev/api/public/walkthrough.mp4) — narrated three-minute submission walkthrough served from R2.
 
 Checks:
 
@@ -156,6 +157,7 @@ The JSON API the app uses is the public API.
 | GET | `/api/public/events/:slug/sessions` | — | Public sessions JSON |
 | GET | `/api/public/events/:slug/speakers` | — | Public speaker gallery JSON |
 | GET | `/api/public/events/:slug/sessions/:sessionId/calendar.ics` | — | Download scheduled session calendar file |
+| GET | `/api/public/walkthrough.mp4` | — | Stream the narrated three-minute submission walkthrough from R2 |
 | GET | `/api/embeds/events/:slug/schedule` | — | Iframe schedule HTML |
 | GET | `/api/embeds/events/:slug/sessions` | — | Iframe sessions HTML |
 | GET | `/api/embeds/events/:slug/speakers` | — | Iframe speaker gallery HTML |

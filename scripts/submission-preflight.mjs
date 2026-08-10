@@ -1,9 +1,12 @@
 import { access, readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const submission = JSON.parse(await readFile(resolve(root, "submission.json"), "utf8"));
+if (submission.schemaVersion !== 1) throw new Error("submission.json must use schemaVersion 1");
 const requiredUrls = process.env.REQUIRE_SUBMISSION_URLS === "1";
 const requireReceipts = process.env.REQUIRE_RECEIPTS === "1";
 const checks = [];
@@ -94,7 +97,20 @@ await check("Walkthrough media is submission-ready", async () => {
   assert(visual?.codec_name === "h264", `walkthrough video codec is ${visual?.codec_name ?? "missing"}, expected h264`);
   assert(visual.width >= 1280 && visual.height >= 720, `walkthrough is ${visual.width}x${visual.height}, expected at least 1280x720`);
   assert(Number.isFinite(duration) && duration > 30 && duration <= 180, `walkthrough duration is ${duration}s, expected 30–180s`);
+  const bytes = await readFile(resolve(root, video));
+  assert(bytes.length === submission.videoBytes, `walkthrough is ${bytes.length} bytes, expected ${submission.videoBytes}`);
+  assert(createHash("sha256").update(bytes).digest("hex") === submission.videoSha256, "walkthrough SHA-256 does not match submission.json");
+  assert(Math.abs(duration - submission.videoDurationSeconds) < 0.01, `walkthrough duration does not match submission.json (${submission.videoDurationSeconds}s)`);
   if (!audio) warnings.push(`Walkthrough ${video} has no audio; use the narrated final or record a human voiceover.`);
+});
+
+const videoUrl = process.env.SPEAKEROPS_VIDEO_URL ?? submission.videoUrl;
+await check("Published walkthrough URL is submission-ready", async () => {
+  assert(videoUrl, "no published walkthrough URL is configured");
+  const response = await fetch(videoUrl, { method: "HEAD" });
+  assert(response.ok, `published walkthrough returned HTTP ${response.status}`);
+  assert(response.headers.get("content-type")?.startsWith("video/mp4"), "published walkthrough is not video/mp4");
+  assert(Number(response.headers.get("content-length")) > 1_000_000, "published walkthrough content length is unexpectedly small");
 });
 
 await check("Narration and reimbursement audit artifacts", async () => {
@@ -128,8 +144,8 @@ if (receiptCount === 0) {
 }
 
 for (const [name, value] of [
-  ["organizer submission form", process.env.SPEAKEROPS_SUBMISSION_FORM_URL],
-  ["uploaded walkthrough", process.env.SPEAKEROPS_VIDEO_URL],
+  ["organizer submission form", process.env.SPEAKEROPS_SUBMISSION_FORM_URL ?? submission.submissionFormUrl],
+  ["uploaded walkthrough", videoUrl],
 ]) {
   if (!value) {
     const message = `Missing ${name} URL; provide it as ${name === "organizer submission form" ? "SPEAKEROPS_SUBMISSION_FORM_URL" : "SPEAKEROPS_VIDEO_URL"}.`;
