@@ -425,15 +425,15 @@ api.post("/events/:slug/submissions", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Public: speaker portal demo magic link
+// Public: speaker portal demo link
 // ---------------------------------------------------------------------------
 
 api.get("/speaker-portal/:token", async (c) => {
   const token = c.req.param("token").trim();
   if (!token) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
 
-  // Isolated stub: the seeded demo uses speaker ids as magic-link tokens until
-  // real expiring tokens land. Keep this route replaceable and read-only.
+  // The seeded demo uses speaker ids as stable demo tokens. Production-grade
+  // expiring links are outside the hackathon claim and can replace this seam.
   const bundle = await createRepo(c.env).getSpeakerPortalByToken(token);
   if (!bundle) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
   return c.json(bundle);

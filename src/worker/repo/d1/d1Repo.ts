@@ -1146,8 +1146,7 @@ export class D1Repo implements SpeakerOpsRepo {
   }
 
   async getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null> {
-    // Demo magic-link stub: until Lane C/D adds real one-time tokens, the token
-    // is the seeded speaker id (for example, spk_ada).
+    // Demo speaker links use the seeded speaker id as their stable token.
     const speaker = await this.db
       .prepare("SELECT * FROM speakers WHERE id = ?")
       .bind(token)

@@ -41,6 +41,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 ## Production Checklist
 
 - [ ] Wrangler authenticated.
+- [ ] `pnpm release:preflight` passes.
 - [ ] Real D1 id replaces the placeholder.
 - [ ] R2 bucket exists.
 - [ ] `ORGANIZER_PASSCODE` is set as a Worker secret.
@@ -58,3 +59,4 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - D1 is the full backend. Airtable proves a read/write operational slice rather than mirroring every table.
 - Email delivery is simulated and persisted; no external email is sent without credentials.
 - Agenda uses fast explicit room/time controls instead of drag-and-drop, meeting the same placement job with less demo risk.
+- Speaker portal links use stable demo tokens; expiring production magic links are not claimed.

@@ -13,7 +13,7 @@ Scaffold + golden path. Working today:
 - Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and a room-based agenda with live room/speaker conflicts.
-- **Speaker portal**: magic-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records.
+- **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
 - **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
 - **Airtable proof**: cached Events/Speakers reads, Messages writes, 5 req/s protection, 429 retries, explicit D1 fallback, and an organizer status screen.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
@@ -79,6 +79,7 @@ Checks:
 pnpm check     # typecheck (web + worker projects)
 pnpm test      # domain tests (vitest)
 pnpm build     # production SPA build
+pnpm verify    # all checks above plus a Wrangler deployment dry-run
 ```
 
 Reset the demo to its exact seeded state at any time:
@@ -91,6 +92,7 @@ pnpm db:reset:local
 
 ```bash
 pnpm exec wrangler login
+pnpm release:preflight             # reports every remaining local release blocker
 pnpm cf:provision                  # creates the D1 database and R2 bucket
 # copy the database_id printed by d1 create into wrangler.jsonc
 pnpm exec wrangler secret put ORGANIZER_PASSCODE

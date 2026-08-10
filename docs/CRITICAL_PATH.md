@@ -16,7 +16,7 @@ The judging-critical product path is implemented on `main`. Six feature issues a
 
 Verification evidence:
 
-- `pnpm check` passes.
+- `pnpm verify` passes typecheck, tests, production build, and Worker deployment dry-run.
 - 67 tests pass across domain, demo-loader, calendar, timezone, and Airtable adapter coverage.
 - Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
 - A fresh headed Groundwork walkthrough verified Reviews, Agenda, Speakers, Speaker Portal, Communications, Integrations, and persistent event switching with no console errors.
@@ -30,6 +30,8 @@ Verification evidence:
 3. Replace the placeholder D1 id in `wrangler.jsonc`.
 4. Set `ORGANIZER_PASSCODE` (and optional Airtable credentials) as Worker secrets.
 5. Apply migrations/seed, deploy, and run the production walkthrough.
+
+Run `pnpm release:preflight` at any point for an executable check of the local release gates, Wrangler authentication, and D1/R2 configuration.
 
 Do not flip the full judging demo to Airtable. D1 is the complete backend; Airtable is a documented bonus proof.
 

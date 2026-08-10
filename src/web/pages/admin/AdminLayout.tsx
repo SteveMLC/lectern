@@ -245,8 +245,17 @@ function PasscodeGate({ onUnlocked }: { onUnlocked: () => void }) {
           </p>
         </div>
         <form onSubmit={unlock} className="space-y-3">
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value="organizer"
+            readOnly
+            hidden
+          />
           <Input
             type="password"
+            autoComplete="current-password"
             value={candidate}
             onChange={(e) => setCandidate(e.target.value)}
             placeholder="Passcode"
