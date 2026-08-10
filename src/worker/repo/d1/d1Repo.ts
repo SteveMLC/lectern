@@ -1,4 +1,5 @@
 import type {
+  AgendaSlot,
   ConditionalRule,
   Event,
   EventBundle,
@@ -6,6 +7,8 @@ import type {
   EventSummary,
   Form,
   FormField,
+  OrganizerAgendaResponse,
+  OrganizerSession,
   PublicScheduleResponse,
   PublicSession,
   PublicSessionsResponse,
@@ -25,6 +28,7 @@ import type {
   Track,
 } from "../../../shared/contracts";
 import type {
+  CreateDirectSessionInput,
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
   DecideSubmissionInput,
@@ -32,9 +36,11 @@ import type {
   SpeakerPortalSession,
   SpeakerOpsRepo,
   SubmissionDecisionResult,
+  UpsertAgendaSlotInput,
 } from "../types";
-import { buildSessionFromSubmission } from "../../../shared/domain/acceptance";
+import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, statusForDecision } from "../../../shared/domain/decisions";
+import { findScheduleConflicts } from "../../../shared/domain/schedule";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -159,6 +165,21 @@ interface SessionRow {
   format: string;
   status: string;
   origin: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OrganizerSessionRow extends SessionRow {
+  track_name: string | null;
+}
+
+interface AgendaSlotRow {
+  id: string;
+  event_id: string;
+  session_id: string;
+  room_id: string | null;
+  starts_at: string;
+  ends_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -507,6 +528,19 @@ function mapSession(r: SessionRow): Session {
     format: r.format as Session["format"],
     status: r.status as Session["status"],
     origin: r.origin as Session["origin"],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function mapAgendaSlot(r: AgendaSlotRow): AgendaSlot {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    sessionId: r.session_id,
+    roomId: r.room_id,
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -937,6 +971,135 @@ export class D1Repo implements SpeakerOpsRepo {
       session: mapSession(sessionRow),
       reusedSession: existing !== null,
     };
+  }
+
+  async getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse> {
+    const [sessionsRes, speakersRes, slotsRes] = await this.db.batch([
+      this.db
+        .prepare(
+          `SELECT s.*, t.name AS track_name
+           FROM sessions s
+           LEFT JOIN tracks t ON t.id = s.track_id
+           WHERE s.event_id = ?
+           ORDER BY s.status = 'cancelled', s.title`,
+        )
+        .bind(eventId),
+      this.db
+        .prepare(
+          `SELECT ss.session_id, ss.speaker_id, ss.role, ss.sort_order,
+                  sp.name, sp.company, sp.title
+           FROM session_speakers ss
+           JOIN sessions s ON s.id = ss.session_id
+           JOIN speakers sp ON sp.id = ss.speaker_id
+           WHERE s.event_id = ?
+           ORDER BY ss.session_id, ss.sort_order`,
+        )
+        .bind(eventId),
+      this.db
+        .prepare("SELECT * FROM agenda_slots WHERE event_id = ? ORDER BY starts_at, room_id")
+        .bind(eventId),
+    ]);
+
+    const speakerRows = (speakersRes?.results ?? []) as unknown as PublicSessionSpeakerRow[];
+    const speakersBySession = new Map<string, PublicSessionSpeaker[]>();
+    for (const row of speakerRows) {
+      const speakers = speakersBySession.get(row.session_id) ?? [];
+      speakers.push(mapPublicSessionSpeaker(row));
+      speakersBySession.set(row.session_id, speakers);
+    }
+
+    const slots = ((slotsRes?.results ?? []) as unknown as AgendaSlotRow[]).map(mapAgendaSlot);
+    const slotBySession = new Map(slots.map((slot) => [slot.sessionId, slot]));
+    const sessions: OrganizerSession[] = (
+      (sessionsRes?.results ?? []) as unknown as OrganizerSessionRow[]
+    ).map((row) => ({
+      ...mapSession(row),
+      trackName: row.track_name,
+      speakers: speakersBySession.get(row.id) ?? [],
+      slot: slotBySession.get(row.id) ?? null,
+    }));
+    const sessionSpeakers = speakerRows.map((row) => ({
+      sessionId: row.session_id,
+      speakerId: row.speaker_id,
+      role: row.role as "primary" | "co_speaker",
+      sortOrder: row.sort_order,
+    }));
+
+    return { sessions, conflicts: findScheduleConflicts(slots, sessionSpeakers) };
+  }
+
+  async createDirectSession(input: CreateDirectSessionInput): Promise<OrganizerSession> {
+    const built = buildDirectSession({
+      id: input.id,
+      eventId: input.eventId,
+      title: input.title,
+      abstract: input.abstract,
+      format: input.format,
+      trackId: input.trackId,
+      speakers: input.speakerIds.map((speakerId, index) => ({
+        speakerId,
+        role: index === 0 ? "primary" : "co_speaker",
+        sortOrder: index,
+      })),
+      now: input.now,
+    });
+
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO sessions
+             (id, event_id, source_submission_id, track_id, title, abstract, format, status, origin, created_at, updated_at)
+           VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, 'direct', ?8, ?8)`,
+        )
+        .bind(
+          built.session.id,
+          built.session.eventId,
+          built.session.trackId,
+          built.session.title,
+          built.session.abstract,
+          built.session.format,
+          built.session.status,
+          input.now,
+        ),
+      ...built.sessionSpeakers.map((speaker) =>
+        this.db
+          .prepare(
+            `INSERT INTO session_speakers (session_id, speaker_id, role, sort_order)
+             VALUES (?1, ?2, ?3, ?4)`,
+          )
+          .bind(speaker.sessionId, speaker.speakerId, speaker.role, speaker.sortOrder),
+      ),
+    ]);
+
+    const agenda = await this.getOrganizerAgenda(input.eventId);
+    const created = agenda.sessions.find((session) => session.id === input.id);
+    if (!created) throw new Error("Direct session not found after insert.");
+    return created;
+  }
+
+  async upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {
+    await this.db
+      .prepare(
+        `INSERT INTO agenda_slots
+           (id, event_id, session_id, room_id, starts_at, ends_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+         ON CONFLICT(session_id) DO UPDATE SET
+           room_id = excluded.room_id,
+           starts_at = excluded.starts_at,
+           ends_at = excluded.ends_at,
+           updated_at = excluded.updated_at`,
+      )
+      .bind(
+        input.id,
+        input.eventId,
+        input.sessionId,
+        input.roomId,
+        input.startsAt,
+        input.endsAt,
+        input.now,
+      )
+      .run();
+    return this.getOrganizerAgenda(input.eventId);
   }
 
   async countsForEvent(eventId: string): Promise<EventCounts> {

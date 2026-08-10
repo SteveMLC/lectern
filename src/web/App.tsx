@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import { AdminLayout } from "./pages/admin/AdminLayout";
+import { Agenda } from "./pages/admin/Agenda";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Reviews } from "./pages/admin/Reviews";
@@ -27,16 +28,7 @@ export function App() {
         <Route index element={<Dashboard />} />
         <Route path="submissions" element={<Submissions />} />
         <Route path="reviews" element={<Reviews />} />
-        <Route
-          path="agenda"
-          element={
-            <ComingSoon
-              title="Agenda"
-              lane="Lane B"
-              body="Drag-and-drop day/room grid with live room and speaker conflict detection, plus list, day, and week projections. The conflict engine already ships in src/shared/domain/schedule.ts with seeded conflicts to find."
-            />
-          }
-        />
+        <Route path="agenda" element={<Agenda />} />
         <Route
           path="speakers"
           element={

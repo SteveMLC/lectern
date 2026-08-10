@@ -2,6 +2,8 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  OrganizerAgendaResponse,
+  OrganizerSession,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
@@ -12,10 +14,12 @@ import type {
 import type {
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
+  CreateDirectSessionInput,
   DecideSubmissionInput,
   SpeakerPortalBundle,
   SpeakerOpsRepo,
   SubmissionDecisionResult,
+  UpsertAgendaSlotInput,
 } from "../types";
 
 /**
@@ -115,6 +119,18 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async decideSubmission(_input: DecideSubmissionInput): Promise<SubmissionDecisionResult> {
     throw new AirtableNotWiredError("decideSubmission");
+  }
+
+  async getOrganizerAgenda(_eventId: string): Promise<OrganizerAgendaResponse> {
+    throw new AirtableNotWiredError("getOrganizerAgenda");
+  }
+
+  async createDirectSession(_input: CreateDirectSessionInput): Promise<OrganizerSession> {
+    throw new AirtableNotWiredError("createDirectSession");
+  }
+
+  async upsertAgendaSlot(_input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {
+    throw new AirtableNotWiredError("upsertAgendaSlot");
   }
 
   async countsForEvent(_eventId: string): Promise<EventCounts> {

@@ -221,6 +221,58 @@ export const SubmissionDecisionResponse = z.object({
 export type SubmissionDecisionResponse = z.infer<typeof SubmissionDecisionResponse>;
 
 // ---------------------------------------------------------------------------
+// Program sessions + agenda (organizer)
+// ---------------------------------------------------------------------------
+
+export const OrganizerSession = Session.extend({
+  trackName: z.string().nullable(),
+  speakers: z.array(PublicSessionSpeaker),
+  slot: AgendaSlot.nullable(),
+});
+export type OrganizerSession = z.infer<typeof OrganizerSession>;
+
+export const OrganizerAgendaResponse = z.object({
+  sessions: z.array(OrganizerSession),
+  conflicts: z.array(
+    z.object({
+      type: z.enum(["room", "speaker"]),
+      slotIds: z.tuple([z.string(), z.string()]),
+      sessionIds: z.tuple([z.string(), z.string()]),
+      roomId: z.string().optional(),
+      speakerId: z.string().optional(),
+      message: z.string(),
+    }),
+  ),
+});
+export type OrganizerAgendaResponse = z.infer<typeof OrganizerAgendaResponse>;
+
+export const CreateDirectSessionRequest = z.object({
+  title: z.string().trim().min(3).max(200),
+  abstract: z.string().trim().min(10).max(5000),
+  format: SessionFormat,
+  trackId: z.string().nullable().optional(),
+  speakerIds: z.array(z.string()).max(8).default([]),
+});
+export type CreateDirectSessionRequest = z.infer<typeof CreateDirectSessionRequest>;
+
+export const CreateDirectSessionResponse = z.object({
+  session: OrganizerSession,
+});
+export type CreateDirectSessionResponse = z.infer<typeof CreateDirectSessionResponse>;
+
+export const AgendaSlotRequest = z
+  .object({
+    roomId: z.string(),
+    startsAt: z.iso.datetime({ offset: true }),
+    endsAt: z.iso.datetime({ offset: true }),
+  })
+  .refine((value) => Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+    message: "End time must be after start time.",
+    path: ["endsAt"],
+  });
+export type AgendaSlotRequest = z.infer<typeof AgendaSlotRequest>;
+
+// ---------------------------------------------------------------------------
 // Dashboard counts (organizer)
 // ---------------------------------------------------------------------------
 

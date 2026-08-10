@@ -2,11 +2,15 @@ import { Hono } from "hono";
 import pkg from "../../../package.json";
 import {
   AssetKind,
+  AgendaSlotRequest,
   CfpSubmissionRequest,
+  CreateDirectSessionRequest,
+  type CreateDirectSessionResponse,
   type CreateSubmissionResponse,
   type EventCounts,
   type EventsListResponse,
   type HealthResponse,
+  type OrganizerAgendaResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
@@ -274,6 +278,9 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
+      { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
+      { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
+      { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "public", purpose: "Stream a stored asset." },
     ],
@@ -428,6 +435,89 @@ api.get("/events/:slug/counts", organizerAuth, async (c) => {
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   const counts: EventCounts = await repo.countsForEvent(bundle.event.id);
   return c.json(counts);
+});
+
+api.get("/events/:slug/agenda", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const body: OrganizerAgendaResponse = await repo.getOrganizerAgenda(bundle.event.id);
+  return c.json(body);
+});
+
+api.post("/events/:slug/sessions", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = CreateDirectSessionRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Session is invalid.", parsed.error.issues);
+  }
+  const data = parsed.data;
+  if (data.trackId && !bundle.tracks.some((track) => track.id === data.trackId)) {
+    return errorResponse(422, "validation_error", "Unknown track for this event.");
+  }
+
+  const speakerIds = [...new Set(data.speakerIds)];
+  const speakers = await Promise.all(speakerIds.map((id) => repo.getSpeakerById(id)));
+  if (speakers.some((speaker) => !speaker || speaker.eventId !== bundle.event.id)) {
+    return errorResponse(422, "validation_error", "One or more speakers do not belong to this event.");
+  }
+
+  const session = await repo.createDirectSession({
+    id: randomId("ses"),
+    eventId: bundle.event.id,
+    title: data.title,
+    abstract: data.abstract,
+    format: data.format,
+    trackId: data.trackId ?? null,
+    speakerIds,
+    now: new Date().toISOString(),
+  });
+  const body: CreateDirectSessionResponse = { session };
+  return c.json(body, 201);
+});
+
+api.put("/events/:slug/sessions/:sessionId/slot", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const agenda = await repo.getOrganizerAgenda(bundle.event.id);
+  if (!agenda.sessions.some((session) => session.id === c.req.param("sessionId"))) {
+    return errorResponse(404, "session_not_found", "No session with that id for this event.");
+  }
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = AgendaSlotRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Agenda placement is invalid.", parsed.error.issues);
+  }
+  if (!bundle.rooms.some((room) => room.id === parsed.data.roomId)) {
+    return errorResponse(422, "validation_error", "Unknown room for this event.");
+  }
+
+  const body: OrganizerAgendaResponse = await repo.upsertAgendaSlot({
+    id: randomId("slot"),
+    eventId: bundle.event.id,
+    sessionId: c.req.param("sessionId"),
+    roomId: parsed.data.roomId,
+    startsAt: parsed.data.startsAt,
+    endsAt: parsed.data.endsAt,
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
 });
 
 // ---------------------------------------------------------------------------

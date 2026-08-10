@@ -1,13 +1,17 @@
 import { z } from "zod";
 import {
   ApiError,
+  AgendaSlotRequest,
   CfpSubmissionRequest,
+  CreateDirectSessionRequest,
+  CreateDirectSessionResponse,
   CreateSubmissionResponse,
   EventBundle,
   EventCounts,
   EventSummary,
   EventsListResponse,
   HealthResponse,
+  OrganizerAgendaResponse,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
@@ -158,6 +162,27 @@ export const apiClient = {
     request(EventCounts, `/api/events/${encodeURIComponent(slug)}/counts`, undefined, {
       auth: true,
     }),
+
+  agenda: (slug: string) =>
+    request(OrganizerAgendaResponse, `/api/events/${encodeURIComponent(slug)}/agenda`, undefined, {
+      auth: true,
+    }),
+
+  createDirectSession: (slug: string, body: CreateDirectSessionRequest) =>
+    request(
+      CreateDirectSessionResponse,
+      `/api/events/${encodeURIComponent(slug)}/sessions`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  placeSession: (slug: string, sessionId: string, body: AgendaSlotRequest) =>
+    request(
+      OrganizerAgendaResponse,
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/slot`,
+      { method: "PUT", body: JSON.stringify(body) },
+      { auth: true },
+    ),
 
   speakerPortal: (token: string) =>
     request(SpeakerPortalResponse, `/api/speaker-portal/${encodeURIComponent(token)}`),

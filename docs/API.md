@@ -21,7 +21,11 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/events/:slug/submissions` | Organizer submissions list |
+| POST | `/api/events/:slug/submissions/:submissionId/decision` | Approve, maybe, or deny; approval creates/reuses one session |
 | GET | `/api/events/:slug/counts` | Dashboard counts |
+| GET | `/api/events/:slug/agenda` | Sessions, room placements, and computed conflicts |
+| POST | `/api/events/:slug/sessions` | Add a direct invited/sponsor session |
+| PUT | `/api/events/:slug/sessions/:sessionId/slot` | Create or move a session placement |
 | POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
 | GET | `/api/admin/ping` | Passcode verification |
 

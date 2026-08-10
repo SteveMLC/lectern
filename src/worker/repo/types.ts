@@ -3,6 +3,8 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  OrganizerAgendaResponse,
+  OrganizerSession,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
@@ -45,6 +47,9 @@ export interface SpeakerOpsRepo {
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
+  getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;
+  createDirectSession(input: CreateDirectSessionInput): Promise<OrganizerSession>;
+  upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse>;
   countsForEvent(eventId: string): Promise<EventCounts>;
 
   getSpeakerById(id: string): Promise<Speaker | null>;
@@ -63,6 +68,27 @@ export interface SubmissionDecisionResult {
   submission: SubmissionListItem;
   session: Session | null;
   reusedSession: boolean;
+}
+
+export interface CreateDirectSessionInput {
+  id: string;
+  eventId: string;
+  title: string;
+  abstract: string;
+  format: SessionFormat;
+  trackId: string | null;
+  speakerIds: string[];
+  now: string;
+}
+
+export interface UpsertAgendaSlotInput {
+  id: string;
+  eventId: string;
+  sessionId: string;
+  roomId: string;
+  startsAt: string;
+  endsAt: string;
+  now: string;
 }
 
 export interface SpeakerPortalBundle {
