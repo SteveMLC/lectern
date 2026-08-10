@@ -3,7 +3,7 @@ import {
   ApiError,
   AgendaSlotRequest,
   AssetKind,
-  AirtableStatusResponse,
+  AirtableMirrorStatusResponse,
   CfpSubmissionRequest,
   CommunicationKind,
   CommunicationPreviewResponse,
@@ -144,7 +144,7 @@ export const apiClient = {
     }),
 
   airtableStatus: () =>
-    request(AirtableStatusResponse, "/api/integrations/airtable/status", undefined, {
+    request(AirtableMirrorStatusResponse, "/api/airtable/status", undefined, {
       auth: true,
     }),
 

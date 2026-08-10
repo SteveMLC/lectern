@@ -390,3 +390,22 @@ export const AirtableStatusResponse = z.object({
   fallback: z.literal("d1"),
 });
 export type AirtableStatusResponse = z.infer<typeof AirtableStatusResponse>;
+
+export const AirtableMirrorStatusResponse = z.object({
+  configured: z.boolean(),
+  reachable: z.boolean(),
+  error: z.string().optional(),
+  baseTables: z.array(z.string()).optional().default([]),
+  tables: z.array(z.string()),
+  mirrored: z.record(z.string(), z.number()),
+  lastRun: z
+    .object({
+      id: z.string(),
+      startedAt: z.iso.datetime({ offset: true }),
+      finishedAt: z.iso.datetime({ offset: true }).nullable(),
+      status: z.string(),
+      stats: z.record(z.string(), z.unknown()).nullable(),
+    })
+    .nullable(),
+});
+export type AirtableMirrorStatusResponse = z.infer<typeof AirtableMirrorStatusResponse>;

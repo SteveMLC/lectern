@@ -4,12 +4,14 @@ import { useAsync } from "../../lib/useAsync";
 
 export function Integrations() {
   const { data, error, loading, reload } = useAsync(() => apiClient.airtableStatus(), []);
+  const mirroredRecords = data ? Object.values(data.mirrored).reduce((sum, count) => sum + count, 0) : 0;
+  const mirrorTables = data ? data.tables.filter((table) => data.baseTables.includes(table)).length : 0;
 
   return (
     <div>
       <PageHeader
         title="Integrations"
-        subtitle="A narrow Airtable proof with explicit limits; D1 stays the reliable full-product backend."
+        subtitle="A live, rate-safe Airtable mirror; D1 stays the reliable full-product backend."
         actions={<Button variant="secondary" onClick={reload}>Check connection</Button>}
       />
 
@@ -22,20 +24,22 @@ export function Integrations() {
           <Card className="p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-zinc-900">Airtable operational proof</h2>
-                <p className="mt-1 text-sm leading-6 text-zinc-500">Reads Events and Speakers; writes simulated deliveries to Messages.</p>
+                <h2 className="text-base font-semibold text-zinc-900">Airtable operational mirror</h2>
+                <p className="mt-1 text-sm leading-6 text-zinc-500">Mirrors the event, program, agenda, speakers, and outstanding tasks.</p>
               </div>
-              <Badge tone={data.connected ? "emerald" : data.configured ? "rose" : "amber"}>
-                {data.connected ? "Connected" : data.configured ? "Connection failed" : "Credentials needed"}
+              <Badge tone={data.reachable ? "emerald" : data.configured ? "rose" : "amber"}>
+                {data.reachable ? "Connected" : data.configured ? "Connection failed" : "Credentials needed"}
               </Badge>
             </div>
 
             <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-              <Fact label="Active backend" value={data.active ? "Airtable proof" : "D1 fallback"} />
-              <Fact label="Read cache" value={`${data.cacheTtlSeconds} seconds`} />
-              <Fact label="Request spacing" value={`${data.minimumRequestSpacingMs} ms`} />
-              <Fact label="429 handling" value="Retry-After × 2" />
+              <Fact label="Mirror tables" value={`${mirrorTables}/${data.tables.length} ready`} />
+              <Fact label="Mirrored records" value={String(mirroredRecords)} />
+              <Fact label="Last sync" value={data.lastRun?.status ?? "Not run"} />
+              <Fact label="Rate safety" value="210 ms + Retry-After" />
             </dl>
+
+            {data.error ? <p className="mt-4 text-sm text-rose-700">{data.error}</p> : null}
 
             <a
               href="https://github.com/SteveMLC/speakerops/blob/main/docs/AIRTABLE.md"
@@ -50,15 +54,15 @@ export function Integrations() {
           <Card className="p-5">
             <h2 className="text-base font-semibold text-zinc-900">Demo safety</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-600">
-              The adapter is intentionally scoped to one provable read/write workflow. Unwired methods fail loudly, and switching back to D1 restores every product path without migration or data dependency.
+              D1 remains authoritative. Airtable receives idempotent operational mirrors, so throttling or expired credentials never take down the judging path.
             </p>
             <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-semibold text-emerald-900">Current fallback: {data.fallback.toUpperCase()}</p>
+              <p className="text-sm font-semibold text-emerald-900">Current product backend: D1</p>
               <p className="mt-1 text-xs leading-5 text-emerald-800">The judging demo remains usable even if Airtable throttles, credentials expire, or the base is unavailable.</p>
             </div>
             <div className="mt-4 rounded-lg bg-zinc-50 p-4 text-sm text-zinc-600">
-              <p><span className="font-medium text-zinc-900">Reads:</span> {data.readTables.join(", ")}</p>
-              <p className="mt-1"><span className="font-medium text-zinc-900">Writes:</span> {data.writeTable}</p>
+              <p><span className="font-medium text-zinc-900">Base tables:</span> {data.baseTables.join(", ") || "None yet"}</p>
+              <p className="mt-1"><span className="font-medium text-zinc-900">Last run:</span> {data.lastRun ? `${data.lastRun.status} · ${data.lastRun.id}` : "No sync recorded"}</p>
             </div>
           </Card>
         </div>
