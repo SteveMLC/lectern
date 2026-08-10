@@ -13,6 +13,10 @@ SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. P
 | GET | `/api/public/events/:slug/sessions` | Confirmed sessions with tracks and public speakers |
 | GET | `/api/public/events/:slug/speakers` | Public speaker gallery |
 | POST | `/api/events/:slug/submissions` | Public CFP proposal intake |
+| GET | `/api/speaker-portal/:token` | Magic-link speaker portal bundle |
+| PATCH | `/api/speaker-portal/:token/profile` | Update the linked speaker profile |
+| PUT | `/api/speaker-portal/:token/tasks/:taskId` | Complete or reopen an onboarding task |
+| POST | `/api/speaker-portal/:token/assets` | Upload headshot/slides/document to R2 from the speaker portal |
 
 ## Organizer API
 

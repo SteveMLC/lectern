@@ -13,7 +13,7 @@ Scaffold + golden path. Working today:
 - Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, Approve/Maybe/Deny decisions, direct invited sessions, and a room-based agenda with live room/speaker conflicts.
-- **R2 uploads**: speaker asset upload/download round trip as first-class records.
+- **Speaker portal**: magic-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records.
 - **Public embeds**: iframe-friendly schedule, sessions, and speaker gallery routes backed by the same D1 program data.
 - **API docs**: `/docs`, `/api-docs`, `/embed-preview`, and machine-readable `/api/docs`.
 - Deterministic demo seed and one-command reset.
@@ -117,6 +117,10 @@ The JSON API the app uses is the public API.
 | GET | `/api/embeds/events/:slug/sessions` | — | Iframe sessions HTML |
 | GET | `/api/embeds/events/:slug/speakers` | — | Iframe speaker gallery HTML |
 | POST | `/api/events/:slug/submissions` | — | Submit a CFP proposal (validated, conditional-rule aware) |
+| GET | `/api/speaker-portal/:token` | Speaker link | Portal sessions, tasks, files, and resources |
+| PATCH | `/api/speaker-portal/:token/profile` | Speaker link | Edit the speaker's public profile |
+| PUT | `/api/speaker-portal/:token/tasks/:taskId` | Speaker link | Complete or reopen an onboarding task |
+| POST | `/api/speaker-portal/:token/assets` | Speaker link | Upload headshot, slides, or document to R2 |
 | GET | `/api/events/:slug/submissions` | Bearer passcode | Organizer submissions list |
 | POST | `/api/events/:slug/submissions/:submissionId/decision` | Bearer passcode | Approve, maybe, or deny a proposal |
 | GET | `/api/events/:slug/counts` | Bearer passcode | Dashboard counts |

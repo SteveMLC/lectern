@@ -54,6 +54,8 @@ export interface SpeakerOpsRepo {
 
   getSpeakerById(id: string): Promise<Speaker | null>;
   getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null>;
+  updateSpeakerProfile(input: UpdateSpeakerProfileInput): Promise<SpeakerPortalBundle>;
+  updateSpeakerTask(input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
 }
@@ -88,6 +90,24 @@ export interface UpsertAgendaSlotInput {
   roomId: string;
   startsAt: string;
   endsAt: string;
+  now: string;
+}
+
+export interface UpdateSpeakerProfileInput {
+  speakerId: string;
+  name: string;
+  company: string | null;
+  title: string | null;
+  bio: string | null;
+  location: string | null;
+  socials: Speaker["socials"];
+  now: string;
+}
+
+export interface UpdateSpeakerTaskInput {
+  speakerId: string;
+  taskId: string;
+  status: "pending" | "complete";
   now: string;
 }
 

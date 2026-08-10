@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import pkg from "../../../package.json";
 import {
   AssetKind,
@@ -16,8 +16,11 @@ import {
   type PublicSpeakersResponse,
   SubmissionDecisionRequest,
   type SubmissionDecisionResponse,
+  type SpeakerPortalResponse,
   type SubmissionsListResponse,
   type UploadAssetResponse,
+  UpdateSpeakerProfileRequest,
+  UpdateSpeakerTaskRequest,
 } from "../../shared/contracts";
 import { isCfpOpen } from "../../shared/domain/cfp";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
@@ -30,6 +33,55 @@ import { createRepo } from "../repo/factory";
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export const api = new Hono<{ Bindings: Env }>();
+
+async function uploadSpeakerAsset(
+  c: Context<{ Bindings: Env }>,
+  speakerId: string,
+): Promise<Response> {
+  const repo = createRepo(c.env);
+  const speaker = await repo.getSpeakerById(speakerId);
+  if (!speaker) return errorResponse(404, "speaker_not_found", "No speaker with that id.");
+
+  let form: FormData;
+  try {
+    form = await c.req.raw.formData();
+  } catch {
+    return errorResponse(400, "bad_request", "Expected multipart/form-data with a 'file' part.");
+  }
+
+  const filePart: unknown = form.get("file");
+  if (!(filePart instanceof File)) {
+    return errorResponse(422, "validation_error", "Part 'file' must be a file.");
+  }
+  const file = filePart;
+  const kind = AssetKind.safeParse(form.get("kind"));
+  if (!kind.success) {
+    return errorResponse(422, "validation_error", "Part 'kind' must be headshot, slides, or document.");
+  }
+  if (file.size === 0) return errorResponse(422, "validation_error", "Uploaded file is empty.");
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return errorResponse(413, "too_large", "Uploads are limited to 10 MB.");
+  }
+
+  const assetId = randomId("asset");
+  const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, "_").slice(-120) || `upload-${assetId}.bin`;
+  const r2Key = `speakers/${speakerId}/${assetId}/${safeName}`;
+  const contentType = file.type || "application/octet-stream";
+
+  await c.env.BUCKET.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType } });
+  const asset = await repo.createSpeakerAsset({
+    id: assetId,
+    speakerId,
+    kind: kind.data,
+    filename: file.name || safeName,
+    contentType,
+    sizeBytes: file.size,
+    r2Key,
+    uploadedAt: new Date().toISOString(),
+  });
+  const body: UploadAssetResponse = { asset };
+  return c.json(body, 201);
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -275,6 +327,9 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "public", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
+      { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
+      { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
+      { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
@@ -371,6 +426,69 @@ api.get("/speaker-portal/:token", async (c) => {
   const bundle = await createRepo(c.env).getSpeakerPortalByToken(token);
   if (!bundle) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
   return c.json(bundle);
+});
+
+api.patch("/speaker-portal/:token/profile", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = UpdateSpeakerProfileRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Profile is invalid.", parsed.error.issues);
+  }
+  const body: SpeakerPortalResponse = await repo.updateSpeakerProfile({
+    speakerId: portal.speaker.id,
+    ...parsed.data,
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
+api.put("/speaker-portal/:token/tasks/:taskId", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = UpdateSpeakerTaskRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Task update is invalid.", parsed.error.issues);
+  }
+  try {
+    const body: SpeakerPortalResponse = await repo.updateSpeakerTask({
+      speakerId: portal.speaker.id,
+      taskId: c.req.param("taskId"),
+      status: parsed.data.status,
+      now: new Date().toISOString(),
+    });
+    return c.json(body);
+  } catch (error) {
+    if (error instanceof Error && error.message === "task_not_found") {
+      return errorResponse(404, "task_not_found", "No task with that id for this speaker.");
+    }
+    throw error;
+  }
+});
+
+api.post("/speaker-portal/:token/assets", async (c) => {
+  const token = c.req.param("token").trim();
+  const portal = await createRepo(c.env).getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+  return uploadSpeakerAsset(c, portal.speaker.id);
 });
 
 // ---------------------------------------------------------------------------
@@ -525,58 +643,7 @@ api.put("/events/:slug/sessions/:sessionId/slot", organizerAuth, async (c) => {
 // ---------------------------------------------------------------------------
 
 api.post("/speakers/:speakerId/assets", organizerAuth, async (c) => {
-  const speakerId = c.req.param("speakerId");
-  const repo = createRepo(c.env);
-
-  const speaker = await repo.getSpeakerById(speakerId);
-  if (!speaker) return errorResponse(404, "speaker_not_found", "No speaker with that id.");
-
-  let form: FormData;
-  try {
-    form = await c.req.raw.formData();
-  } catch {
-    return errorResponse(400, "bad_request", "Expected multipart/form-data with a 'file' part.");
-  }
-
-  // workers-types declares FormData.get as string-only; the runtime returns a
-  // real File for file parts, so narrow through unknown.
-  const filePart: unknown = form.get("file");
-  if (!(filePart instanceof File)) {
-    return errorResponse(422, "validation_error", "Part 'file' must be a file.");
-  }
-  const file = filePart;
-  const kind = AssetKind.safeParse(form.get("kind"));
-  if (!kind.success) {
-    return errorResponse(422, "validation_error", "Part 'kind' must be headshot, slides, or document.");
-  }
-  if (file.size === 0) return errorResponse(422, "validation_error", "Uploaded file is empty.");
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return errorResponse(413, "too_large", "Uploads are limited to 10 MB.");
-  }
-
-  const assetId = randomId("asset");
-  const safeName =
-    file.name.replace(/[^A-Za-z0-9._-]/g, "_").slice(-120) || `upload-${assetId}.bin`;
-  const r2Key = `speakers/${speakerId}/${assetId}/${safeName}`;
-  const contentType = file.type || "application/octet-stream";
-
-  await c.env.BUCKET.put(r2Key, await file.arrayBuffer(), {
-    httpMetadata: { contentType },
-  });
-
-  const asset = await repo.createSpeakerAsset({
-    id: assetId,
-    speakerId,
-    kind: kind.data,
-    filename: file.name || safeName,
-    contentType,
-    sizeBytes: file.size,
-    r2Key,
-    uploadedAt: new Date().toISOString(),
-  });
-
-  const body: UploadAssetResponse = { asset };
-  return c.json(body, 201);
+  return uploadSpeakerAsset(c, c.req.param("speakerId"));
 });
 
 api.get("/assets/:assetId", async (c) => {

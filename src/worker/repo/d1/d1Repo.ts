@@ -37,6 +37,8 @@ import type {
   SpeakerOpsRepo,
   SubmissionDecisionResult,
   UpsertAgendaSlotInput,
+  UpdateSpeakerProfileInput,
+  UpdateSpeakerTaskInput,
 } from "../types";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, statusForDecision } from "../../../shared/domain/decisions";
@@ -1235,6 +1237,55 @@ export class D1Repo implements SpeakerOpsRepo {
         mapResourcePage,
       ),
     };
+  }
+
+  async updateSpeakerProfile(input: UpdateSpeakerProfileInput): Promise<SpeakerPortalBundle> {
+    await this.db
+      .prepare(
+        `UPDATE speakers SET
+           name = ?1, company = ?2, title = ?3, bio = ?4,
+           location = ?5, socials_json = ?6, updated_at = ?7
+         WHERE id = ?8`,
+      )
+      .bind(
+        input.name,
+        input.company,
+        input.title,
+        input.bio,
+        input.location,
+        input.socials ? JSON.stringify(input.socials) : null,
+        input.now,
+        input.speakerId,
+      )
+      .run();
+    const portal = await this.getSpeakerPortalByToken(input.speakerId);
+    if (!portal) throw new Error("speaker_not_found");
+    return portal;
+  }
+
+  async updateSpeakerTask(input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle> {
+    const task = await this.db
+      .prepare("SELECT id FROM speaker_tasks WHERE id = ?1 AND speaker_id = ?2")
+      .bind(input.taskId, input.speakerId)
+      .first<{ id: string }>();
+    if (!task) throw new Error("task_not_found");
+
+    await this.db
+      .prepare(
+        `UPDATE speaker_tasks SET status = ?1, completed_at = ?2, updated_at = ?3
+         WHERE id = ?4 AND speaker_id = ?5`,
+      )
+      .bind(
+        input.status,
+        input.status === "complete" ? input.now : null,
+        input.now,
+        input.taskId,
+        input.speakerId,
+      )
+      .run();
+    const portal = await this.getSpeakerPortalByToken(input.speakerId);
+    if (!portal) throw new Error("speaker_not_found");
+    return portal;
   }
 
   async createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

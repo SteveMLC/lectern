@@ -1,7 +1,25 @@
 import { Link, useParams } from "react-router";
-import type { ResourcePage, SpeakerTask } from "../../shared/contracts";
-import { Badge, Card, EmptyState, ErrorBanner, Spinner } from "../components/ui";
-import { apiClient } from "../lib/api";
+import { useState } from "react";
+import type {
+  AssetKind,
+  ResourcePage,
+  Speaker,
+  SpeakerPortalResponse,
+  SpeakerTask,
+} from "../../shared/contracts";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Field,
+  Input,
+  Select,
+  Spinner,
+  Textarea,
+} from "../components/ui";
+import { ApiRequestError, apiClient } from "../lib/api";
 import { formatDateRange, formatDateTime } from "../lib/status";
 import { useAsync } from "../lib/useAsync";
 
@@ -27,7 +45,10 @@ const FORMAT_LABEL: Record<string, string> = {
 
 export function SpeakerPortal() {
   const { token = "" } = useParams();
-  const { data, error, loading } = useAsync(() => apiClient.speakerPortal(token), [token]);
+  const { data: loaded, error, loading } = useAsync(() => apiClient.speakerPortal(token), [token]);
+  const [portalOverride, setPortalOverride] = useState<SpeakerPortalResponse | null>(null);
+  const [taskBusyId, setTaskBusyId] = useState<string | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -37,7 +58,7 @@ export function SpeakerPortal() {
     );
   }
 
-  if (error || !data) {
+  if (error || !loaded) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-20">
         <ErrorBanner message={error?.message ?? "Speaker portal not found."} />
@@ -55,6 +76,23 @@ export function SpeakerPortal() {
         </div>
       </div>
     );
+  }
+
+  const data = portalOverride ?? loaded;
+
+  async function toggleTask(task: SpeakerTask) {
+    setTaskBusyId(task.id);
+    setTaskError(null);
+    try {
+      const updated = await apiClient.updateSpeakerTask(token, task.id, {
+        status: task.status === "complete" ? "pending" : "complete",
+      });
+      setPortalOverride(updated);
+    } catch (caught) {
+      setTaskError(caught instanceof ApiRequestError ? caught.message : "Task could not be updated.");
+    } finally {
+      setTaskBusyId(null);
+    }
   }
 
   const completedTasks = data.tasks.filter((item) => item.task.status === "complete").length;
@@ -96,6 +134,8 @@ export function SpeakerPortal() {
             <Metric label="Next due" value={nextDue ? formatDateTime(nextDue) : "None"} />
           </div>
 
+          <ProfileEditor token={token} speaker={data.speaker} onUpdated={setPortalOverride} />
+
           <Card className="p-5">
             <h2 className="text-base font-semibold text-zinc-900">Sessions</h2>
             {data.sessions.length === 0 ? (
@@ -131,6 +171,7 @@ export function SpeakerPortal() {
           <Card className="p-5">
             <h2 className="text-base font-semibold text-zinc-900">Speaker tasks</h2>
             <div className="mt-4 space-y-3">
+              {taskError ? <ErrorBanner message={taskError} /> : null}
               {data.tasks.map(({ task, definition }) => (
                 <div key={task.id} className="rounded-lg border border-zinc-200 bg-white p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -147,6 +188,19 @@ export function SpeakerPortal() {
                   {definition.dueAt ? (
                     <p className="mt-2 text-xs text-zinc-500">Due {formatDateTime(definition.dueAt)}</p>
                   ) : null}
+                  <Button
+                    type="button"
+                    variant={task.status === "complete" ? "ghost" : "secondary"}
+                    className="mt-3 w-full px-3 py-1.5 text-xs"
+                    disabled={taskBusyId !== null}
+                    onClick={() => void toggleTask(task)}
+                  >
+                    {taskBusyId === task.id
+                      ? "Saving…"
+                      : task.status === "complete"
+                        ? "Mark pending"
+                        : "Mark complete"}
+                  </Button>
                 </div>
               ))}
             </div>
@@ -170,10 +224,134 @@ export function SpeakerPortal() {
                 ))}
               </div>
             )}
+            <AssetUploader
+              token={token}
+              onUploaded={async () => setPortalOverride(await apiClient.speakerPortal(token))}
+            />
           </Card>
         </aside>
       </main>
     </div>
+  );
+}
+
+function ProfileEditor({
+  token,
+  speaker,
+  onUpdated,
+}: {
+  token: string;
+  speaker: Speaker;
+  onUpdated: (portal: SpeakerPortalResponse) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(speaker.name);
+  const [title, setTitle] = useState(speaker.title ?? "");
+  const [company, setCompany] = useState(speaker.company ?? "");
+  const [location, setLocation] = useState(speaker.location ?? "");
+  const [bio, setBio] = useState(speaker.bio ?? "");
+  const [website, setWebsite] = useState(speaker.socials?.website ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await apiClient.updateSpeakerProfile(token, {
+        name,
+        title: title.trim() || null,
+        company: company.trim() || null,
+        location: location.trim() || null,
+        bio: bio.trim() || null,
+        socials: website.trim()
+          ? { ...(speaker.socials ?? {}), website: website.trim() }
+          : speaker.socials
+            ? { ...speaker.socials, website: undefined }
+            : null,
+      });
+      onUpdated(updated);
+      setSaved(true);
+      setEditing(false);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Profile could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-900">Public speaker profile</h2>
+          <p className="mt-1 text-sm text-zinc-500">Keep the bio shown on the event site accurate.</p>
+        </div>
+        <Button type="button" variant="secondary" onClick={() => setEditing((value) => !value)}>
+          {editing ? "Cancel" : "Edit profile"}
+        </Button>
+      </div>
+      {saved ? <p role="status" className="mt-3 text-sm font-medium text-emerald-700">Profile saved.</p> : null}
+      {editing ? (
+        <form onSubmit={save} className="mt-5 grid gap-4 border-t border-zinc-100 pt-5 sm:grid-cols-2">
+          <Field label="Name" required><Input value={name} onChange={(event) => setName(event.target.value)} required /></Field>
+          <Field label="Role"><Input value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
+          <Field label="Company"><Input value={company} onChange={(event) => setCompany(event.target.value)} /></Field>
+          <Field label="Location"><Input value={location} onChange={(event) => setLocation(event.target.value)} /></Field>
+          <div className="sm:col-span-2"><Field label="Website"><Input type="url" value={website} onChange={(event) => setWebsite(event.target.value)} /></Field></div>
+          <div className="sm:col-span-2"><Field label="Bio"><Textarea value={bio} onChange={(event) => setBio(event.target.value)} /></Field></div>
+          {error ? <div className="sm:col-span-2"><ErrorBanner message={error} /></div> : null}
+          <div className="sm:col-span-2"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button></div>
+        </form>
+      ) : null}
+    </Card>
+  );
+}
+
+function AssetUploader({ token, onUploaded }: { token: string; onUploaded: () => Promise<void> }) {
+  const [kind, setKind] = useState<AssetKind>("headshot");
+  const [file, setFile] = useState<File | null>(null);
+  const [inputKey, setInputKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function upload(event: React.FormEvent) {
+    event.preventDefault();
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await apiClient.uploadSpeakerAsset(token, file, kind);
+      await onUploaded();
+      setNotice(`${file.name} uploaded.`);
+      setFile(null);
+      setInputKey((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "File could not be uploaded.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={upload} className="mt-5 space-y-3 border-t border-zinc-100 pt-5">
+      <Field label="Upload a file" help="Headshots, slides, and documents up to 10 MB.">
+        <Input key={inputKey} type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+      </Field>
+      <Select aria-label="File kind" value={kind} onChange={(event) => setKind(event.target.value as AssetKind)}>
+        <option value="headshot">Headshot</option>
+        <option value="slides">Slides</option>
+        <option value="document">Document</option>
+      </Select>
+      {notice ? <p role="status" className="text-xs font-medium text-emerald-700">{notice}</p> : null}
+      {error ? <ErrorBanner message={error} /> : null}
+      <Button type="submit" className="w-full" disabled={!file || uploading}>{uploading ? "Uploading…" : "Upload to event team"}</Button>
+    </form>
   );
 }
 

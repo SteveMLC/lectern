@@ -6,12 +6,16 @@ import {
   Form,
   FormField,
   Room,
+  ResourcePage,
   Session,
   SessionFormat,
+  Speaker,
   SpeakerAsset,
   SpeakerRole,
+  SpeakerTask,
   Submission,
   SubmissionStatus,
+  TaskDefinition,
   Track,
 } from "./entities";
 
@@ -292,3 +296,50 @@ export const UploadAssetResponse = z.object({
   asset: SpeakerAsset,
 });
 export type UploadAssetResponse = z.infer<typeof UploadAssetResponse>;
+
+// ---------------------------------------------------------------------------
+// Speaker portal
+// ---------------------------------------------------------------------------
+
+export const SpeakerPortalSession = z.object({
+  id: z.string(),
+  title: z.string(),
+  abstract: z.string(),
+  format: SessionFormat,
+  startsAt: z.iso.datetime({ offset: true }).nullable(),
+  endsAt: z.iso.datetime({ offset: true }).nullable(),
+  roomName: z.string().nullable(),
+});
+export type SpeakerPortalSession = z.infer<typeof SpeakerPortalSession>;
+
+export const SpeakerPortalResponse = z.object({
+  event: EventSummary,
+  speaker: Speaker,
+  sessions: z.array(SpeakerPortalSession),
+  tasks: z.array(z.object({ task: SpeakerTask, definition: TaskDefinition })),
+  assets: z.array(SpeakerAsset),
+  resources: z.array(ResourcePage),
+});
+export type SpeakerPortalResponse = z.infer<typeof SpeakerPortalResponse>;
+
+export const UpdateSpeakerProfileRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  company: z.string().trim().max(120).nullable(),
+  title: z.string().trim().max(120).nullable(),
+  bio: z.string().trim().max(2000).nullable(),
+  location: z.string().trim().max(120).nullable(),
+  socials: z
+    .object({
+      twitter: z.string().trim().max(300).optional(),
+      linkedin: z.string().trim().max(300).optional(),
+      github: z.string().trim().max(300).optional(),
+      website: z.string().trim().max(300).optional(),
+    })
+    .nullable(),
+});
+export type UpdateSpeakerProfileRequest = z.infer<typeof UpdateSpeakerProfileRequest>;
+
+export const UpdateSpeakerTaskRequest = z.object({
+  status: z.enum(["pending", "complete"]),
+});
+export type UpdateSpeakerTaskRequest = z.infer<typeof UpdateSpeakerTaskRequest>;

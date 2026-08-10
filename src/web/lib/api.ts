@@ -2,28 +2,26 @@ import { z } from "zod";
 import {
   ApiError,
   AgendaSlotRequest,
+  AssetKind,
   CfpSubmissionRequest,
   CreateDirectSessionRequest,
   CreateDirectSessionResponse,
   CreateSubmissionResponse,
   EventBundle,
   EventCounts,
-  EventSummary,
   EventsListResponse,
   HealthResponse,
   OrganizerAgendaResponse,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
-  ResourcePage,
-  SessionFormat,
-  Speaker,
-  SpeakerAsset,
-  SpeakerTask,
+  SpeakerPortalResponse,
   SubmissionDecisionRequest,
   SubmissionDecisionResponse,
   SubmissionsListResponse,
-  TaskDefinition,
+  UpdateSpeakerProfileRequest,
+  UpdateSpeakerTaskRequest,
+  UploadAssetResponse,
 } from "../../shared/contracts";
 
 /**
@@ -35,31 +33,6 @@ import {
  */
 
 const PASSCODE_KEY = "speakerops.organizer.passcode";
-
-const SpeakerPortalSession = z.object({
-  id: z.string(),
-  title: z.string(),
-  abstract: z.string(),
-  format: SessionFormat,
-  startsAt: z.iso.datetime({ offset: true }).nullable(),
-  endsAt: z.iso.datetime({ offset: true }).nullable(),
-  roomName: z.string().nullable(),
-});
-
-export const SpeakerPortalResponse = z.object({
-  event: EventSummary,
-  speaker: Speaker,
-  sessions: z.array(SpeakerPortalSession),
-  tasks: z.array(
-    z.object({
-      task: SpeakerTask,
-      definition: TaskDefinition,
-    }),
-  ),
-  assets: z.array(SpeakerAsset),
-  resources: z.array(ResourcePage),
-});
-export type SpeakerPortalResponse = z.infer<typeof SpeakerPortalResponse>;
 
 export function getPasscode(): string | null {
   return sessionStorage.getItem(PASSCODE_KEY);
@@ -92,7 +65,9 @@ async function request<S extends z.ZodType>(
   opts?: { auth?: boolean },
 ): Promise<z.infer<S>> {
   const headers: Record<string, string> = {};
-  if (init?.body !== undefined) headers["content-type"] = "application/json";
+  if (init?.body !== undefined && !(init.body instanceof FormData)) {
+    headers["content-type"] = "application/json";
+  }
   if (opts?.auth) {
     const passcode = getPasscode();
     if (passcode) headers.authorization = `Bearer ${passcode}`;
@@ -186,6 +161,31 @@ export const apiClient = {
 
   speakerPortal: (token: string) =>
     request(SpeakerPortalResponse, `/api/speaker-portal/${encodeURIComponent(token)}`),
+
+  updateSpeakerProfile: (token: string, body: UpdateSpeakerProfileRequest) =>
+    request(
+      SpeakerPortalResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/profile`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  updateSpeakerTask: (token: string, taskId: string, body: UpdateSpeakerTaskRequest) =>
+    request(
+      SpeakerPortalResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+
+  uploadSpeakerAsset: (token: string, file: File, kind: AssetKind) => {
+    const form = new FormData();
+    form.set("file", file);
+    form.set("kind", kind);
+    return request(
+      UploadAssetResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/assets`,
+      { method: "POST", body: form },
+    );
+  },
 
   /** Verifies a candidate passcode against the API without storing it first. */
   verifyPasscode: async (candidate: string): Promise<boolean> => {
