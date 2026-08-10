@@ -48,14 +48,19 @@ Dashboard: point at **"8 need decision →"**.
 
 **1:10 — Reviews**
 > "…and I'm in the decision queue. My new proposal is already here — with the
-> speaker's company, their bio, and their form answers right on the card. I've got what
-> I need to judge it without leaving."
+> speaker's company, their bio, their form answers, and the committee's earlier notes
+> right on the card. I've got what I need to judge it without leaving."
 
-Click **Approve** on the new proposal. Point at the toast.
-> "Approving doesn't just flip a status — it creates exactly one session, idempotently,
-> with lineage back to the submission. The queue just dropped by one."
+Click **Approve** on the new proposal. The note box opens — type: `strong practical angle — main stage material`. Click **Draft acceptance email**.
+> "Approving isn't just a status flip. Claude drafts the acceptance around my note —
+> and look: the speaker's portal link and the exact onboarding checklist the system is
+> about to create, right in the email. The link is guaranteed, even if the model forgot it."
 
-**1:25 — AI decision feedback (the standout beat — slow down here)**
+Click **Send (simulated) & approve**. Point at the toast.
+> "One session created, idempotently, with lineage back to the submission — and my note
+> is saved as a committee note, so the *why* outlives the call."
+
+**1:30 — AI decision feedback (the standout beat — slow down here)**
 Click **Deny** on a weaker proposal. The reasoning box opens.
 > "Now the part every organizer dreads — saying no. I don't get a form letter. I write
 > why, bluntly, the way I'd say it in the committee room…"

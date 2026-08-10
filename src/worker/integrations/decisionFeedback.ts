@@ -21,9 +21,16 @@ export interface FeedbackDraftInput {
   speakerName: string;
   talkTitle: string;
   talkAbstract: string;
-  decision: Extract<ReviewDecision, "deny" | "maybe">;
+  decision: ReviewDecision;
   /** The organizer's internal notes, e.g. "ran this topic last year, abstract has no numbers". */
   reasoning: string;
+  /** Approve only: the speaker's portal URL. Guaranteed to appear in the final draft. */
+  portalUrl?: string;
+  /**
+   * Approve only: the onboarding checklist the system derives at acceptance,
+   * so the email tells the speaker exactly what happens next.
+   */
+  onboardingTasks?: string[];
 }
 
 export interface FeedbackDraft {
@@ -50,8 +57,39 @@ export interface FeedbackDraft {
 // Deterministic fallback — always available, never copies internal reasoning
 // ---------------------------------------------------------------------------
 
+/** The next-steps block shared by both the template and the AI guarantee. */
+function acceptanceNextSteps(input: FeedbackDraftInput): string {
+  const tasks = (input.onboardingTasks ?? []).filter((t) => t.trim());
+  const taskBlock = tasks.length
+    ? `Your speaker portal lists a short onboarding checklist:\n\n${tasks.map((t) => `- ${t}`).join("\n")}\n\n`
+    : "";
+  const portalBlock = input.portalUrl
+    ? `Everything happens in your speaker portal — profile, uploads, and your checklist:\n${input.portalUrl}\n\n`
+    : "";
+  return `${taskBlock}${portalBlock}`;
+}
+
 export function deterministicDraft(input: FeedbackDraftInput): FeedbackDraft {
   const firstName = input.speakerName.split(/\s+/)[0] ?? input.speakerName;
+
+  if (input.decision === "approve") {
+    return {
+      subject: `You're speaking at ${input.eventName}: “${input.talkTitle}”`,
+      bodyMd: `Hi ${firstName},
+
+Great news — “${input.talkTitle}” is accepted for ${input.eventName}. Your session is now part of the program, and we're glad to have you.
+
+${acceptanceNextSteps(input)}We'll follow up with your exact day, time, and room once the schedule is locked. Reply to this email with any questions in the meantime.
+
+Welcome aboard,
+The ${input.eventName} program team`,
+      aiUsed: false,
+      note: input.reasoning.trim()
+        ? "Template draft — your internal note was saved to the committee record but not copied into this email. Personalize it manually, or configure AI-assisted drafting."
+        : "Template draft — set ANTHROPIC_API_KEY to enable AI-assisted drafting.",
+    };
+  }
+
   const opening =
     input.decision === "deny"
       ? `Thank you for proposing “${input.talkTitle}” for ${input.eventName}. After review, we are not able to include it in this year's program.`
@@ -101,6 +139,32 @@ const DRAFT_TOOL = {
 } as const;
 
 function prompt(input: FeedbackDraftInput): string {
+  if (input.decision === "approve") {
+    const tasks = (input.onboardingTasks ?? []).filter((t) => t.trim());
+    return `You are drafting an ACCEPTANCE email for a conference organizer to send to a speaker.
+
+Event: ${input.eventName}
+Speaker: ${input.speakerName}
+Accepted proposal: ${input.talkTitle}
+Proposal abstract: ${input.talkAbstract}
+
+The organizer's INTERNAL note (may be blunt or logistical, not speaker-facing):
+${input.reasoning || "(none given)"}
+
+Write the email the organizer should send. Requirements:
+- Genuinely warm congratulations without gushing. Acceptance must be
+  unmistakable in the first sentence.
+- If the internal note contains something worth telling the speaker (e.g.
+  what the committee liked), convey it kindly — never quote it verbatim.
+  Ignore parts that are purely internal.
+- Include this exact speaker-portal link on its own line: ${input.portalUrl ?? "(no portal link)"}
+${tasks.length ? `- List these onboarding items exactly, as a markdown list:\n${tasks.map((t) => `  - ${t}`).join("\n")}` : "- Mention that onboarding details live in the portal."}
+- Do not invent schedule details (day, time, room) — say those follow once
+  the schedule is locked.
+- 120-200 words. No subject-line prefix like "Subject:". No placeholders.
+- Sign off as "The ${input.eventName} program team".`;
+  }
+
   const decisionWord = input.decision === "deny" ? "declined" : "waitlisted";
   return `You are drafting a decision email for a conference organizer to send to a speaker.
 
@@ -228,7 +292,13 @@ export async function draftDecisionFeedback(
 ): Promise<FeedbackDraft> {
   if (!cfg.apiKey) return deterministicDraft(input);
   try {
-    return await aiDraft(input, { apiKey: cfg.apiKey, model: cfg.model, fetcher: cfg.fetcher });
+    const draft = await aiDraft(input, { apiKey: cfg.apiKey, model: cfg.model, fetcher: cfg.fetcher });
+    // Hard guarantee for acceptances: whatever the model writes, the speaker
+    // gets their portal link. Appended deterministically if the draft lacks it.
+    if (input.decision === "approve" && input.portalUrl && !draft.bodyMd.includes(input.portalUrl)) {
+      return { ...draft, bodyMd: `${draft.bodyMd}\n\nYour speaker portal: ${input.portalUrl}` };
+    }
+    return draft;
   } catch (error) {
     const fallback = deterministicDraft(input);
     return {

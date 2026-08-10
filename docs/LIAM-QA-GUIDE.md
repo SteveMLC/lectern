@@ -43,8 +43,15 @@ what your JSON files say. So be rough with it.
 5. Go to `/admin`, enter the passcode.
 6. **Dashboard** — does "N need decision" match reality? Click it.
 7. **Reviews** — find the talk you submitted in Part 1. Your name, your abstract, your
-   answers should all be on the card.
-8. **Approve it.** Watch: green toast, queue count drops by one.
+   answers should all be on the card. Some cards also show **Committee notes** — prior
+   reviewer comments with an accept/reject lean.
+8. **Approve it.** A note box opens — type something short ("great topic"), then
+   **Draft acceptance email**. Check hard:
+   - The email must contain the speaker's **portal link** and the **onboarding
+     checklist** (headshot, bio, slides, AV check). Always — even weird notes.
+   - **Send (simulated) & approve**: green toast, queue count drops by one.
+   - Reload and switch the scope chip to **All**: your note should now sit on the
+     card as a committee note. ("Approve without email" must also save the note.)
 9. **The AI beat — test this hard.** Pick a weak proposal and click **Deny**. A box asks
    *why*. Write blunt reasons like you'd text them to a friend — "boring topic, no
    numbers, we did this last year." Click **Draft feedback email**.
@@ -66,7 +73,8 @@ what your JSON files say. So be rough with it.
     their actual missing items. Download the calendar invite (.ics) — does it open in
     a calendar app with the right session?
 13. **Submissions** → **Export CSV** — open it in Numbers/Excel. Titles with commas and
-    quotes should not break columns.
+    quotes should not break columns, and the **Committee notes** column should carry
+    the notes you wrote in steps 8-9.
 
 ### Part 3: The public side (5 min)
 

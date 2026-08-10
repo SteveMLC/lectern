@@ -356,8 +356,8 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
       { method: "GET", path: "/events/:slug/submissions.csv", auth: "organizer", purpose: "Submissions export as CSV (Excel-friendly)." },
-      { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft a decision-feedback email from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Never auto-sends." },
-      { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session." },
+      { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft the decision email (acceptance, waitlist, or rejection) from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Acceptances carry the speaker's portal link and onboarding checklist. Never auto-sends." },
+      { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session. An optional reasoning note is persisted as a committee review." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
       { method: "GET", path: "/integrations/airtable/status", auth: "organizer", purpose: "Airtable proof connectivity, rate guard, and D1 fallback status." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
@@ -598,6 +598,7 @@ api.post("/events/:slug/submissions/:submissionId/decision", organizerAuth, asyn
     const result = await repo.decideSubmission({
       submissionId: submission.id,
       decision: parsed.data.decision,
+      reasoning: parsed.data.reasoning,
       now: new Date().toISOString(),
     });
     const body: SubmissionDecisionResponse = result;
@@ -636,6 +637,24 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
   }
 
   const primary = submission.speakers[0];
+
+  // Acceptances carry the speaker's portal link and the exact onboarding
+  // checklist the system will derive at commit time — same table the
+  // acceptance batch reads, so the email can never promise a different list.
+  let portalUrl: string | undefined;
+  let onboardingTasks: string[] | undefined;
+  if (parsed.data.decision === "approve") {
+    portalUrl = primary ? `${new URL(c.req.url).origin}/speaker/${primary.speakerId}` : undefined;
+    const taskRows = await c.env.DB.prepare(
+      `SELECT label FROM task_definitions
+       WHERE event_id = ?1 AND applies_to = 'accepted_speakers'
+       ORDER BY sort_order, label`,
+    )
+      .bind(bundle.event.id)
+      .all<{ label: string }>();
+    onboardingTasks = (taskRows.results ?? []).map((row) => row.label);
+  }
+
   const draft = await draftDecisionFeedback(
     {
       eventName: bundle.event.name,
@@ -644,6 +663,8 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
       talkAbstract: submission.abstract,
       decision: parsed.data.decision,
       reasoning: parsed.data.reasoning,
+      portalUrl,
+      onboardingTasks,
     },
     { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
   );

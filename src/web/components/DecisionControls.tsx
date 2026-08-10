@@ -14,12 +14,14 @@ import { Button, Textarea, cn } from "./ui";
  * The rule it encodes: the current status renders as STATE (a checked,
  * non-interactive chip), and only legal transitions render as ACTIONS.
  *
- * Deny and Maybe open the feedback flow: the organizer writes their blunt
- * internal reasoning, a draft email is composed from it (Claude when a key is
- * configured, an honest template otherwise), the organizer edits, and only
- * "Send & deny/waitlist" commits — decision applied, simulated send recorded.
- * AI proposes, the human approves, the deterministic system commits. Nothing
- * is ever auto-sent, and skipping the email entirely stays one click away.
+ * Every decision opens the same flow: the organizer writes their internal
+ * note (optional for approve, the point of the exercise for deny/maybe), a
+ * decision email is drafted from it — acceptance with the speaker's portal
+ * link and onboarding checklist, feedback for deny/waitlist — the organizer
+ * edits, and "Send & <decision>" commits. The note is persisted as a
+ * committee review either way, so the WHY outlives the call. AI proposes,
+ * the human approves, the deterministic system commits. Nothing is ever
+ * auto-sent, and skipping the email stays one click away.
  */
 
 const ACTION_STYLE: Record<ReviewDecision, string> = {
@@ -57,10 +59,8 @@ function availableActions(submission: SubmissionListItem): ReviewDecision[] {
   }
 }
 
-type FeedbackDecision = "deny" | "maybe";
-
 interface FlowState {
-  decision: FeedbackDecision;
+  decision: ReviewDecision;
   stage: "reasoning" | "drafting" | "editing";
   reasoning: string;
   draft?: FeedbackDraftResponse;
@@ -69,6 +69,42 @@ interface FlowState {
   error?: string;
   sending?: boolean;
 }
+
+const FLOW_COPY: Record<
+  ReviewDecision,
+  { title: (t: string) => string; hint: string; placeholder: string; draftButton: string; emailNoun: string }
+> = {
+  approve: {
+    title: (t) => `Accept “${t}”?`,
+    hint:
+      "Optional internal note — saved to the committee record and used to personalize the acceptance email. The email always carries the speaker's portal link and onboarding checklist.",
+    placeholder: 'e.g. "loved the live-demo angle — main stage material"',
+    draftButton: "Draft acceptance email",
+    emailNoun: "Acceptance email",
+  },
+  maybe: {
+    title: (t) => `Why waitlist “${t}”?`,
+    hint:
+      "Write it bluntly — this stays internal, saved as a committee note on this proposal. It becomes the basis of a thoughtful feedback email you review before anything is sent.",
+    placeholder: 'e.g. "solid but we already have two eval talks; revisit if a slot opens"',
+    draftButton: "Draft feedback email",
+    emailNoun: "Feedback email",
+  },
+  deny: {
+    title: (t) => `Why deny “${t}”?`,
+    hint:
+      "Write it bluntly — this stays internal, saved as a committee note on this proposal. It becomes the basis of a thoughtful feedback email you review before anything is sent.",
+    placeholder: 'e.g. "ran this topic last year; abstract has no real numbers; better fit for a meetup"',
+    draftButton: "Draft feedback email",
+    emailNoun: "Feedback email",
+  },
+};
+
+const DECISION_VERB: Record<ReviewDecision, string> = {
+  approve: "approve",
+  maybe: "waitlist",
+  deny: "deny",
+};
 
 export function DecisionControls({
   submission,
@@ -82,7 +118,7 @@ export function DecisionControls({
   eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
-  onDecide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
+  onDecide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
   compact?: boolean;
 }) {
   const [flow, setFlow] = useState<FlowState | null>(null);
@@ -103,11 +139,6 @@ export function DecisionControls({
   const primarySpeaker = submission.speakers[0];
 
   function beginAction(decision: ReviewDecision) {
-    if (decision === "approve") {
-      void onDecide(submission, decision);
-      return;
-    }
-    // Deny/Maybe: open the feedback flow instead of committing immediately.
     setFlow({ decision, stage: "reasoning", reasoning: "", subject: "", body: "" });
   }
 
@@ -146,7 +177,7 @@ export function DecisionControls({
         });
       }
       setFlow(null);
-      await onDecide(submission, current.decision);
+      await onDecide(submission, current.decision, current.reasoning);
     } catch (error) {
       setFlow({
         ...current,
@@ -158,10 +189,10 @@ export function DecisionControls({
 
   async function commitWithoutEmail(current: FlowState) {
     setFlow(null);
-    await onDecide(submission, current.decision);
+    await onDecide(submission, current.decision, current.reasoning);
   }
 
-  const decisionVerb = (d: FeedbackDecision) => (d === "deny" ? "deny" : "waitlist");
+  const copy = flow ? FLOW_COPY[flow.decision] : null;
 
   return (
     <div className={cn("space-y-2", compact ? "min-w-52" : "")}>
@@ -202,21 +233,18 @@ export function DecisionControls({
         ))}
       </div>
 
-      {flow ? (
+      {flow && copy ? (
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left">
           {flow.stage === "reasoning" || flow.stage === "drafting" ? (
             <>
               <p className="text-xs font-semibold text-zinc-800">
-                Why {decisionVerb(flow.decision)} “{submission.title}”?
+                {copy.title(submission.title)}
               </p>
-              <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">
-                Write it bluntly — this stays internal. It becomes the basis of a
-                thoughtful feedback email you review before anything is sent.
-              </p>
+              <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">{copy.hint}</p>
               <Textarea
                 value={flow.reasoning}
                 onChange={(e) => setFlow({ ...flow, reasoning: e.target.value })}
-                placeholder={'e.g. "ran this topic last year; abstract has no real numbers; better fit for a meetup"'}
+                placeholder={copy.placeholder}
                 className="mt-2 min-h-20 bg-white text-xs"
                 disabled={flow.stage === "drafting"}
               />
@@ -230,7 +258,7 @@ export function DecisionControls({
                   disabled={flow.stage === "drafting"}
                   onClick={() => void draftEmail(flow)}
                 >
-                  {flow.stage === "drafting" ? "Drafting…" : "Draft feedback email"}
+                  {flow.stage === "drafting" ? "Drafting…" : copy.draftButton}
                 </Button>
                 <Button
                   type="button"
@@ -254,7 +282,7 @@ export function DecisionControls({
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-zinc-800">
-                  Feedback email to {primarySpeaker?.name ?? "the speaker"}
+                  {copy.emailNoun} to {primarySpeaker?.name ?? "the speaker"}
                 </p>
                 <span
                   className={cn(
@@ -301,7 +329,7 @@ export function DecisionControls({
                 >
                   {flow.sending
                     ? "Sending…"
-                    : `Send (simulated) & ${decisionVerb(flow.decision)}`}
+                    : `Send (simulated) & ${DECISION_VERB[flow.decision]}`}
                 </Button>
                 <Button
                   type="button"

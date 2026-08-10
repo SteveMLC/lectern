@@ -41,12 +41,15 @@ export function Reviews() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [scope, setScope] = useState<"pending" | "all">("pending");
 
-  async function decide(submission: SubmissionListItem, decision: ReviewDecision) {
+  async function decide(submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) {
     setBusyId(submission.id);
     setActionError(null);
     setNotice(null);
     try {
-      const result = await apiClient.decideSubmission(eventSlug, submission.id, { decision });
+      const result = await apiClient.decideSubmission(eventSlug, submission.id, {
+        decision,
+        reasoning,
+      });
       if (decision === "approve") {
         setNotice(
           result.reusedSession
@@ -176,7 +179,7 @@ function ReviewCard({
   eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
-  onDecide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
+  onDecide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
 }) {
   const primary = submission.speakers[0];
   const facts = answerFacts(submission.answers);
@@ -246,6 +249,37 @@ function ReviewCard({
         ) : null}
       </div>
 
+      {submission.reviews.length > 0 ? (
+        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
+            Committee notes
+          </p>
+          <div className="mt-1.5 space-y-1.5">
+            {submission.reviews.map((review) => (
+              <p
+                key={`${review.reviewerName}-${review.submittedAt}`}
+                className="text-xs leading-5 text-zinc-700"
+              >
+                <span className="font-medium text-zinc-900">{review.reviewerName}</span>
+                <span
+                  className={cn(
+                    "ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+                    review.recommendation === "accept"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : review.recommendation === "reject"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-amber-100 text-amber-700",
+                  )}
+                >
+                  {review.recommendation}
+                </span>
+                {review.comment ? <span className="ml-1.5">{review.comment}</span> : null}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-4 border-t border-zinc-100 pt-4">
         <div className="flex flex-wrap items-center gap-2">
           <DecisionControls
@@ -253,7 +287,7 @@ function ReviewCard({
             submission={submission}
             busy={busy}
             anyBusy={anyBusy}
-            onDecide={(target, decision) => onDecide(target, decision)}
+            onDecide={onDecide}
           />
           {primary && submission.status !== "draft" && submission.status !== "withdrawn" ? (
             <Link

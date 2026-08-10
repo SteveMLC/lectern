@@ -55,6 +55,20 @@ describe("submissionsToCsv", () => {
         bio: null,
       },
     ],
+    reviews: [
+      {
+        reviewerName: "Sam Peters",
+        recommendation: "accept",
+        comment: "Strong practical angle, verify the numbers.",
+        submittedAt: "2026-07-30T09:00:00Z",
+      },
+      {
+        reviewerName: "Organizer",
+        recommendation: "reject",
+        comment: "=HYPERLINK evil, ran last year",
+        submittedAt: "2026-08-01T09:00:00Z",
+      },
+    ],
   };
 
   it("produces a header plus one row per submission with speakers flattened", () => {
@@ -62,11 +76,32 @@ describe("submissionsToCsv", () => {
     const lines = csv.trimEnd().split("\r\n");
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain("Title,Status,Track");
+    expect(lines[0]).toContain("Committee notes");
     expect(lines[1]).toContain('"Shipping ""Fast"", Safely"');
     expect(lines[1]).toContain("Tom Ostrander; Ada Okafor");
     expect(lines[1]).toContain("tom@plainsignal.example; ada@nimbuslabs.example");
     expect(lines[1]).toContain("PlainSignal");
     expect(lines[1]).toContain('"Line one.\nLine two."');
+  });
+
+  it("exports committee notes with reviewer, lean, and comment", () => {
+    const csv = submissionsToCsv([submission]);
+    expect(csv).toContain("Sam Peters (accept): Strong practical angle");
+    expect(csv).toContain("Organizer (reject)");
+  });
+
+  it("keeps formula-shaped note content inert (cell does not start with =)", () => {
+    const hostile: SubmissionListItem = {
+      ...submission,
+      reviews: [
+        { reviewerName: "=cmd", recommendation: "abstain", comment: null, submittedAt: "2026-08-01T09:00:00Z" },
+      ],
+    };
+    const csv = submissionsToCsv([hostile]);
+    const row = csv.trimEnd().split("\r\n")[1]!;
+    for (const cell of row.split(",")) {
+      expect(cell.startsWith("=")).toBe(false);
+    }
   });
 
   it("handles an empty list as just the header", () => {

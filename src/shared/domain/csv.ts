@@ -33,6 +33,7 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
     "Companies",
     "Submitted at",
     "Abstract",
+    "Committee notes",
     "SpeakerOps ID",
   ];
   const rows = submissions.map((s) => [
@@ -48,6 +49,11 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
       .join("; "),
     s.submittedAt ?? "",
     s.abstract,
+    s.reviews
+      .map((review) =>
+        `${review.reviewerName} (${review.recommendation}): ${review.comment ?? ""}`.trim().replace(/:$/, ""),
+      )
+      .join(" | "),
     s.id,
   ]);
   return toCsv([header, ...rows]);

@@ -195,9 +195,25 @@ export const SubmissionSpeakerView = z.object({
 });
 export type SubmissionSpeakerView = z.infer<typeof SubmissionSpeakerView>;
 
+/**
+ * A committee note on a proposal: who said what, and which way they leaned.
+ * Sourced from the reviews table — seeded committee reviews and the notes the
+ * organizer writes while deciding both land here, so the record of WHY a call
+ * was made survives the call itself.
+ */
+export const SubmissionReviewView = z.object({
+  reviewerName: z.string(),
+  recommendation: z.enum(["accept", "reject", "waitlist", "abstain"]),
+  comment: z.string().nullable(),
+  submittedAt: z.string(),
+});
+export type SubmissionReviewView = z.infer<typeof SubmissionReviewView>;
+
 export const SubmissionListItem = Submission.extend({
   speakers: z.array(SubmissionSpeakerView),
   trackName: z.string().nullable(),
+  /** Newest first. */
+  reviews: z.array(SubmissionReviewView),
 });
 export type SubmissionListItem = z.infer<typeof SubmissionListItem>;
 
@@ -216,11 +232,17 @@ export type ReviewDecision = z.infer<typeof ReviewDecision>;
 
 export const SubmissionDecisionRequest = z.object({
   decision: ReviewDecision,
+  /**
+   * The organizer's internal note. When present it is persisted as a
+   * committee review on the proposal, so the reasoning behind a decision
+   * outlives the decision. Never shown to speakers.
+   */
+  reasoning: z.string().trim().max(2000).default(""),
 });
 export type SubmissionDecisionRequest = z.infer<typeof SubmissionDecisionRequest>;
 
 export const FeedbackDraftRequest = z.object({
-  decision: z.enum(["deny", "maybe"]),
+  decision: ReviewDecision,
   /** The organizer's internal reasoning; drives the drafted email. */
   reasoning: z.string().trim().max(2000).default(""),
 });

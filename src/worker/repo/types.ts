@@ -64,6 +64,8 @@ export interface SpeakerOpsRepo {
 export interface DecideSubmissionInput {
   submissionId: string;
   decision: "approve" | "maybe" | "deny";
+  /** Internal note; persisted as a committee review when non-empty. */
+  reasoning?: string;
   now: string;
 }
 

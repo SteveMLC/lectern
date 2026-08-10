@@ -14,6 +14,14 @@ const INPUT: FeedbackDraftInput = {
   reasoning: "we ran a nearly identical talk last year; single data point; abstract has no numbers",
 };
 
+const APPROVE_INPUT: FeedbackDraftInput = {
+  ...INPUT,
+  decision: "approve",
+  reasoning: "loved the contrarian take — main stage material",
+  portalUrl: "https://speakerops.example/speaker/spk_tob",
+  onboardingTasks: ["Upload your headshot", "Confirm your bio", "Upload draft slides", "Book your AV check"],
+};
+
 function fakeAnthropic(responder: () => { status?: number; body?: unknown }) {
   const calls: { url: string; body: Record<string, unknown> }[] = [];
   const fetcher = (async (url: string | URL, init?: RequestInit) => {
@@ -46,6 +54,26 @@ describe("deterministicDraft", () => {
   it("omits the feedback section when no reasoning is given", () => {
     const draft = deterministicDraft({ ...INPUT, reasoning: "" });
     expect(draft.bodyMd).not.toContain("Feedback from the committee");
+  });
+
+  it("acceptance carries congratulations, the portal link, and the exact checklist", () => {
+    const draft = deterministicDraft({ ...APPROVE_INPUT });
+    expect(draft.subject).toContain("You're speaking at");
+    expect(draft.bodyMd).toContain("is accepted");
+    expect(draft.bodyMd).toContain("https://speakerops.example/speaker/spk_tob");
+    expect(draft.bodyMd).toContain("- Upload your headshot");
+    expect(draft.bodyMd).toContain("- Confirm your bio");
+    // Internal note stays internal even on a happy decision.
+    expect(draft.bodyMd).not.toContain("main stage material");
+    // No invented logistics.
+    expect(draft.bodyMd).toContain("once the schedule is locked");
+  });
+
+  it("acceptance without task definitions still reads complete", () => {
+    const draft = deterministicDraft({ ...APPROVE_INPUT, onboardingTasks: [] });
+    expect(draft.bodyMd).toContain("https://speakerops.example/speaker/spk_tob");
+    // No empty bullet-list block when the event defines no onboarding tasks.
+    expect(draft.bodyMd).not.toMatch(/^- /m);
   });
 });
 
@@ -119,6 +147,51 @@ describe("draftDecisionFeedback", () => {
     expect(draft.aiUsed).toBe(false);
     expect(draft.subject).toContain("Microservices");
     expect(draft.providerEvidence?.requestId).toBe("msg_fallback");
+  });
+
+  it("guarantees the portal link on acceptances even when the AI omits it", async () => {
+    const { fetcher } = fakeAnthropic(() => ({
+      body: {
+        id: "msg_no_link",
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 50, output_tokens: 40 },
+        content: [
+          {
+            type: "tool_use",
+            input: { subject: "Welcome aboard!", body: "Hi Tobias,\n\nYou're in. Details soon." },
+          },
+        ],
+      },
+    }));
+    const draft = await draftDecisionFeedback(APPROVE_INPUT, { apiKey: "k", fetcher });
+    expect(draft.aiUsed).toBe(true);
+    expect(draft.bodyMd).toContain("Your speaker portal: https://speakerops.example/speaker/spk_tob");
+  });
+
+  it("sends the portal link and checklist to the model for acceptances", async () => {
+    const { fetcher, calls } = fakeAnthropic(() => ({
+      body: {
+        id: "msg_accept",
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 50, output_tokens: 40 },
+        content: [
+          {
+            type: "tool_use",
+            input: {
+              subject: "S",
+              body: "Body with https://speakerops.example/speaker/spk_tob included.",
+            },
+          },
+        ],
+      },
+    }));
+    const draft = await draftDecisionFeedback(APPROVE_INPUT, { apiKey: "k", fetcher });
+    const sentPrompt = JSON.stringify(calls[0]!.body.messages);
+    expect(sentPrompt).toContain("ACCEPTANCE email");
+    expect(sentPrompt).toContain("https://speakerops.example/speaker/spk_tob");
+    expect(sentPrompt).toContain("Book your AV check");
+    // Link already present — no duplicate appended.
+    expect(draft.bodyMd.match(/speaker\/spk_tob/g)).toHaveLength(1);
   });
 
   it("honors a model override", async () => {

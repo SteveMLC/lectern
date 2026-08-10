@@ -22,6 +22,7 @@ import type {
   SpeakerAsset,
   SpeakerTask,
   SubmissionListItem,
+  SubmissionReviewView,
   SubmissionSpeakerView,
   SubmissionStatus,
   TaskDefinition,
@@ -499,9 +500,27 @@ function mapResourcePage(r: ResourcePageRow): ResourcePage {
   };
 }
 
+interface ReviewRow {
+  submission_id: string;
+  reviewer_name: string;
+  recommendation: string;
+  overall_comment: string | null;
+  submitted_at: string;
+}
+
+function mapReviewView(r: ReviewRow): SubmissionReviewView {
+  return {
+    reviewerName: r.reviewer_name,
+    recommendation: r.recommendation as SubmissionReviewView["recommendation"],
+    comment: r.overall_comment,
+    submittedAt: r.submitted_at,
+  };
+}
+
 function mapSubmissionListItem(
   r: SubmissionRow & { track_name: string | null },
   speakers: SubmissionSpeakerView[],
+  reviews: SubmissionReviewView[],
 ): SubmissionListItem {
   return {
     id: r.id,
@@ -518,6 +537,7 @@ function mapSubmissionListItem(
     updatedAt: r.updated_at,
     speakers,
     trackName: r.track_name,
+    reviews,
   };
 }
 
@@ -814,7 +834,7 @@ export class D1Repo implements SpeakerOpsRepo {
   }
 
   async listSubmissions(eventId: string): Promise<SubmissionListItem[]> {
-    const [subsRes, linksRes] = await this.db.batch([
+    const [subsRes, linksRes, reviewsRes] = await this.db.batch([
       this.db
         .prepare(
           `SELECT s.*, t.name AS track_name
@@ -834,12 +854,22 @@ export class D1Repo implements SpeakerOpsRepo {
            ORDER BY ss.submission_id, ss.sort_order`,
         )
         .bind(eventId),
+      this.db
+        .prepare(
+          `SELECT rv.submission_id, rv.reviewer_name, rv.recommendation, rv.overall_comment, rv.submitted_at
+           FROM reviews rv
+           JOIN submissions s ON s.id = rv.submission_id
+           WHERE s.event_id = ?
+           ORDER BY rv.submission_id, rv.submitted_at DESC`,
+        )
+        .bind(eventId),
     ]);
 
     const subs = (subsRes?.results ?? []) as unknown as (SubmissionRow & {
       track_name: string | null;
     })[];
     const links = (linksRes?.results ?? []) as unknown as SubmissionSpeakerLinkRow[];
+    const reviewRows = (reviewsRes?.results ?? []) as unknown as ReviewRow[];
 
     const speakersBySubmission = new Map<string, SubmissionSpeakerView[]>();
     for (const link of links) {
@@ -856,7 +886,20 @@ export class D1Repo implements SpeakerOpsRepo {
       speakersBySubmission.set(link.submission_id, list);
     }
 
-    return subs.map((row) => mapSubmissionListItem(row, speakersBySubmission.get(row.id) ?? []));
+    const reviewsBySubmission = new Map<string, SubmissionReviewView[]>();
+    for (const review of reviewRows) {
+      const list = reviewsBySubmission.get(review.submission_id) ?? [];
+      list.push(mapReviewView(review));
+      reviewsBySubmission.set(review.submission_id, list);
+    }
+
+    return subs.map((row) =>
+      mapSubmissionListItem(
+        row,
+        speakersBySubmission.get(row.id) ?? [],
+        reviewsBySubmission.get(row.id) ?? [],
+      ),
+    );
   }
 
   async getSubmissionById(id: string): Promise<SubmissionListItem | null> {
@@ -892,7 +935,15 @@ export class D1Repo implements SpeakerOpsRepo {
       bio: link.bio,
     }));
 
-    return mapSubmissionListItem(row, speakers);
+    const reviewsRes = await this.db
+      .prepare(
+        `SELECT submission_id, reviewer_name, recommendation, overall_comment, submitted_at
+         FROM reviews WHERE submission_id = ? ORDER BY submitted_at DESC`,
+      )
+      .bind(id)
+      .all<ReviewRow>();
+
+    return mapSubmissionListItem(row, speakers, (reviewsRes.results ?? []).map(mapReviewView));
   }
 
   /**
@@ -920,6 +971,73 @@ export class D1Repo implements SpeakerOpsRepo {
     );
   }
 
+  /**
+   * The organizer's reasoning, saved as a committee review so the WHY behind
+   * a decision survives it. Upserts on the fixed organizer identity: deciding
+   * again replaces the note rather than stacking duplicates. Events without
+   * an evaluation round (demo-loaded conferences) get one lazily so the
+   * reviews FK always has a home.
+   */
+  private async committeeNoteStatements(
+    eventId: string,
+    submissionId: string,
+    decision: DecideSubmissionInput["decision"],
+    reasoning: string | undefined,
+    now: string,
+  ): Promise<D1PreparedStatement[]> {
+    const note = reasoning?.trim();
+    if (!note) return [];
+
+    const statements: D1PreparedStatement[] = [];
+    const existingRound = await this.db
+      .prepare(
+        `SELECT r.id FROM evaluation_rounds r
+         JOIN evaluation_plans p ON p.id = r.plan_id
+         WHERE p.event_id = ?1
+         ORDER BY (r.status = 'open') DESC, r.round_number DESC
+         LIMIT 1`,
+      )
+      .bind(eventId)
+      .first<{ id: string }>();
+
+    let roundId = existingRound?.id;
+    if (!roundId) {
+      const planId = `plan_${crypto.randomUUID().slice(0, 8)}`;
+      roundId = `round_${crypto.randomUUID().slice(0, 8)}`;
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO evaluation_plans (id, event_id, name, description, created_at)
+             VALUES (?1, ?2, 'Program decisions', 'Created automatically to hold organizer decision notes.', ?3)`,
+          )
+          .bind(planId, eventId, now),
+        this.db
+          .prepare(
+            `INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at, closes_at)
+             VALUES (?1, ?2, 'Decisions', 1, 'open', ?3, NULL)`,
+          )
+          .bind(roundId, planId, now),
+      );
+    }
+
+    const recommendation =
+      decision === "approve" ? "accept" : decision === "maybe" ? "waitlist" : "reject";
+    statements.push(
+      this.db
+        .prepare(
+          `INSERT INTO reviews
+             (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at)
+           VALUES (?1, ?2, ?3, 'Organizer', 'organizer@speakerops.local', '{}', ?4, ?5, ?6)
+           ON CONFLICT(round_id, submission_id, reviewer_email) DO UPDATE SET
+             overall_comment = excluded.overall_comment,
+             recommendation = excluded.recommendation,
+             submitted_at = excluded.submitted_at`,
+        )
+        .bind(`rev_${crypto.randomUUID().slice(0, 8)}`, roundId, submissionId, note, recommendation, now),
+    );
+    return statements;
+  }
+
   async decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult> {
     const submission = await this.getSubmissionById(input.submissionId);
     if (!submission) throw new Error("submission_not_found");
@@ -927,12 +1045,22 @@ export class D1Repo implements SpeakerOpsRepo {
       throw new Error("invalid_decision_transition");
     }
 
+    const noteStatements = await this.committeeNoteStatements(
+      submission.eventId,
+      submission.id,
+      input.decision,
+      input.reasoning,
+      input.now,
+    );
+
     const targetStatus = statusForDecision(input.decision);
     if (input.decision !== "approve") {
-      await this.db
-        .prepare("UPDATE submissions SET status = ?1, updated_at = ?2 WHERE id = ?3")
-        .bind(targetStatus, input.now, submission.id)
-        .run();
+      await this.db.batch([
+        this.db
+          .prepare("UPDATE submissions SET status = ?1, updated_at = ?2 WHERE id = ?3")
+          .bind(targetStatus, input.now, submission.id),
+        ...noteStatements,
+      ]);
       const updated = await this.getSubmissionById(submission.id);
       if (!updated) throw new Error("Submission disappeared after decision.");
       return { submission: updated, session: null, reusedSession: false };
@@ -991,6 +1119,7 @@ export class D1Repo implements SpeakerOpsRepo {
         built.sessionSpeakers.map((speaker) => speaker.speakerId),
         input.now,
       ),
+      ...noteStatements,
     ];
     await this.db.batch(statements);
 

@@ -28,7 +28,7 @@ type Filter = "all" | SubmissionStatusType;
 interface DecisionState {
   eventSlug: string;
   busyId: string | null;
-  decide: (submission: SubmissionListItem, decision: ReviewDecision) => Promise<void>;
+  decide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
 }
 
 export function Submissions() {
@@ -45,12 +45,15 @@ export function Submissions() {
 
   const submissions = data?.submissions ?? [];
 
-  async function decide(submission: SubmissionListItem, decision: ReviewDecision) {
+  async function decide(submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) {
     setBusyId(submission.id);
     setNotice(null);
     setActionError(null);
     try {
-      const result = await apiClient.decideSubmission(eventSlug, submission.id, { decision });
+      const result = await apiClient.decideSubmission(eventSlug, submission.id, {
+        decision,
+        reasoning,
+      });
       if (decision === "approve") {
         setNotice(
           result.reusedSession
