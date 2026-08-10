@@ -6,6 +6,24 @@ SpeakerOps is an open-source replacement for the program side of Sessionboard: c
 
 Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe Airtable proof adapter reads event/speaker operations and writes communication receipts behind the same repository boundary.
 
+## Try it live
+
+**https://speakerops.speakerops-go7.workers.dev**
+
+Organizer passcode: **`speakerops-dev`** — a deliberately public demo passcode, not a credential. Rotate it with `wrangler secret put ORGANIZER_PASSCODE` on your own deploy.
+
+A five-minute tour, in order:
+
+| # | Do this | What it proves |
+| --- | --- | --- |
+| 1 | [Open the event page](https://speakerops.speakerops-go7.workers.dev/e/horizon-2026) | Seeded conference: 4 tracks, 3 rooms, CFP open |
+| 2 | [Submit a proposal](https://speakerops.speakerops-go7.workers.dev/e/horizon-2026/cfp) — pick **Workshop** as the format | A conditional field appears, and it is required. Switch back to Talk and it vanishes. The API enforces the same rule, so a hidden field is never demanded |
+| 3 | [Open the organizer console](https://speakerops.speakerops-go7.workers.dev/admin) and go to Submissions | Your proposal is there with its speaker attached — the full public-to-organizer round trip |
+| 4 | [Load a second conference](https://speakerops.speakerops-go7.workers.dev/demo) | A hand-authored dataset with staged scheduling conflicts. The same button resets it, so you can break anything here safely |
+| 5 | [View the embeds](https://speakerops.speakerops-go7.workers.dev/embed-preview) | Iframe-ready schedule, sessions, and speaker gallery. Narrow the window — they are mobile-first |
+
+Break the demo on purpose. **Reset** on `/demo` restores the loaded conference to exactly what its files describe, and the seeded event has a one-command reset too.
+
 ## Status
 
 Scaffold + golden path. Working today:
