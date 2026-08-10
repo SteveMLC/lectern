@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const ledgerPath = resolve(root, "usage/ledger.jsonl");
+const receiptsPath = resolve(root, "usage/receipts.jsonl");
 const pricingPath = resolve(root, "usage/pricing.json");
 const reportPath = resolve(root, "usage/REPORT.md");
 const sourcesPath = resolve(root, "usage/private/sources.json");
@@ -26,6 +27,15 @@ function parseJsonl(text, label) {
 
 async function readLedger() {
   return parseJsonl(await readFile(ledgerPath, "utf8"), "usage/ledger.jsonl");
+}
+
+async function readReceipts() {
+  try {
+    return parseJsonl(await readFile(receiptsPath, "utf8"), "usage/receipts.jsonl");
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 async function readPricing() {
@@ -86,6 +96,40 @@ export function validateEntry(entry, rates, seen = new Set()) {
     if (Math.abs(expected - entry.cost.estimatedUsd) > 0.000001) errors.push(`estimatedUsd ${entry.cost.estimatedUsd} does not match ${expected}`);
   }
   if (entry.cost?.actualBilledUsd !== null && (!Number.isFinite(entry.cost.actualBilledUsd) || entry.cost.actualBilledUsd < 0)) errors.push("actualBilledUsd must be null or non-negative");
+  return errors;
+}
+
+export function validateReceipt(receipt, entries, seen = new Set(), covered = new Set()) {
+  const errors = [];
+  const requireText = (path, value) => {
+    if (typeof value !== "string" || value.trim() === "") errors.push(`${path} is required`);
+  };
+  if (receipt.schemaVersion !== 1) errors.push("schemaVersion must be 1");
+  requireText("id", receipt.id);
+  if (seen.has(receipt.id)) errors.push(`duplicate receipt id ${receipt.id}`);
+  seen.add(receipt.id);
+  if (Number.isNaN(Date.parse(receipt.recordedAt))) errors.push("recordedAt must be ISO-8601");
+  const periodStart = Date.parse(receipt.period?.start);
+  const periodEnd = Date.parse(receipt.period?.end);
+  if (Number.isNaN(periodStart) || Number.isNaN(periodEnd)) errors.push("period start/end must be ISO-8601");
+  else if (periodEnd < periodStart) errors.push("period end must not precede period start");
+  requireText("provider", receipt.provider);
+  requireText("label", receipt.label);
+  if (!Number.isFinite(receipt.amountUsd) || receipt.amountUsd <= 0) errors.push("amountUsd must be positive");
+  if (receipt.receiptStatus !== "evidenced_subscription_receipt") errors.push("receiptStatus must be evidenced_subscription_receipt");
+  if (receipt.source?.kind !== "provider_receipt") errors.push("source.kind must be provider_receipt");
+  if (!/^[a-f0-9]{64}$/.test(receipt.source?.sha256 ?? "")) errors.push("source.sha256 must be a SHA-256 digest");
+  if (!Number.isSafeInteger(receipt.source?.bytes) || receipt.source.bytes < 1) errors.push("source.bytes must be positive");
+  if (receipt.source?.rawEvidence !== "retained_privately") errors.push("source.rawEvidence must be retained_privately");
+  if (!Array.isArray(receipt.coversEntryIds) || receipt.coversEntryIds.length === 0) errors.push("coversEntryIds must identify at least one usage entry");
+  for (const id of receipt.coversEntryIds ?? []) {
+    const entry = entries.find((candidate) => candidate.id === id);
+    if (!entry) errors.push(`unknown covered usage entry ${id}`);
+    else if (entry.provider !== receipt.provider) errors.push(`covered entry ${id} has provider ${entry.provider}, expected ${receipt.provider}`);
+    else if (entry.cost?.actualBilledUsd !== null) errors.push(`covered entry ${id} already has actual billed spend recorded`);
+    if (covered.has(id)) errors.push(`usage entry ${id} is covered by more than one receipt`);
+    covered.add(id);
+  }
   return errors;
 }
 
@@ -376,12 +420,78 @@ async function sync(options = {}) {
   return captured;
 }
 
+async function receipt(options = {}) {
+  if (!options.file || !options.provider || !options.label || !options.amount || !options.periodStart || !options.periodEnd) {
+    throw new Error("receipt requires --file, --provider, --label, --amount, --period-start, and --period-end");
+  }
+  const amountUsd = Number(options.amount);
+  if (!Number.isFinite(amountUsd) || amountUsd <= 0) throw new Error("--amount must be a positive USD value");
+  const periodStart = Date.parse(options.periodStart);
+  const periodEnd = Date.parse(options.periodEnd);
+  if (Number.isNaN(periodStart) || Number.isNaN(periodEnd)) throw new Error("--period-start and --period-end must be ISO-8601 timestamps");
+  const period = { start: new Date(periodStart).toISOString(), end: new Date(periodEnd).toISOString() };
+  if (period.end < period.start) throw new Error("--period-end must not precede --period-start");
 
-function aggregate(entries) {
+  const [rawReceipt, entries, receipts] = await Promise.all([
+    readFile(expandLocalPath(options.file)),
+    readLedger(),
+    readReceipts(),
+  ]);
+  const alreadyCovered = new Set(receipts.flatMap((item) => item.coversEntryIds ?? []));
+  const explicitIds = options.covers ? options.covers.split(",").map((id) => id.trim()).filter(Boolean) : null;
+  const coversEntryIds = explicitIds ?? entries
+    .filter((entry) =>
+      entry.provider === options.provider &&
+      entry.cost.actualBilledUsd === null &&
+      entry.period.end >= period.start &&
+      entry.period.start <= period.end &&
+      !alreadyCovered.has(entry.id),
+    )
+    .map((entry) => entry.id);
+  if (coversEntryIds.length === 0) throw new Error("No uncovered usage entries match this provider and billing period; pass --covers with explicit ledger ids if needed.");
+
+  const now = new Date().toISOString();
+  const sha256 = sourceDigest(rawReceipt);
+  if (receipts.some((item) => item.source?.sha256 === sha256)) throw new Error("This receipt file is already recorded.");
+  const idHash = createHash("sha256")
+    .update(`${options.provider}:${period.start}:${period.end}:${amountUsd}:${sha256}`)
+    .digest("hex")
+    .slice(0, 12);
+  const record = {
+    schemaVersion: 1,
+    id: `receipt-${now.slice(0, 10).replaceAll("-", "")}-${idHash}`,
+    recordedAt: now,
+    provider: options.provider,
+    label: options.label,
+    period,
+    amountUsd,
+    receiptStatus: "evidenced_subscription_receipt",
+    source: {
+      kind: "provider_receipt",
+      sha256,
+      bytes: rawReceipt.length,
+      rawEvidence: "retained_privately",
+    },
+    coversEntryIds,
+    notes: ["Raw receipt retained privately; only its digest, byte size, allocation, and billed amount are committed."],
+  };
+  const errors = validateReceipt(record, entries, new Set(receipts.map((item) => item.id)), alreadyCovered);
+  if (errors.length) throw new Error(`Receipt failed validation:\n- ${errors.join("\n- ")}`);
+  if (!options.dryRun) {
+    await appendFile(receiptsPath, `${JSON.stringify(record)}\n`);
+    await renderReport();
+  }
+  if (!options.quiet) console.log(JSON.stringify(record, null, 2));
+  return record;
+}
+
+
+function aggregate(entries, receipts = []) {
   const totals = new Map();
   let estimated = 0;
-  let actual = 0;
+  let actual = receipts.reduce((sum, item) => sum + item.amountUsd, 0);
   let pending = 0;
+  const covered = new Set(receipts.flatMap((item) => item.coversEntryIds ?? []));
   for (const entry of entries) {
     const key = `${entry.provider}/${entry.model}`;
     const row = totals.get(key) ?? { calls: 0, entries: 0, tokens: normalizeTokens(), estimated: 0 };
@@ -391,8 +501,8 @@ function aggregate(entries) {
     row.estimated += entry.cost.estimatedUsd;
     totals.set(key, row);
     estimated += entry.cost.estimatedUsd;
-    if (entry.cost.actualBilledUsd === null) pending += 1;
-    else actual += entry.cost.actualBilledUsd;
+    if (entry.cost.actualBilledUsd !== null) actual += entry.cost.actualBilledUsd;
+    else if (!covered.has(entry.id)) pending += 1;
   }
   return { totals, estimated, actual, pending };
 }
@@ -412,8 +522,8 @@ function summaryTable({ totals, estimated }) {
   return lines.join("\n");
 }
 
-function buildReport(entries, digest, generatedAt) {
-  const agg = aggregate(entries);
+function buildReport(entries, digest, generatedAt, receipts = [], receiptDigest = sourceDigest("")) {
+  const agg = aggregate(entries, receipts);
 
   const inventory = entries.map((entry) => {
     const day = entry.period.end.slice(0, 10);
@@ -421,18 +531,23 @@ function buildReport(entries, digest, generatedAt) {
     const evidence = `\`${entry.source.sha256.slice(0, 12)}…\` (${entry.source.lineCount} lines)`;
     return `| ${day} | ${entry.actor.name} | ${entry.model} | ${entry.category.replaceAll("_", " ")} | ${entry.tokens.providerTotal.toLocaleString("en-US")} | $${entry.cost.estimatedUsd.toFixed(2)} | ${evidence} | ${refs.length ? refs.map((ref) => `\`${ref.slice(0, 9)}\``).join(" ") : "—"} |`;
   });
+  const receiptInventory = receipts.map((receipt) => {
+    const evidence = `\`${receipt.source.sha256.slice(0, 12)}…\` (${receipt.source.bytes.toLocaleString("en-US")} bytes)`;
+    return `| ${receipt.period.start.slice(0, 10)}–${receipt.period.end.slice(0, 10)} | ${receipt.provider} | ${receipt.label} | $${receipt.amountUsd.toFixed(2)} | ${receipt.coversEntryIds.length} | ${evidence} |`;
+  });
 
   const md = `# AI usage reimbursement audit
 
 Generated ${generatedAt} UTC by \`pnpm usage:report\`. Do not edit by hand — regenerate instead.
 
 Ledger digest: \`${digest}\` (${entries.length} entries). \`pnpm usage:check\` fails if this file no longer matches the ledger.
+Receipt-allocation digest: \`${receiptDigest}\` (${receipts.length} records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
 2. **API-equivalent estimate — $${agg.estimated.toFixed(2)}** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $${agg.actual.toFixed(2)} evidenced so far** — the number a reimbursement claim uses. ${agg.pending} entr${agg.pending === 1 ? "y" : "ies"} await subscription receipts.
+3. **Actual billed spend — $${agg.actual.toFixed(2)} evidenced so far** — the number a reimbursement claim uses. ${agg.pending} usage entr${agg.pending === 1 ? "y" : "ies"} remain uncovered by a recorded receipt.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -448,23 +563,36 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | --- | --- | --- | --- | ---: | ---: | --- | --- |
 ${inventory.join("\n")}
 
+## Receipt allocations
+
+Receipt files stay in \`usage/private/\`. The tracked allocation ledger stores only a SHA-256, byte size, billing period, amount, and the usage-entry ids covered, preventing the same work or receipt from being claimed twice.
+
+| Billing period | Provider | Receipt label | Actual USD | Usage entries covered | Private receipt evidence |
+| --- | --- | --- | ---: | ---: | --- |
+${receiptInventory.length ? receiptInventory.join("\n") : "| — | — | No receipt recorded yet | $0.00 | 0 | — |"}
+
 ## How to audit this
 
 1. \`pnpm usage:check\` — validates every entry against the schema, recomputes each cost from [pricing.json](pricing.json), rejects duplicate evidence, and confirms this report matches the ledger digest above.
 2. \`git log --follow usage/ledger.jsonl\` — the ledger is append-only; history shows every addition in context.
 3. Compare any entry's \`sha256\` against the raw session log we provide on request; the line count must match.
-4. Check receipts against entries marked \`pending_subscription_receipt\` when the claim is filed.
+4. \`pnpm usage:receipt -- ...\` hashes a private receipt and appends an immutable allocation record; validation rejects duplicate receipt files and overlapping usage-entry coverage.
 `;
 
   return { md, estimated: agg.estimated };
 }
 
 async function renderReport() {
-  const rawLedger = await readFile(ledgerPath, "utf8");
+  const [rawLedger, rawReceipts] = await Promise.all([
+    readFile(ledgerPath, "utf8"),
+    readFile(receiptsPath, "utf8").catch((error) => error.code === "ENOENT" ? "" : Promise.reject(error)),
+  ]);
   const entries = parseJsonl(rawLedger, "usage/ledger.jsonl");
+  const receipts = parseJsonl(rawReceipts, "usage/receipts.jsonl");
   const digest = sourceDigest(rawLedger);
+  const receiptDigest = sourceDigest(rawReceipts);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const built = buildReport(entries, digest, generatedAt);
+  const built = buildReport(entries, digest, generatedAt, receipts, receiptDigest);
   await writeFile(reportPath, built.md);
   return { digest, entries: entries.length, estimated: built.estimated };
 }
@@ -475,39 +603,31 @@ async function report() {
 }
 
 async function check() {
-  const [entries, pricing] = await Promise.all([readLedger(), readPricing()]);
+  const [entries, pricing, receipts] = await Promise.all([readLedger(), readPricing(), readReceipts()]);
   const seen = new Set();
   const failures = entries.flatMap((entry, index) => validateEntry(entry, pricing.rates, seen).map((message) => `line ${index + 1}: ${message}`));
+  const seenReceipts = new Set();
+  const covered = new Set();
+  failures.push(...receipts.flatMap((receipt, index) => validateReceipt(receipt, entries, seenReceipts, covered).map((message) => `receipt line ${index + 1}: ${message}`)));
   if (failures.length) throw new Error(`Usage ledger failed validation:\n- ${failures.join("\n- ")}`);
-  const rawLedger = await readFile(ledgerPath, "utf8");
+  const [rawLedger, rawReceipts] = await Promise.all([
+    readFile(ledgerPath, "utf8"),
+    readFile(receiptsPath, "utf8").catch((error) => error.code === "ENOENT" ? "" : Promise.reject(error)),
+  ]);
   const digest = sourceDigest(rawLedger);
+  const receiptDigest = sourceDigest(rawReceipts);
   const reportText = await readFile(reportPath, "utf8").catch(() => "");
   const stamp = reportText.match(/^Generated (.+) UTC by/m)?.[1];
-  const expected = stamp ? buildReport(entries, digest, stamp).md : null;
+  const expected = stamp ? buildReport(entries, digest, stamp, receipts, receiptDigest).md : null;
   if (expected === null || reportText !== expected) {
     throw new Error("usage/REPORT.md is stale or hand-edited: run `pnpm usage:report` to regenerate it from the ledger.");
   }
-  console.log(`Usage ledger valid: ${entries.length} entries, ${seen.size} unique evidence records. Report is current.`);
+  console.log(`Usage ledger valid: ${entries.length} entries, ${seen.size} unique evidence records, ${receipts.length} receipt allocation(s). Report is current.`);
 }
 
 async function summary() {
-  const entries = await readLedger();
-  const totals = new Map();
-  let estimated = 0;
-  let actual = 0;
-  let pending = 0;
-  for (const entry of entries) {
-    const key = `${entry.provider}/${entry.model}`;
-    const row = totals.get(key) ?? { calls: 0, entries: 0, tokens: normalizeTokens(), estimated: 0 };
-    row.calls += entry.calls ?? 0;
-    row.entries += 1;
-    row.tokens = addTokens(row.tokens, entry.tokens);
-    row.estimated += entry.cost.estimatedUsd;
-    totals.set(key, row);
-    estimated += entry.cost.estimatedUsd;
-    if (entry.cost.actualBilledUsd === null) pending += 1;
-    else actual += entry.cost.actualBilledUsd;
-  }
+  const [entries, receipts] = await Promise.all([readLedger(), readReceipts()]);
+  const { totals, estimated, actual, pending } = aggregate(entries, receipts);
   console.log("# AI usage reimbursement summary\n");
   console.log("| Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |");
   console.log("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
@@ -516,7 +636,7 @@ async function summary() {
     console.log(`| ${key} | ${row.entries} | ${row.calls || "—"} | ${row.tokens.uncachedInput.toLocaleString()} | ${row.tokens.cacheRead.toLocaleString()} | ${writes.toLocaleString()} | ${row.tokens.output.toLocaleString()} | $${row.estimated.toFixed(2)} |`);
   }
   console.log(`\nAPI-equivalent estimate: **$${estimated.toFixed(2)}**.`);
-  console.log(`Actual billed spend evidenced so far: **$${actual.toFixed(2)}**. Receipt/subscription proof pending on ${pending} entries.`);
+  console.log(`Actual billed spend evidenced so far: **$${actual.toFixed(2)}** across ${receipts.length} receipt allocation(s). Receipt/subscription proof pending on ${pending} entries.`);
   console.log("\nThe estimate is a workload gauge, not a reimbursement claim. Use invoices or subscription receipts for the actual claim.");
 }
 
@@ -526,8 +646,9 @@ async function main() {
   if (command === "summary") return summary();
   if (command === "snapshot") return snapshot(cliArgs(rest));
   if (command === "sync") return sync(cliArgs(rest));
+  if (command === "receipt") return receipt(cliArgs(rest));
   if (command === "report") return report();
-  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|report>");
+  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|receipt|report>");
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

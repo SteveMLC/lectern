@@ -1,6 +1,6 @@
 // @ts-nocheck -- exercises the repository's JavaScript CLI module directly.
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, selectRateId, validateEntry } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, selectRateId, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -88,5 +88,45 @@ describe("usage ledger", () => {
     const seen = new Set();
     expect(validateEntry(entry, rates, seen)).toEqual([]);
     expect(validateEntry(entry, rates, seen)).toContain("duplicate id same");
+  });
+
+  it("validates an immutable private-receipt allocation", () => {
+    const entry = {
+      id: "usage-1",
+      provider: "openai",
+      cost: { actualBilledUsd: null },
+    };
+    const receipt = {
+      schemaVersion: 1,
+      id: "receipt-1",
+      recordedAt: "2026-08-10T12:00:00Z",
+      provider: "openai",
+      label: "Codex subscription — August 2026",
+      period: { start: "2026-08-01T00:00:00Z", end: "2026-08-31T23:59:59Z" },
+      amountUsd: 200,
+      receiptStatus: "evidenced_subscription_receipt",
+      source: { kind: "provider_receipt", sha256: "b".repeat(64), bytes: 1234, rawEvidence: "retained_privately" },
+      coversEntryIds: ["usage-1"],
+    };
+    expect(validateReceipt(receipt, [entry])).toEqual([]);
+  });
+
+  it("rejects double-covered usage across receipt records", () => {
+    const entries = [{ id: "usage-1", provider: "openai", cost: { actualBilledUsd: null } }];
+    const base = {
+      schemaVersion: 1,
+      recordedAt: "2026-08-10T12:00:00Z",
+      provider: "openai",
+      label: "Subscription receipt",
+      period: { start: "2026-08-01T00:00:00Z", end: "2026-08-31T23:59:59Z" },
+      amountUsd: 100,
+      receiptStatus: "evidenced_subscription_receipt",
+      source: { kind: "provider_receipt", sha256: "c".repeat(64), bytes: 100, rawEvidence: "retained_privately" },
+      coversEntryIds: ["usage-1"],
+    };
+    const covered = new Set();
+    expect(validateReceipt({ ...base, id: "receipt-1" }, entries, new Set(), covered)).toEqual([]);
+    expect(validateReceipt({ ...base, id: "receipt-2", source: { ...base.source, sha256: "d".repeat(64) } }, entries, new Set(), covered))
+      .toContain("usage entry usage-1 is covered by more than one receipt");
   });
 });

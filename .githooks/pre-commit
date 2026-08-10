@@ -7,4 +7,7 @@ fi
 
 pnpm usage:sync -- --quiet
 git add usage/ledger.jsonl usage/REPORT.md
+if [ -f usage/receipts.jsonl ]; then
+  git add usage/receipts.jsonl
+fi
 pnpm usage:check

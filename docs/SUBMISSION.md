@@ -53,7 +53,14 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 - [x] Check browser console and mobile-width admin navigation.
 - [x] Run the guarded production reset twice: 53 clean Airtable mappings, 0 remaining duplicates/orphans, strict gate 6/6.
 - [x] Add deployed URL here.
-- [ ] Record video from a clean reset; submit with buffer.
+- [x] Record and decode-validate a clean 1280×720 walkthrough; local ignored submission cut is 2:59.76, and production was reset afterward.
+- [ ] Add narration if desired, upload the walkthrough, add the organizer form URL when it is sent in Discord, and submit with buffer.
+
+## Submission Assets
+
+- Local full walkthrough: `output/playwright/speakerops-walkthrough-draft.webm` (5:23, ignored by git).
+- Local submission cut: `output/playwright/speakerops-walkthrough-submission.mp4` (2:59.76, H.264, 1280×720, ignored by git).
+- The current official brief says the form will be sent out; it does not contain a submission-form URL as of August 10, 2026. Watch the organizer Discord before final submission.
 
 ## Known Intentional Limits
 

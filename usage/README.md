@@ -7,6 +7,7 @@ Authoritative rule: [Kill My SaaS 1 brief](https://docs.google.com/document/d/1r
 ## What is committed
 
 - `ledger.jsonl` — one immutable JSON object per measured work period. It records the agent, model, token categories, artifacts/commits, sanitized session id, raw-evidence SHA-256, and line count.
+- `receipts.jsonl` — append-only receipt allocations. Each record stores a private receipt's digest, byte size, billing period, actual amount, and the usage entries it covers; the receipt itself is never committed.
 - `pricing.json` — dated official list-price snapshots used only to gauge API-equivalent workload cost.
 - `REPORT.md` — the current human-readable reimbursement summary.
 
@@ -61,10 +62,28 @@ pnpm usage:summary
 
 `pnpm verify` includes ledger validation, so duplicate ids, broken evidence hashes, negative counters, and stale cost calculations fail CI.
 
+## Record actual billed spend
+
+Keep the invoice or subscription receipt in `usage/private/`, then append a sanitized allocation record:
+
+```bash
+pnpm usage:receipt -- \
+  --file usage/private/openai-august-receipt.pdf \
+  --provider openai \
+  --label "Codex subscription — August 2026" \
+  --amount 200 \
+  --period-start 2026-08-01T00:00:00Z \
+  --period-end 2026-08-31T23:59:59Z
+```
+
+By default the command covers all uncovered entries from that provider whose work period overlaps the billing period. Use `--covers usage-id-1,usage-id-2` only when a receipt needs a narrower allocation. The command hashes the raw file, appends `receipts.jsonl`, and regenerates the report. It rejects duplicate receipt files, unknown entries, provider mismatches, and double-covered work. Use `--dry-run` to inspect the allocation first.
+
+Never revise an earlier usage entry to add billed spend. Corrections and receipts are new immutable records, preserving the original provider evidence and git history.
+
 ## Claim checklist
 
 - Keep the raw JSONL files and provider/account exports in `usage/private/`; git ignores their contents.
-- Add the matching invoice or subscription receipt to `usage/private/` and update `actualBilledUsd` plus `receiptStatus` in the corresponding ledger entry.
+- Add the matching invoice or subscription receipt to `usage/private/` and record it with `pnpm usage:receipt`; do not edit an existing ledger entry.
 - Keep plan-level charges separate from the API-equivalent estimate. Do not claim both for the same usage.
 - Preserve relevant commit hashes and artifact paths in each entry.
 - Run `pnpm usage:check` and attach the ledger/report plus requested private evidence when the organizer asks.

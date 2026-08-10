@@ -16,6 +16,7 @@
     "usage:check": "node scripts/usage-ledger.mjs check",
     "usage:summary": "node scripts/usage-ledger.mjs summary",
     "usage:report": "node scripts/usage-ledger.mjs report",
+    "usage:receipt": "node scripts/usage-ledger.mjs receipt",
     "usage:snapshot": "node scripts/usage-ledger.mjs snapshot",
     "usage:sync": "node scripts/usage-ledger.mjs sync",
     "usage:install-hooks": "node scripts/install-usage-hooks.mjs",
