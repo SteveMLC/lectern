@@ -127,7 +127,10 @@ export function validateEntry(entry, rates, seen = new Set()) {
   if (seen.has(entry.id)) errors.push(`duplicate id ${entry.id}`);
   seen.add(entry.id);
   if (Number.isNaN(Date.parse(entry.recordedAt))) errors.push("recordedAt must be ISO-8601");
-  if (Number.isNaN(Date.parse(entry.period?.start)) || Number.isNaN(Date.parse(entry.period?.end))) errors.push("period start/end must be ISO-8601");
+  const periodStart = Date.parse(entry.period?.start);
+  const periodEnd = Date.parse(entry.period?.end);
+  if (Number.isNaN(periodStart) || Number.isNaN(periodEnd)) errors.push("period start/end must be ISO-8601");
+  else if (periodEnd < periodStart) errors.push("period end must not precede period start");
   requireText("actor.name", entry.actor?.name);
   requireText("actor.surface", entry.actor?.surface);
   requireText("provider", entry.provider);
@@ -135,13 +138,42 @@ export function validateEntry(entry, rates, seen = new Set()) {
   requireText("category", entry.category);
   requireText("description", entry.description);
   if (!["provider_reported", "estimated", "manual"].includes(entry.measurement)) errors.push("measurement must be provider_reported, estimated, or manual");
-  try { normalizeTokens(entry.tokens); }
+  if (entry.calls !== null && (!Number.isSafeInteger(entry.calls) || entry.calls < 0)) errors.push("calls must be null or a non-negative integer");
+  let tokens;
+  try {
+    tokens = normalizeTokens(entry.tokens);
+    const normalizedTotal = tokens.uncachedInput + tokens.cacheRead + tokens.cacheWrite
+      + tokens.cacheWrite5m + tokens.cacheWrite1h + tokens.output;
+    if (tokens.providerTotal !== normalizedTotal) errors.push(`tokens.providerTotal ${tokens.providerTotal} does not match normalized categories ${normalizedTotal}`);
+  }
   catch (error) { errors.push(error.message); }
   requireText("source.kind", entry.source?.kind);
   requireText("source.sessionId", entry.source?.sessionId);
   if (!/^[a-f0-9]{64}$/.test(entry.source?.sha256 ?? "")) errors.push("source.sha256 must be a SHA-256 digest");
   if (!Number.isSafeInteger(entry.source?.lineCount) || entry.source.lineCount < 1) errors.push("source.lineCount must be positive");
   if (entry.source?.rawEvidence !== "retained_privately") errors.push("source.rawEvidence must be retained_privately");
+  try {
+    const cumulative = normalizeTokens(entry.source?.cumulative);
+    const cumulativeTotal = cumulative.uncachedInput + cumulative.cacheRead + cumulative.cacheWrite
+      + cumulative.cacheWrite5m + cumulative.cacheWrite1h + cumulative.output;
+    if (cumulative.providerTotal !== cumulativeTotal) errors.push(`source.cumulative.providerTotal ${cumulative.providerTotal} does not match normalized categories ${cumulativeTotal}`);
+    if (tokens) {
+      for (const key of tokenKeys) {
+        if (cumulative[key] < tokens[key]) errors.push(`source.cumulative.${key} is smaller than this entry's delta`);
+      }
+    }
+  } catch (error) { errors.push(`source.cumulative ${error.message}`); }
+  for (const [field, values] of [["commits", entry.commits], ["artifacts", entry.artifacts], ["notes", entry.notes]]) {
+    if (!Array.isArray(values) || values.some((value) => typeof value !== "string")) errors.push(`${field} must be an array of strings`);
+    else if (values.some((value) => /(?:file:\/\/|\/Users\/|\/home\/|[A-Za-z]:\\\\)/.test(value))) errors.push(`${field} must not contain absolute local paths`);
+  }
+  if (entry.cost?.kind !== "api_list_price_estimate") errors.push("cost.kind must be api_list_price_estimate");
+  if (!["pending_subscription_receipt", "pending_provider_invoice", "provider_log_reports_zero"].includes(entry.cost?.receiptStatus)) {
+    errors.push("cost.receiptStatus must identify pending subscription/provider evidence or provider-reported zero spend");
+  }
+  if (entry.cost?.receiptStatus === "provider_log_reports_zero" && entry.cost?.actualBilledUsd !== 0) {
+    errors.push("provider_log_reports_zero requires actualBilledUsd 0");
+  }
   const rate = rates[entry.cost?.rateId];
   if (!rate) errors.push(`unknown cost.rateId ${entry.cost?.rateId}`);
   else {
@@ -185,6 +217,19 @@ export function validateReceipt(receipt, entries, seen = new Set(), covered = ne
     covered.add(id);
   }
   return errors;
+}
+
+export function unexpectedTrackedPrivatePaths(paths) {
+  return paths.filter((path) => path.startsWith("usage/private/") && path !== "usage/private/README.md");
+}
+
+function trackedPrivatePaths() {
+  const result = spawnSync("git", ["ls-files", "-z", "--", "usage/private"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) throw new Error(result.stderr || "Unable to inspect tracked private evidence paths.");
+  return result.stdout.split("\0").filter(Boolean);
 }
 
 function addTokens(left, right) {
@@ -799,6 +844,7 @@ async function check() {
   const seenReceipts = new Set();
   const covered = new Set();
   failures.push(...receipts.flatMap((receipt, index) => validateReceipt(receipt, entries, seenReceipts, covered).map((message) => `receipt line ${index + 1}: ${message}`)));
+  failures.push(...unexpectedTrackedPrivatePaths(trackedPrivatePaths()).map((path) => `${path} is private reimbursement evidence and must not be tracked`));
   if (failures.length) throw new Error(`Usage ledger failed validation:\n- ${failures.join("\n- ")}`);
   const [rawLedger, rawReceipts] = await Promise.all([
     readFile(ledgerPath, "utf8"),
