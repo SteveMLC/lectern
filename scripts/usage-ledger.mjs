@@ -409,7 +409,15 @@ async function sync(options = {}) {
       captured.push(...entries);
     } catch (error) {
       if (source.required === false && error.code === "ENOENT") continue;
-      throw new Error(`Usage source ${source.name ?? source.file}: ${error.message}`);
+      // Telemetry must never block a commit. Oversized session logs (V8's
+      // string limit surfaces as "Invalid string length") and other read
+      // failures skip the source with a warning; the ledger keeps its last
+      // good entry for it and the next successful sync catches up.
+      console.warn(
+        `Usage source ${source.name ?? source.file} skipped: ${error.message}. ` +
+          `Snapshot it manually once readable.`,
+      );
+      continue;
     }
   }
   if (!options.dryRun && captured.length) await renderReport();
