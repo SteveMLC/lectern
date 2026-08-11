@@ -51,7 +51,7 @@ INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, ti
  'Two days on building software that ships.',
  'Horizon Dev Summit brings 600 engineers together for two days of talks, workshops, and panels on AI engineering, developer experience, infrastructure, and product craft.',
  '2026-10-14', '2026-10-15', 'America/Los_Angeles',
- 'Fort Mason Center, San Francisco', 'https://example.com/horizon-2026',
+ 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026',
  '2026-07-15T09:00:00Z', '2026-08-01T09:00:00Z');
 
 INSERT INTO tracks (id, event_id, name, description, color, sort_order) VALUES
@@ -288,7 +288,7 @@ We are excited to have your session at Horizon Dev Summit 2026. Our records show
 - Upload headshot (due Sep 15)
 - Upload draft slides (due Oct 1)
 
-You can complete everything in your speaker portal: https://example.com/portal
+You can complete everything in your speaker portal (linked from your acceptance email).
 
 Thanks!
 The Horizon Dev Summit 2026 team',
@@ -307,7 +307,7 @@ Welcome to Horizon Dev Summit 2026. Everything you need before the event:
 - **Slides:** 16:9, PDF or Keynote. Upload a draft by October 1.
 - **Recording:** all Main Hall sessions are recorded. Sign the release in your portal.
 - **AV:** HDMI and USB-C at the podium. Confidence monitor with timer.',
- '<iframe src="https://example.com/" title="Speaker reference example" width="100%" height="360" loading="lazy"></iframe>',
+ '<iframe src="https://speakerops.speakerops-go7.workers.dev/api/embeds/events/horizon-2026/schedule" title="Live event schedule" width="100%" height="360" loading="lazy"></iframe>',
  1, '2026-08-02T12:00:00Z');
 
 INSERT INTO integration_connections (id, event_id, system, status, config_json, updated_at) VALUES

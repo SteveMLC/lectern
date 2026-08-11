@@ -3,7 +3,6 @@ import pkg from "../../../package.json";
 import {
   AssetKind,
   AgendaSlotRequest,
-  type AirtableStatusResponse,
   CfpSubmissionRequest,
   CommunicationKind,
   type CommunicationPreviewResponse,
@@ -42,7 +41,6 @@ import { errorResponse } from "../lib/http";
 import { createRepo } from "../repo/factory";
 import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/decisionFeedback";
 import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
-import { AirtableRepo } from "../repo/airtable/airtableRepo";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const WALKTHROUGH_R2_KEY = "submission/speakerops-walkthrough-final.mp4";
@@ -363,7 +361,10 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session. An optional reasoning note is persisted as a committee review." },
       { method: "POST", path: "/events/:slug/sessions/:sessionId/schedule-notice-draft", auth: "organizer", purpose: "Draft the email telling a slotted session's speakers their confirmed day, time, and room — AI-personalized from an organizer note, slot facts guaranteed verbatim. Never auto-sends." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
-      { method: "GET", path: "/integrations/airtable/status", auth: "organizer", purpose: "Airtable proof connectivity, rate guard, and D1 fallback status." },
+      { method: "GET", path: "/airtable/status", auth: "organizer", purpose: "Airtable mirror connectivity, schema, mapped record counts, and last sync run." },
+      { method: "POST", path: "/airtable/events/:slug/sync", auth: "organizer", purpose: "Idempotently mirror one event into Airtable; re-running updates in place. ?dedupe=1&prune=1 available." },
+      { method: "GET", path: "/admin/ping", auth: "organizer", purpose: "Passcode verification (204)." },
+      { method: "GET", path: "/admin/ai-usage", auth: "organizer", purpose: "Provider-reported AI usage events for the reimbursement audit." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
       { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
@@ -531,28 +532,6 @@ api.post("/speaker-portal/:token/assets", async (c) => {
 // ---------------------------------------------------------------------------
 
 api.get("/admin/ping", organizerAuth, (c) => c.body(null, 204));
-
-api.get("/integrations/airtable/status", organizerAuth, async (c) => {
-  const configured = Boolean(c.env.AIRTABLE_TOKEN && c.env.AIRTABLE_BASE_ID);
-  let connected = false;
-  if (configured) {
-    connected = await new AirtableRepo({
-      token: c.env.AIRTABLE_TOKEN!,
-      baseId: c.env.AIRTABLE_BASE_ID!,
-    }).health();
-  }
-  const body: AirtableStatusResponse = {
-    configured,
-    active: c.env.DATA_BACKEND === "airtable",
-    connected,
-    readTables: ["Events", "Speakers"],
-    writeTable: "Messages",
-    minimumRequestSpacingMs: 210,
-    cacheTtlSeconds: 15,
-    fallback: "d1",
-  };
-  return c.json(body);
-});
 
 api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   const repo = createRepo(c.env);

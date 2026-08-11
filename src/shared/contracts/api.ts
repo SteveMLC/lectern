@@ -448,18 +448,6 @@ export const SimulateCommunicationResponse = z.object({
 });
 export type SimulateCommunicationResponse = z.infer<typeof SimulateCommunicationResponse>;
 
-export const AirtableStatusResponse = z.object({
-  configured: z.boolean(),
-  active: z.boolean(),
-  connected: z.boolean(),
-  readTables: z.tuple([z.literal("Events"), z.literal("Speakers")]),
-  writeTable: z.literal("Messages"),
-  minimumRequestSpacingMs: z.literal(210),
-  cacheTtlSeconds: z.literal(15),
-  fallback: z.literal("d1"),
-});
-export type AirtableStatusResponse = z.infer<typeof AirtableStatusResponse>;
-
 export const AirtableMirrorStatusResponse = z.object({
   configured: z.boolean(),
   reachable: z.boolean(),

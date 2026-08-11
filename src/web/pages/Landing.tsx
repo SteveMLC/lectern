@@ -9,8 +9,8 @@ const FEATURES: { title: string; body: string }[] = [
     body: "Custom fields, required validation, close dates, and conditional show/hide rules — evaluated identically in the browser and the API.",
   },
   {
-    title: "Review rounds that end in decisions",
-    body: "Rubric scoring across named rounds. Accepting a submission creates exactly one schedulable session, with lineage kept.",
+    title: "Reviews that end in decisions",
+    body: "Approve, waitlist, or deny with your reasoning saved as a committee note — and an AI-drafted decision email you review before it goes anywhere. Accepting creates exactly one schedulable session, with lineage kept.",
   },
   {
     title: "Agenda with conflict detection",
