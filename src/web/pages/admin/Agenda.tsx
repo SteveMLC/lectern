@@ -38,7 +38,7 @@ interface AgendaData {
 
 export function Agenda() {
   const { eventSlug } = useAdminContext();
-  const { data, error, loading, reload } = useAsync(async (): Promise<AgendaData> => {
+  const { data, error, loading } = useAsync(async (): Promise<AgendaData> => {
     const [bundle, agenda, speakerResponse] = await Promise.all([
       apiClient.eventBundle(eventSlug),
       apiClient.agenda(eventSlug),
@@ -56,6 +56,7 @@ export function Agenda() {
   const [dayFilter, setDayFilter] = useState("all");
   const [trackFilter, setTrackFilter] = useState("all");
   const [roomFilter, setRoomFilter] = useState("all");
+  const [directOpen, setDirectOpen] = useState(false);
 
   const agenda = agendaOverride ?? data?.agenda;
   const conflictedSessions = useMemo(
@@ -119,7 +120,6 @@ export function Agenda() {
       <PageHeader
         title="Agenda"
         subtitle="Build the program from accepted proposals and direct invited sessions. Conflicts update on every move."
-        actions={<Button variant="secondary" onClick={() => { setAgendaOverride(null); reload(); }}>Refresh</Button>}
       />
 
       {notice ? (
@@ -129,52 +129,57 @@ export function Agenda() {
       ) : null}
       {actionError ? <div className="mb-4"><ErrorBanner message={actionError} /></div> : null}
 
-      <DirectSessionForm
-        eventSlug={eventSlug}
-        tracks={data.bundle.tracks}
-        speakers={data.speakers}
-        onCreated={async (title) => {
-          await refreshAgenda();
-          setNotice(`“${title}” was added directly to the program—no submission required.`);
-        }}
-      />
-
-      <Card className="mb-5 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">Agenda projection</p>
-            <div className="mt-2 flex gap-1.5" role="group" aria-label="Agenda view">
-              <Button type="button" variant={view === "board" ? "primary" : "ghost"} onClick={() => setView("board")}>Room board</Button>
-              <Button type="button" variant={view === "list" ? "primary" : "ghost"} onClick={() => setView("list")}>List</Button>
-            </div>
+      {/* One toolbar, one container: view, filters, and the single primary
+          action live together so the board itself stays above the fold. */}
+      <Card className="mb-4 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1.5" role="group" aria-label="Agenda view">
+            <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "board" ? "primary" : "ghost"} onClick={() => setView("board")}>Room board</Button>
+            <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "list" ? "primary" : "ghost"} onClick={() => setView("list")}>List</Button>
           </div>
-          <Field label="Day">
-            <Select value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}>
-              <option value="all">All event days</option>
-              {eventDays.map((day, index) => <option key={day} value={day}>Day {index + 1} · {day}</option>)}
-            </Select>
-          </Field>
-          <Field label="Track">
-            <Select value={trackFilter} onChange={(event) => setTrackFilter(event.target.value)}>
-              <option value="all">All tracks</option>
-              {data.bundle.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
-            </Select>
-          </Field>
-          <Field label="Room">
-            <Select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
-              <option value="all">All rooms</option>
-              {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
-            </Select>
-          </Field>
+          <span aria-hidden="true" className="hidden h-5 w-px bg-zinc-200 sm:block" />
+          <Select aria-label="Filter by day" className="w-auto text-xs" value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}>
+            <option value="all">All event days</option>
+            {eventDays.map((day, index) => <option key={day} value={day}>Day {index + 1} · {day}</option>)}
+          </Select>
+          <Select aria-label="Filter by track" className="w-auto text-xs" value={trackFilter} onChange={(event) => setTrackFilter(event.target.value)}>
+            <option value="all">All tracks</option>
+            {data.bundle.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+          </Select>
+          <Select aria-label="Filter by room" className="w-auto text-xs" value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
+            <option value="all">All rooms</option>
+            {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+          </Select>
+          <div className="ml-auto">
+            <Button
+              type="button"
+              className="px-3 py-1.5 text-xs"
+              variant={directOpen ? "ghost" : "primary"}
+              title="Sponsor and invited sessions go straight onto the program — no CFP submission needed."
+              onClick={() => setDirectOpen((value) => !value)}
+            >
+              {directOpen ? "Cancel" : "Add direct session"}
+            </Button>
+          </div>
         </div>
-        <p className="mt-3 text-xs leading-5 text-zinc-500">
-          Drag any session card onto a room. Scheduled sessions keep their time; unscheduled sessions take the next open 45-minute slot. The Move button remains available for exact time editing and mobile use.
-        </p>
       </Card>
+
+      {directOpen ? (
+        <DirectSessionForm
+          eventSlug={eventSlug}
+          tracks={data.bundle.tracks}
+          speakers={data.speakers}
+          onCreated={async (title) => {
+            await refreshAgenda();
+            setDirectOpen(false);
+            setNotice(`“${title}” was added directly to the program—no submission required.`);
+          }}
+        />
+      ) : null}
 
       {agenda.conflicts.length > 0 ? (
         <div role="alert">
-        <Card className="mb-5 border-rose-300 bg-rose-50 p-4 shadow-none">
+        <Card className="mb-4 border-rose-300 bg-rose-50 p-4 shadow-none">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-rose-900">
               {agenda.conflicts.length} live schedule {agenda.conflicts.length === 1 ? "conflict" : "conflicts"}
@@ -202,6 +207,12 @@ export function Agenda() {
         <div className="grid gap-5 xl:grid-cols-[minmax(18rem,0.7fr)_minmax(0,2fr)]">
           <section>
             <SectionTitle title="Unscheduled" count={unscheduled.length} />
+            {unscheduled.length > 0 ? (
+              <p className="mb-3 text-xs leading-5 text-zinc-500">
+                Drag a card onto a room — it takes the next open 45-minute slot. Scheduled cards
+                keep their time when dragged; Move gives exact control.
+              </p>
+            ) : null}
             <div className="space-y-3">
               {unscheduled.length === 0 ? (
                 <EmptyState title="Everything is placed" body="All sessions have a day, time, and room." />
@@ -320,7 +331,6 @@ function DirectSessionForm({
   speakers: PublicSpeaker[];
   onCreated: (title: string) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [abstract, setAbstract] = useState("");
   const [format, setFormat] = useState<SessionFormat>("keynote");
@@ -345,7 +355,6 @@ function DirectSessionForm({
       setTitle("");
       setAbstract("");
       setSpeakerId("");
-      setOpen(false);
     } catch (caught) {
       setError(caught instanceof ApiRequestError ? caught.message : "Session could not be added.");
     } finally {
@@ -354,18 +363,10 @@ function DirectSessionForm({
   }
 
   return (
-    <Card className="mb-5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="font-semibold text-zinc-900">Sponsor or invited session</p>
-          <p className="mt-0.5 text-sm text-zinc-500">Add it straight to the program without manufacturing a CFP submission.</p>
-        </div>
-        <Button type="button" variant={open ? "ghost" : "primary"} onClick={() => setOpen((value) => !value)}>
-          {open ? "Cancel" : "Add direct session"}
-        </Button>
-      </div>
-      {open ? (
-        <form onSubmit={submit} className="mt-5 grid gap-4 border-t border-zinc-100 pt-5 md:grid-cols-2">
+    <Card className="mb-4 p-4">
+      <p className="font-semibold text-zinc-900">Sponsor or invited session</p>
+      <p className="mt-0.5 text-sm text-zinc-500">Goes straight onto the program — no CFP submission needed.</p>
+      <form onSubmit={submit} className="mt-4 grid gap-4 border-t border-zinc-100 pt-4 md:grid-cols-2">
           <Field label="Session title" required>
             <Input value={title} onChange={(event) => setTitle(event.target.value)} minLength={3} required />
           </Field>
@@ -396,7 +397,6 @@ function DirectSessionForm({
             <Button type="submit" disabled={saving}>{saving ? "Adding…" : "Add to program"}</Button>
           </div>
         </form>
-      ) : null}
     </Card>
   );
 }
