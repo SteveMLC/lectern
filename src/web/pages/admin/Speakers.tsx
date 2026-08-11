@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { SpeakerAvatar } from "../../components/SpeakerAvatar";
 import { Badge, Card, EmptyState, ErrorBanner, PageHeader, Spinner } from "../../components/ui";
 import { apiClient } from "../../lib/api";
 import { useAsync } from "../../lib/useAsync";
@@ -25,13 +26,18 @@ export function Speakers() {
           {data.speakers.map((speaker) => (
             <Card key={speaker.id} className="flex min-h-52 flex-col p-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-zinc-900">{speaker.name}</h2>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {[speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker"}
-                  </p>
+                <div className="flex min-w-0 items-start gap-3">
+                  <SpeakerAvatar name={speaker.name} headshotUrl={speaker.headshotUrl} />
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-zinc-900">{speaker.name}</h2>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {[speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker"}
+                    </p>
+                  </div>
                 </div>
-                <Badge tone="indigo">Portal ready</Badge>
+                <Badge tone={speaker.headshotUrl ? "indigo" : "amber"}>
+                  {speaker.headshotUrl ? "Headshot in" : "No headshot"}
+                </Badge>
               </div>
               {speaker.bio ? (
                 <p className="mt-4 flex-1 text-sm leading-6 text-zinc-600 line-clamp-3">{speaker.bio}</p>

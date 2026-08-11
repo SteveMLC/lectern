@@ -247,7 +247,7 @@ export function CfpPage() {
             <Field
               label="Short bio"
               htmlFor="bio"
-              help="Two or three sentences, third person. Shown on the public site if accepted."
+              help="Two or three sentences, third person. Shown on the public site if accepted. No headshot needed yet — if we accept you, your speaker portal will ask for it."
               error={fieldErrors["speaker.bio"]}
             >
               <Textarea

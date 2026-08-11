@@ -19,7 +19,7 @@ import {
 } from "../../components/ui";
 import { DecisionControls } from "../../components/DecisionControls";
 import { ApiRequestError, apiClient, getPasscode } from "../../lib/api";
-import { STATUS_LABEL, STATUS_TONE, formatDateTime } from "../../lib/status";
+import { STATUS_LABEL, STATUS_TONE, formatDateTime, pipelineStage } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
@@ -260,17 +260,18 @@ function SubmissionRow({
   const speakerLine = submission.speakers
     .map((sp) => (sp.company ? `${sp.name} (${sp.company})` : sp.name))
     .join(", ");
+  const stage = pipelineStage(submission);
 
   return (
     <tr className="border-b border-zinc-100 align-top last:border-0 hover:bg-zinc-50/70">
-      <td className="max-w-96 px-4 py-4">
-        <p className="font-medium text-zinc-900">{submission.title}</p>
-        <p className="mt-1 max-h-10 overflow-hidden text-xs leading-5 text-zinc-500">
-          {submission.abstract}
-        </p>
+      {/* The title has to stay readable: without a floor the decision column's
+          min width squeezes this to one word per line. */}
+      <td className="min-w-64 px-4 py-4">
+        <p className="font-medium leading-snug text-zinc-900">{submission.title}</p>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{submission.abstract}</p>
       </td>
-      <td className="max-w-60 px-4 py-4">
-        <p className="truncate text-sm text-zinc-700" title={speakerLine}>
+      <td className="min-w-44 px-4 py-4">
+        <p className="text-sm leading-snug text-zinc-700">
           {speakerLine || "No speaker attached"}
         </p>
         <p className="mt-1 truncate text-xs text-zinc-500" title={submission.speakers[0]?.email}>
@@ -278,11 +279,12 @@ function SubmissionRow({
         </p>
       </td>
       <td className="px-4 py-4">
-        <p className="text-sm text-zinc-700">{submission.trackName ?? "Unassigned"}</p>
+        <p className="text-sm leading-snug text-zinc-700">{submission.trackName ?? "Unassigned"}</p>
         <p className="mt-1 text-xs capitalize text-zinc-500">{submission.format}</p>
       </td>
       <td className="px-4 py-4">
-        <Badge tone={STATUS_TONE[submission.status]}>{STATUS_LABEL[submission.status]}</Badge>
+        <Badge tone={stage.tone}>{stage.label}</Badge>
+        <p className="mt-1 whitespace-nowrap text-[11px] text-zinc-400">{stage.detail}</p>
       </td>
       <td className="px-4 py-4">
         <CompletenessIndicator submission={submission} />

@@ -146,8 +146,19 @@ function embedDocument(title: string, body: string): Response {
     .abstract { color: #3f3f46; font-size: 13px; line-height: 1.55; margin: 8px 0 0; }
     .pill { border-radius: 999px; display: inline-flex; font-size: 11px; font-weight: 700; padding: 2px 8px; }
     .empty { border: 1px dashed #d4d4d8; border-radius: 8px; color: #71717a; font-size: 13px; padding: 16px; text-align: center; }
-    .speaker { display: grid; gap: 4px; }
+    .speaker { display: flex; gap: 12px; align-items: flex-start; }
+    .speaker-body { display: grid; gap: 4px; min-width: 0; }
     .speaker-name { font-size: 15px; font-weight: 700; }
+    .avatar { border-radius: 999px; flex-shrink: 0; height: 48px; object-fit: cover; width: 48px; }
+    .avatar-initials { align-items: center; background: #eef2ff; color: #4338ca; display: flex; font-size: 15px;
+                       font-weight: 700; justify-content: center; }
+    .day { border-bottom: 1px solid #e4e4e7; color: #18181b; font-size: 13px; font-weight: 700; margin: 16px 0 2px;
+           padding-bottom: 6px; }
+    .day:first-of-type { margin-top: 4px; }
+    .time { color: #4338ca; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+    .group { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 16px 0 2px;
+             text-transform: uppercase; }
+    .group:first-of-type { margin-top: 4px; }
     @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
   </style>
 </head>
@@ -157,18 +168,32 @@ function embedDocument(title: string, body: string): Response {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "public, max-age=60",
-        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
+        // img-src 'self' is required or headshots silently vanish: with
+        // default-src 'none' the browser blocks them and the gallery renders
+        // as broken alt text. Scripts stay forbidden.
+        "content-security-policy":
+          "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
       },
     },
   );
 }
 
-function formatEmbedDateTime(value: string, timezone: string): string {
+/** "Wednesday, October 14" — the day header on the schedule embed. */
+function formatEmbedDay(value: string, timezone: string): string {
   return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
     timeZone: timezone,
   }).format(new Date(value));
+}
+
+/** Initials for the speaker embed's no-headshot tile. */
+function embedInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
 }
 
 function formatEmbedTime(value: string, timezone: string): string {
@@ -184,53 +209,83 @@ function sessionSpeakers(speakers: PublicSessionsResponse["sessions"][number]["s
   return speakers.map((speaker) => escapeHtml(speaker.name)).join(", ");
 }
 
+/**
+ * Schedule: the agenda as an attendee reads it — grouped by day, ordered by
+ * time, showing only what is actually placed. Distinct on purpose from the
+ * sessions embed, which is the catalogue.
+ */
 function renderScheduleEmbed(data: PublicScheduleResponse): Response {
-  const items =
-    data.slots.length === 0
-      ? `<div class="empty">Schedule coming soon.</div>`
-      : data.slots
+  let body: string;
+  if (data.slots.length === 0) {
+    body = `<div class="empty">Schedule coming soon.</div>`;
+  } else {
+    const byDay = new Map<string, typeof data.slots>();
+    for (const slot of data.slots) {
+      const day = formatEmbedDay(slot.startsAt, data.timezone);
+      byDay.set(day, [...(byDay.get(day) ?? []), slot]);
+    }
+    body = [...byDay.entries()]
+      .map(([day, slots]) => {
+        const items = slots
           .map((slot) => {
             const track = slot.session.track;
-            const starts = formatEmbedDateTime(slot.startsAt, data.timezone);
+            const starts = formatEmbedTime(slot.startsAt, data.timezone);
             const ends = formatEmbedTime(slot.endsAt, data.timezone);
             return `<article class="item">
   <div class="row">
     <p class="title">${escapeHtml(slot.session.title)}</p>
     ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
   </div>
-  <div class="meta">${escapeHtml(starts)}-${escapeHtml(ends)}${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${sessionSpeakers(slot.session.speakers)}</div>
+  <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${sessionSpeakers(slot.session.speakers)}</div>
   <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
 </article>`;
           })
           .join("");
+        return `<h2 class="day">${escapeHtml(day)}</h2><section class="stack">${items}</section>`;
+      })
+      .join("");
+  }
 
   return embedDocument(
     `${data.event.name} schedule`,
-    `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">${escapeHtml(data.timezone)}</div></header><section class="stack">${items}</section>`,
+    `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">By day and time · ${escapeHtml(data.timezone)}</div></header>${body}`,
   );
 }
 
+/**
+ * Sessions: the full catalogue grouped by track, including talks that have
+ * no slot yet. An attendee browsing topics wants this; an attendee planning
+ * their day wants the schedule.
+ */
 function renderSessionsEmbed(data: PublicSessionsResponse): Response {
-  const items =
-    data.sessions.length === 0
-      ? `<div class="empty">Sessions coming soon.</div>`
-      : data.sessions
-          .map((session) => {
-            const track = session.track;
-            return `<article class="item">
-  <div class="row">
-    <p class="title">${escapeHtml(session.title)}</p>
-    ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
-  </div>
+  let body: string;
+  if (data.sessions.length === 0) {
+    body = `<div class="empty">Sessions coming soon.</div>`;
+  } else {
+    const byTrack = new Map<string, typeof data.sessions>();
+    for (const session of data.sessions) {
+      const track = session.track?.name ?? "Unassigned track";
+      byTrack.set(track, [...(byTrack.get(track) ?? []), session]);
+    }
+    body = [...byTrack.entries()]
+      .map(([track, sessions]) => {
+        const items = sessions
+          .map(
+            (session) => `<article class="item">
+  <p class="title">${escapeHtml(session.title)}</p>
   <div class="meta">${escapeHtml(session.format)} · ${sessionSpeakers(session.speakers)}</div>
   <p class="abstract">${escapeHtml(session.abstract)}</p>
-</article>`;
-          })
+</article>`,
+          )
           .join("");
+        return `<h2 class="group">${escapeHtml(track)} · ${sessions.length}</h2><section class="stack">${items}</section>`;
+      })
+      .join("");
+  }
 
   return embedDocument(
     `${data.event.name} sessions`,
-    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1></header><section class="stack">${items}</section>`,
+    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">The full catalogue, grouped by track</div></header>${body}`,
   );
 }
 
@@ -241,9 +296,16 @@ function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
       : data.speakers
           .map(
             (speaker) => `<article class="item speaker">
-  <div class="speaker-name">${escapeHtml(speaker.name)}</div>
-  <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
-  ${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : ""}
+  ${
+    speaker.headshotUrl
+      ? `<img class="avatar" src="${escapeHtml(speaker.headshotUrl)}" alt="${escapeHtml(speaker.name)} headshot" loading="lazy" />`
+      : `<span class="avatar avatar-initials" aria-hidden="true">${escapeHtml(embedInitials(speaker.name))}</span>`
+  }
+  <div class="speaker-body">
+    <div class="speaker-name">${escapeHtml(speaker.name)}</div>
+    <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
+    ${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : ""}
+  </div>
 </article>`,
           )
           .join("");

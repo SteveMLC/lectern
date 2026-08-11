@@ -13,7 +13,7 @@ import {
 } from "../../components/ui";
 import { DecisionControls } from "../../components/DecisionControls";
 import { ApiRequestError, apiClient } from "../../lib/api";
-import { STATUS_LABEL, STATUS_TONE } from "../../lib/status";
+import { pipelineStage } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
@@ -108,7 +108,7 @@ export function Reviews() {
         </div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         <ScopeChip active={scope === "pending"} onClick={() => setScope("pending")}>
           Needs decision · {pendingCount}
         </ScopeChip>
@@ -116,6 +116,14 @@ export function Reviews() {
           All · {submissions.length}
         </ScopeChip>
       </div>
+
+      <p className="mb-4 text-xs leading-5 text-zinc-500">
+        <span className="font-medium text-zinc-700">Where a proposal stands</span> is derived from
+        the record, not a label someone remembered to set: <em>Awaiting first look</em> means no
+        committee notes yet, <em>Under review</em> means a reviewer has weighed in, then
+        Accepted, Waitlisted, or Denied. Every decision you make here saves your reasoning as a
+        committee note.
+      </p>
 
       {loading ? (
         <Spinner label="Loading review queue" />
@@ -183,6 +191,7 @@ function ReviewCard({
 }) {
   const primary = submission.speakers[0];
   const facts = answerFacts(submission.answers);
+  const stage = pipelineStage(submission);
 
   return (
     <Card className="flex flex-col p-5">
@@ -195,7 +204,10 @@ function ReviewCard({
             {submission.title}
           </h2>
         </div>
-        <Badge tone={STATUS_TONE[submission.status]}>{STATUS_LABEL[submission.status]}</Badge>
+        <div className="shrink-0 text-right">
+          <Badge tone={stage.tone}>{stage.label}</Badge>
+          <p className="mt-1 text-[11px] text-zinc-400">{stage.detail}</p>
+        </div>
       </div>
 
       <p className="mt-3 flex-1 text-sm leading-6 text-zinc-600">{submission.abstract}</p>

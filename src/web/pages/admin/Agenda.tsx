@@ -472,9 +472,27 @@ function SessionCard({
       onDragEnd={onDragEnd}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-medium leading-snug text-zinc-900">{session.title}</p>
-          <p className="mt-1 truncate text-xs text-zinc-500">{speakers || "Speaker TBA"}</p>
+        <div className="flex min-w-0 items-start gap-2">
+          {draggable ? (
+            <span
+              aria-hidden="true"
+              title="Drag onto any room"
+              className="mt-0.5 shrink-0 text-zinc-300"
+            >
+              <svg viewBox="0 0 16 16" className="size-4" fill="currentColor">
+                <circle cx="6" cy="4" r="1.3" />
+                <circle cx="10" cy="4" r="1.3" />
+                <circle cx="6" cy="8" r="1.3" />
+                <circle cx="10" cy="8" r="1.3" />
+                <circle cx="6" cy="12" r="1.3" />
+                <circle cx="10" cy="12" r="1.3" />
+              </svg>
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <p className="font-medium leading-snug text-zinc-900">{session.title}</p>
+            <p className="mt-1 truncate text-xs text-zinc-500">{speakers || "Speaker TBA"}</p>
+          </div>
         </div>
         <Badge tone={session.origin === "direct" ? "violet" : "sky"}>{session.origin === "direct" ? "Direct" : "CFP"}</Badge>
       </div>

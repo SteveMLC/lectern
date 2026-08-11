@@ -102,6 +102,12 @@ export const PublicSpeaker = z.object({
   bio: z.string().nullable(),
   location: z.string().nullable(),
   socials: z.record(z.string(), z.string()).nullable(),
+  /**
+   * The speaker's most recent headshot, uploaded through their portal.
+   * Null until they upload one — surfaces render initials in the meantime,
+   * so a gallery is never a wall of broken images.
+   */
+  headshotUrl: z.string().nullable(),
 });
 export type PublicSpeaker = z.infer<typeof PublicSpeaker>;
 

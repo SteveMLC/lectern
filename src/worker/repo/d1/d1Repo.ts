@@ -396,7 +396,7 @@ function mapSpeaker(r: SpeakerRow): Speaker {
   };
 }
 
-function mapPublicSpeaker(r: SpeakerRow): PublicSpeaker {
+function mapPublicSpeaker(r: SpeakerRow & { headshot_asset_id?: string | null }): PublicSpeaker {
   return {
     id: r.id,
     name: r.name,
@@ -405,6 +405,7 @@ function mapPublicSpeaker(r: SpeakerRow): PublicSpeaker {
     bio: r.bio,
     location: r.location,
     socials: parseJson<PublicSpeaker["socials"]>(r.socials_json, null),
+    headshotUrl: r.headshot_asset_id ? `/api/assets/${r.headshot_asset_id}` : null,
   };
 }
 
@@ -754,9 +755,16 @@ export class D1Repo implements SpeakerOpsRepo {
       .first<EventRow>();
     if (!event) return null;
 
+    // The headshot is whichever one the speaker uploaded most recently; the
+    // correlated subquery keeps this a single round trip.
     const { results } = await this.db
       .prepare(
-        `SELECT sp.*
+        `SELECT sp.*,
+                (SELECT sa.id
+                   FROM speaker_assets sa
+                  WHERE sa.speaker_id = sp.id AND sa.kind = 'headshot'
+                  ORDER BY sa.uploaded_at DESC
+                  LIMIT 1) AS headshot_asset_id
          FROM speakers sp
          WHERE EXISTS (
            SELECT 1
@@ -769,7 +777,7 @@ export class D1Repo implements SpeakerOpsRepo {
          ORDER BY sp.name`,
       )
       .bind(event.id)
-      .all<SpeakerRow>();
+      .all<SpeakerRow & { headshot_asset_id: string | null }>();
 
     return {
       event: mapEventSummary(event),
