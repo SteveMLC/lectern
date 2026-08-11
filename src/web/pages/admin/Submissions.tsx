@@ -33,6 +33,7 @@ interface DecisionState {
     decision: ReviewDecision,
     reasoning: string,
     sessionTitle?: string,
+    reviewerName?: string,
   ) => Promise<void>;
 }
 
@@ -55,6 +56,7 @@ export function Submissions() {
     decision: ReviewDecision,
     reasoning: string,
     sessionTitle?: string,
+    reviewerName?: string,
   ) {
     setBusyId(submission.id);
     setNotice(null);
@@ -64,6 +66,7 @@ export function Submissions() {
         decision,
         reasoning,
         sessionTitle,
+        reviewerName,
       });
       if (decision === "approve") {
         setNotice(

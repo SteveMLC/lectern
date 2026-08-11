@@ -245,6 +245,13 @@ export const SubmissionDecisionRequest = z.object({
    */
   reasoning: z.string().trim().max(2000).default(""),
   /**
+   * Who this note is filed under. Absent means the default "Organizer" —
+   * a single decider never touches this. A team types names and the notes
+   * stack per person instead of replacing each other. A label, not an
+   * account: the passcode stays the trust boundary.
+   */
+  reviewerName: z.string().trim().max(120).optional(),
+  /**
    * Approve only: the title/abstract the session should carry in the
    * program, when the organizer retitles on approval. The submission keeps
    * what the speaker pitched. Absent or empty keeps the original.

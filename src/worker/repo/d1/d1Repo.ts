@@ -44,7 +44,7 @@ import type {
   UpdateSpeakerTaskInput,
 } from "../types";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
-import { canApplyDecision, statusForDecision } from "../../../shared/domain/decisions";
+import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
 
 // ---------------------------------------------------------------------------
@@ -992,10 +992,12 @@ export class D1Repo implements SpeakerOpsRepo {
     submissionId: string,
     decision: DecideSubmissionInput["decision"],
     reasoning: string | undefined,
+    reviewerName: string | undefined,
     now: string,
   ): Promise<D1PreparedStatement[]> {
     const note = reasoning?.trim();
     if (!note) return [];
+    const reviewer = reviewerIdentity(reviewerName);
 
     const statements: D1PreparedStatement[] = [];
     const existingRound = await this.db
@@ -1036,13 +1038,23 @@ export class D1Repo implements SpeakerOpsRepo {
         .prepare(
           `INSERT INTO reviews
              (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at)
-           VALUES (?1, ?2, ?3, 'Organizer', 'organizer@speakerops.local', '{}', ?4, ?5, ?6)
+           VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?7, ?8)
            ON CONFLICT(round_id, submission_id, reviewer_email) DO UPDATE SET
+             reviewer_name = excluded.reviewer_name,
              overall_comment = excluded.overall_comment,
              recommendation = excluded.recommendation,
              submitted_at = excluded.submitted_at`,
         )
-        .bind(`rev_${crypto.randomUUID().slice(0, 8)}`, roundId, submissionId, note, recommendation, now),
+        .bind(
+          `rev_${crypto.randomUUID().slice(0, 8)}`,
+          roundId,
+          submissionId,
+          reviewer.name,
+          reviewer.email,
+          note,
+          recommendation,
+          now,
+        ),
     );
     return statements;
   }
@@ -1059,6 +1071,7 @@ export class D1Repo implements SpeakerOpsRepo {
       submission.id,
       input.decision,
       input.reasoning,
+      input.reviewerName,
       input.now,
     );
 

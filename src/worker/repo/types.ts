@@ -75,6 +75,8 @@ export interface DecideSubmissionInput {
   decision: "approve" | "maybe" | "deny";
   /** Internal note; persisted as a committee review when non-empty. */
   reasoning?: string;
+  /** Who the note is filed under; empty means the default Organizer. */
+  reviewerName?: string;
   /** Approve only: program title/abstract, when retitled on approval. */
   sessionTitle?: string;
   sessionAbstract?: string;

@@ -46,6 +46,7 @@ export function Reviews() {
     decision: ReviewDecision,
     reasoning: string,
     sessionTitle?: string,
+    reviewerName?: string,
   ) {
     setBusyId(submission.id);
     setActionError(null);
@@ -55,6 +56,7 @@ export function Reviews() {
         decision,
         reasoning,
         sessionTitle,
+        reviewerName,
       });
       if (decision === "approve") {
         setNotice(
@@ -198,6 +200,7 @@ function ReviewCard({
     decision: ReviewDecision,
     reasoning: string,
     sessionTitle?: string,
+    reviewerName?: string,
   ) => Promise<void>;
 }) {
   const primary = submission.speakers[0];

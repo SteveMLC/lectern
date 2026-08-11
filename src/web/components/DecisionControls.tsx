@@ -63,6 +63,12 @@ interface FlowState {
   decision: ReviewDecision;
   stage: "reasoning" | "drafting" | "editing";
   reasoning: string;
+  /**
+   * Who the note is filed under. Empty means the default Organizer — the
+   * single-decider path stays zero-typing. Remembered per tab so a named
+   * reviewer working a queue types their name once.
+   */
+  reviewerName: string;
   /** Approve only: the title the program will use. Starts as the pitch. */
   sessionTitle: string;
   draft?: FeedbackDraftResponse;
@@ -71,6 +77,8 @@ interface FlowState {
   error?: string;
   sending?: boolean;
 }
+
+const REVIEWER_NAME_KEY = "speakerops.reviewer.name";
 
 const FLOW_COPY: Record<
   ReviewDecision,
@@ -125,6 +133,7 @@ export function DecisionControls({
     decision: ReviewDecision,
     reasoning: string,
     sessionTitle?: string,
+    reviewerName?: string,
   ) => Promise<void>;
   compact?: boolean;
 }) {
@@ -150,10 +159,18 @@ export function DecisionControls({
       decision,
       stage: "reasoning",
       reasoning: "",
+      reviewerName: sessionStorage.getItem(REVIEWER_NAME_KEY) ?? "",
       sessionTitle: submission.title,
       subject: "",
       body: "",
     });
+  }
+
+  function rememberReviewer(current: FlowState) {
+    const name = current.reviewerName.trim();
+    if (name) sessionStorage.setItem(REVIEWER_NAME_KEY, name);
+    else sessionStorage.removeItem(REVIEWER_NAME_KEY);
+    return name || undefined;
   }
 
   async function draftEmail(current: FlowState) {
@@ -191,7 +208,13 @@ export function DecisionControls({
         });
       }
       setFlow(null);
-      await onDecide(submission, current.decision, current.reasoning, current.sessionTitle);
+      await onDecide(
+        submission,
+        current.decision,
+        current.reasoning,
+        current.sessionTitle,
+        rememberReviewer(current),
+      );
     } catch (error) {
       setFlow({
         ...current,
@@ -203,7 +226,13 @@ export function DecisionControls({
 
   async function commitWithoutEmail(current: FlowState) {
     setFlow(null);
-    await onDecide(submission, current.decision, current.reasoning, current.sessionTitle);
+    await onDecide(
+      submission,
+      current.decision,
+      current.reasoning,
+      current.sessionTitle,
+      rememberReviewer(current),
+    );
   }
 
   const copy = flow ? FLOW_COPY[flow.decision] : null;
@@ -286,6 +315,26 @@ export function DecisionControls({
                 className="mt-2 min-h-20 bg-white text-xs"
                 disabled={flow.stage === "drafting"}
               />
+              <div className="mt-2 flex items-center gap-2">
+                <label
+                  htmlFor={`reviewer-name-${submission.id}`}
+                  className="shrink-0 text-[11px] font-medium text-zinc-600"
+                >
+                  Reviewing as
+                </label>
+                <input
+                  id={`reviewer-name-${submission.id}`}
+                  value={flow.reviewerName}
+                  onChange={(e) => setFlow({ ...flow, reviewerName: e.target.value })}
+                  placeholder="Organizer"
+                  maxLength={120}
+                  className="w-40 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-900 focus:border-accent focus:outline-none"
+                  disabled={flow.stage === "drafting"}
+                />
+                <span className="text-[10px] leading-3 text-zinc-400">
+                  Notes stack per name — solo? Leave it.
+                </span>
+              </div>
               {flow.error ? (
                 <p className="mt-1 text-xs font-medium text-rose-600">{flow.error}</p>
               ) : null}

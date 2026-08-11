@@ -46,9 +46,11 @@ Everything is walkable right now:
    system derives, or kind, specific feedback for deny/waitlist. Approving
    also lets you retitle the talk for the program while the submission keeps
    what the speaker pitched. The note persists as a committee review on the
-   card, approval creates exactly one session idempotently, and nothing
-   auto-sends. AI proposes, the human approves; an honest template takes
-   over when no key is configured.
+   card — one decider by default, but type a name in "Reviewing as" and
+   multiple named notes stack on one proposal instead of overwriting, a
+   committee only when you need one. Approval creates exactly one session
+   idempotently, and nothing auto-sends. AI proposes, the human approves;
+   an honest template takes over when no key is configured.
 3. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Then "Notify speakers": Claude drafts the schedule notice telling every

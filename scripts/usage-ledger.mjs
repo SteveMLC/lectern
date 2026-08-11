@@ -377,13 +377,21 @@ export function parseClaude(records, options = {}) {
   return [...groups.entries()].map(([model, rows]) => {
     const tokens = rows.reduce((sum, row) => {
       const usage = row.message.usage;
+      const cacheWrite5m = asInt(usage.cache_creation?.ephemeral_5m_input_tokens);
+      const cacheWrite1h = asInt(usage.cache_creation?.ephemeral_1h_input_tokens);
+      // providerTotal must equal the categories we actually record, or the
+      // entry contradicts itself and validateEntry rejects it. Claude logs
+      // can report cache_creation_input_tokens slightly out of step with the
+      // 5m/1h breakout, so the breakout — which is what cost is computed
+      // from — is the number that has to add up.
       return addTokens(sum, {
         uncachedInput: usage.input_tokens,
         cacheRead: usage.cache_read_input_tokens,
-        cacheWrite5m: usage.cache_creation?.ephemeral_5m_input_tokens,
-        cacheWrite1h: usage.cache_creation?.ephemeral_1h_input_tokens,
+        cacheWrite5m,
+        cacheWrite1h,
         output: usage.output_tokens,
-        providerTotal: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.output_tokens ?? 0),
+        providerTotal: asInt(usage.input_tokens) + asInt(usage.cache_read_input_tokens)
+          + cacheWrite5m + cacheWrite1h + asInt(usage.output_tokens),
       });
     }, {});
     const timestamps = rows.map((row) => row.timestamp).sort();

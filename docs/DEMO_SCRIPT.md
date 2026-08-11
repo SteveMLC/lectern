@@ -71,6 +71,11 @@ Click **Deny** on a weaker proposal. The reasoning box opens.
 > why, bluntly, the way I'd say it in the committee room…"
 
 Type on camera: `ran this topic last year; abstract has no real numbers; would love a workshop version instead`
+Optionally point at the **Reviewing as** field:
+> "Most conferences aren't run by a committee — one person calls it. So by default this is
+> just me. But if I want a second voice, I type a name and their note stacks on the card
+> instead of overwriting mine. A committee only when you need one — no plans to configure."
+
 Click **Draft feedback email**. Wait the ~2 seconds. Point at the badge.
 > "…and Claude turns my blunt notes into a thoughtful, specific email — the decision
 > stays unmistakable, my reasons become feedback the speaker can actually use. I can
