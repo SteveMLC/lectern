@@ -257,6 +257,37 @@ export const FeedbackDraftResponse = z.object({
 });
 export type FeedbackDraftResponse = z.infer<typeof FeedbackDraftResponse>;
 
+// ---------------------------------------------------------------------------
+// Schedule notices (organizer)
+// ---------------------------------------------------------------------------
+
+export const ScheduleNoticeDraftRequest = z.object({
+  /** Organizer's optional internal note; personalizes the draft, never quoted. */
+  note: z.string().trim().max(2000).default(""),
+});
+export type ScheduleNoticeDraftRequest = z.infer<typeof ScheduleNoticeDraftRequest>;
+
+export const ScheduleNoticeRecipient = z.object({
+  speakerId: z.string(),
+  name: z.string(),
+  email: z.email(),
+});
+export type ScheduleNoticeRecipient = z.infer<typeof ScheduleNoticeRecipient>;
+
+export const ScheduleNoticeDraftResponse = z.object({
+  subject: z.string(),
+  bodyMd: z.string(),
+  aiUsed: z.boolean(),
+  model: z.string().optional(),
+  note: z.string().optional(),
+  /** Human-readable slot in the event timezone, e.g. "Thursday, September 10 · 2:30 – 3:15 PM PDT". */
+  slotSummary: z.string(),
+  scheduleUrl: z.string(),
+  icsUrl: z.string(),
+  recipients: z.array(ScheduleNoticeRecipient),
+});
+export type ScheduleNoticeDraftResponse = z.infer<typeof ScheduleNoticeDraftResponse>;
+
 export const SubmissionDecisionResponse = z.object({
   submission: SubmissionListItem,
   session: Session.nullable(),

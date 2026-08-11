@@ -90,6 +90,15 @@ Click **Add direct session**, create "Sponsor Keynote" with a speaker, place it.
 > "Sponsor keynotes never went through the CFP — that's a first-class path, not a fake
 > submission."
 
+Click **Notify speakers →** on the session you just moved (lands in Communications,
+prefilled). Click **Draft schedule notice**. Point at the slot line.
+> "And the schedule doesn't move in silence — one click, and Claude drafts the email
+> telling the speaker their exact new day, time, and room. The slot facts are required
+> verbatim — the model is never allowed to restate a time in its own words. Dragging
+> never fires an email; I decide when the schedule speaks."
+
+Click **Send (simulated) to 1 speaker**.
+
 **2:30 — Speaker portal (Speakers → Open speaker portal on the new speaker)**
 > "The speaker I just accepted already has an onboarding checklist — derived the moment
 > they joined the program."

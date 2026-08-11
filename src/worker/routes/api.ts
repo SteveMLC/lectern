@@ -20,6 +20,8 @@ import {
   SubmissionDecisionRequest,
   type SubmissionDecisionResponse,
   FeedbackDraftRequest,
+  ScheduleNoticeDraftRequest,
+  type ScheduleNoticeDraftResponse,
   type FeedbackDraftResponse,
   type SpeakerPortalResponse,
   SimulateCommunicationRequest,
@@ -38,7 +40,8 @@ import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
 import { errorResponse } from "../lib/http";
 import { createRepo } from "../repo/factory";
-import { draftDecisionFeedback } from "../integrations/decisionFeedback";
+import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/decisionFeedback";
+import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
 import { AirtableRepo } from "../repo/airtable/airtableRepo";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -358,6 +361,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/submissions.csv", auth: "organizer", purpose: "Submissions export as CSV (Excel-friendly)." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft the decision email (acceptance, waitlist, or rejection) from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Acceptances carry the speaker's portal link and onboarding checklist. Never auto-sends." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session. An optional reasoning note is persisted as a committee review." },
+      { method: "POST", path: "/events/:slug/sessions/:sessionId/schedule-notice-draft", auth: "organizer", purpose: "Draft the email telling a slotted session's speakers their confirmed day, time, and room — AI-personalized from an organizer note, slot facts guaranteed verbatim. Never auto-sends." },
       { method: "GET", path: "/events/:slug/counts", auth: "organizer", purpose: "Organizer dashboard counts." },
       { method: "GET", path: "/integrations/airtable/status", auth: "organizer", purpose: "Airtable proof connectivity, rate guard, and D1 fallback status." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
@@ -669,43 +673,147 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
     { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
   );
 
-  if (draft.providerEvidence) {
-    const evidence = draft.providerEvidence;
-    const occurredAt = new Date().toISOString();
-    const canonical = JSON.stringify({
-      provider: "anthropic",
-      requestId: evidence.requestId,
-      model: evidence.model,
-      purpose: "decision_feedback_draft",
-      usage: evidence.usage,
-    });
-    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
-    const evidenceSha256 = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const usage = evidence.usage;
-    await c.env.DB.prepare(
-      `INSERT OR IGNORE INTO ai_usage_events (
-         id, provider, provider_request_id, model, purpose, occurred_at,
-         input_tokens, cache_creation_input_tokens, cache_creation_5m_input_tokens,
-         cache_creation_1h_input_tokens, cache_read_input_tokens, output_tokens,
-         evidence_sha256, measurement
-       ) VALUES (?1, 'anthropic', ?2, ?3, 'decision_feedback_draft', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'provider_reported')`,
-    ).bind(
-      randomId("aiu"),
-      evidence.requestId,
-      evidence.model,
-      occurredAt,
-      usage.inputTokens,
-      usage.cacheCreationInputTokens,
-      usage.cacheCreation5mInputTokens,
-      usage.cacheCreation1hInputTokens,
-      usage.cacheReadInputTokens,
-      usage.outputTokens,
-      evidenceSha256,
-    ).run();
-  }
+  await recordAiUsageEvent(c.env, "decision_feedback_draft", draft.providerEvidence);
 
   const { providerEvidence: _privateProviderEvidence, ...publicDraft } = draft;
   const body: FeedbackDraftResponse = publicDraft;
+  return c.json(body);
+});
+
+/** Provider-reported usage into the tamper-evident reimbursement ledger. */
+async function recordAiUsageEvent(
+  env: Env,
+  purpose: string,
+  evidence: ProviderEvidence | undefined,
+): Promise<void> {
+  if (!evidence) return;
+  const occurredAt = new Date().toISOString();
+  const canonical = JSON.stringify({
+    provider: "anthropic",
+    requestId: evidence.requestId,
+    model: evidence.model,
+    purpose,
+    usage: evidence.usage,
+  });
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  const evidenceSha256 = [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const usage = evidence.usage;
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO ai_usage_events (
+       id, provider, provider_request_id, model, purpose, occurred_at,
+       input_tokens, cache_creation_input_tokens, cache_creation_5m_input_tokens,
+       cache_creation_1h_input_tokens, cache_read_input_tokens, output_tokens,
+       evidence_sha256, measurement
+     ) VALUES (?1, 'anthropic', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'provider_reported')`,
+  ).bind(
+    randomId("aiu"),
+    evidence.requestId,
+    evidence.model,
+    purpose,
+    occurredAt,
+    usage.inputTokens,
+    usage.cacheCreationInputTokens,
+    usage.cacheCreation5mInputTokens,
+    usage.cacheCreation1hInputTokens,
+    usage.cacheReadInputTokens,
+    usage.outputTokens,
+    evidenceSha256,
+  ).run();
+}
+
+/**
+ * Draft the schedule notice for a slotted session's speakers. Deliberate,
+ * never fired by dragging: the organizer asks, reviews, edits, and sends.
+ * Slot facts are formatted server-side in the event timezone and guaranteed
+ * into the draft whatever the model does.
+ */
+api.post("/events/:slug/sessions/:sessionId/schedule-notice-draft", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = ScheduleNoticeDraftRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Schedule notice request is invalid.", parsed.error.issues);
+  }
+
+  const sessionId = c.req.param("sessionId");
+  const sessionRow = await c.env.DB.prepare(
+    "SELECT id, event_id, title FROM sessions WHERE id = ?1",
+  )
+    .bind(sessionId)
+    .first<{ id: string; event_id: string; title: string }>();
+  if (!sessionRow || sessionRow.event_id !== bundle.event.id) {
+    return errorResponse(404, "session_not_found", "No session with that id for this event.");
+  }
+
+  const slot = await c.env.DB.prepare(
+    "SELECT room_id, starts_at, ends_at FROM agenda_slots WHERE session_id = ?1",
+  )
+    .bind(sessionId)
+    .first<{ room_id: string | null; starts_at: string; ends_at: string }>();
+  if (!slot) {
+    return errorResponse(
+      409,
+      "session_not_scheduled",
+      "Place the session on the agenda first — a schedule notice needs a confirmed slot.",
+    );
+  }
+
+  const speakersRes = await c.env.DB.prepare(
+    `SELECT sp.id, sp.name, sp.email
+     FROM session_speakers ss
+     JOIN speakers sp ON sp.id = ss.speaker_id
+     WHERE ss.session_id = ?1
+     ORDER BY ss.sort_order`,
+  )
+    .bind(sessionId)
+    .all<{ id: string; name: string; email: string }>();
+  const recipients = (speakersRes.results ?? []).map((row) => ({
+    speakerId: row.id,
+    name: row.name,
+    email: row.email,
+  }));
+  if (recipients.length === 0) {
+    return errorResponse(409, "no_speakers", "Attach a speaker to the session before sending a notice.");
+  }
+
+  const origin = new URL(c.req.url).origin;
+  const room = slot.room_id ? bundle.rooms.find((candidate) => candidate.id === slot.room_id) : undefined;
+  const slotSummary = formatSlotWindow(slot.starts_at, slot.ends_at, bundle.event.timezone);
+  const scheduleUrl = `${origin}/e/${encodeURIComponent(bundle.event.slug)}`;
+  const icsUrl = `${origin}/api/public/events/${encodeURIComponent(bundle.event.slug)}/sessions/${encodeURIComponent(sessionId)}/calendar.ics`;
+
+  const draft = await draftScheduleNotice(
+    {
+      eventName: bundle.event.name,
+      talkTitle: sessionRow.title,
+      speakerNames: recipients.map((recipient) => recipient.name),
+      slotSummary,
+      roomName: room?.name ?? null,
+      scheduleUrl,
+      icsUrl,
+      note: parsed.data.note,
+    },
+    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+  );
+
+  await recordAiUsageEvent(c.env, "schedule_notice_draft", draft.providerEvidence);
+
+  const { providerEvidence: _privateEvidence, ...publicDraft } = draft;
+  const body: ScheduleNoticeDraftResponse = {
+    ...publicDraft,
+    slotSummary,
+    scheduleUrl,
+    icsUrl,
+    recipients,
+  };
   return c.json(body);
 });
 

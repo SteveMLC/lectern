@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
-import type { CommunicationKind, CommunicationPreviewResponse } from "../../../shared/contracts";
+import type {
+  CommunicationKind,
+  CommunicationPreviewResponse,
+  ScheduleNoticeDraftResponse,
+} from "../../../shared/contracts";
 import {
   Badge,
   Button,
@@ -11,6 +15,8 @@ import {
   PageHeader,
   Select,
   Spinner,
+  Textarea,
+  cn,
 } from "../../components/ui";
 import { ApiRequestError, apiClient } from "../../lib/api";
 import { formatDateTime } from "../../lib/status";
@@ -63,6 +69,8 @@ export function Communications() {
         subtitle="Preview the exact speaker email, download its calendar handoff, and record a safe simulated send."
       />
 
+      <ScheduleNoticeCard eventSlug={eventSlug} preselect={searchParams.get("session") ?? ""} />
+
       {speakers.loading ? (
         <Spinner label="Loading speakers" />
       ) : speakers.error ? (
@@ -111,6 +119,226 @@ export function Communications() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Session-centric schedule notices: pick a slotted session, tell every
+ * speaker on it their confirmed day, time, and room. Deliberate — dragging a
+ * session never fires an email; this card is where the organizer decides to
+ * speak. Drafts are AI-personalized from an optional note; the slot facts
+ * arrive from the server pre-formatted in the event timezone and are
+ * guaranteed into the body whatever the model writes.
+ */
+function ScheduleNoticeCard({ eventSlug, preselect }: { eventSlug: string; preselect: string }) {
+  const agenda = useAsync(() => apiClient.agenda(eventSlug), [eventSlug]);
+  const [selectedSession, setSelectedSession] = useState(preselect);
+  const [note, setNote] = useState("");
+  const [draft, setDraft] = useState<ScheduleNoticeDraftResponse | null>(null);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const eligible = (agenda.data?.sessions ?? []).filter(
+    (session) => session.slot !== null && session.speakers.length > 0,
+  );
+  const sessionId = eligible.some((session) => session.id === selectedSession)
+    ? selectedSession
+    : eligible[0]?.id ?? "";
+  const chosen = eligible.find((session) => session.id === sessionId);
+
+  async function draftNotice() {
+    if (!sessionId) return;
+    setDrafting(true);
+    setError(null);
+    setDone(null);
+    try {
+      const result = await apiClient.scheduleNoticeDraft(eventSlug, sessionId, { note });
+      setDraft(result);
+      setSubject(result.subject);
+      setBody(result.bodyMd);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Drafting failed — try again.");
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  async function sendToAll() {
+    if (!draft) return;
+    setSending(true);
+    setError(null);
+    try {
+      for (const recipient of draft.recipients) {
+        await apiClient.simulateCommunication(eventSlug, {
+          speakerId: recipient.speakerId,
+          subject,
+          bodyMd: body,
+        });
+      }
+      setDone(
+        `Recorded ${draft.recipients.length} simulated deliver${draft.recipients.length === 1 ? "y" : "ies"} — ${draft.recipients.map((recipient) => recipient.name).join(", ")} now know their slot.`,
+      );
+      setDraft(null);
+      setNote("");
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Simulated send failed.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Card className="mb-5 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900">Schedule notice</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Tell a session's speakers their confirmed day, time, and room. Nothing fires when you
+            drag the agenda — you decide when the schedule speaks.
+          </p>
+        </div>
+      </div>
+
+      {agenda.loading ? (
+        <div className="mt-4">
+          <Spinner label="Loading scheduled sessions" />
+        </div>
+      ) : agenda.error ? (
+        <div className="mt-4">
+          <ErrorBanner message={agenda.error.message} />
+        </div>
+      ) : eligible.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">
+          No scheduled sessions with speakers yet — place a session on the agenda first.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <Field label="Session">
+              <Select
+                value={sessionId}
+                onChange={(event) => {
+                  setSelectedSession(event.target.value);
+                  setDraft(null);
+                  setDone(null);
+                }}
+              >
+                {eligible.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.title} — {session.speakers.map((speaker) => speaker.name).join(", ")}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Note for the draft (optional, stays internal)">
+              <Textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder={'e.g. "gave them the post-keynote slot — biggest room of the day"'}
+                className="min-h-10 text-xs"
+                disabled={drafting}
+              />
+            </Field>
+          </div>
+
+          {draft === null ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" disabled={drafting || !sessionId} onClick={() => void draftNotice()}>
+                {drafting ? "Drafting…" : "Draft schedule notice"}
+              </Button>
+              {chosen ? (
+                <span className="text-xs text-zinc-500">
+                  Goes to {chosen.speakers.length} speaker{chosen.speakers.length === 1 ? "" : "s"}.
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-zinc-800">
+                  To: {draft.recipients.map((recipient) => `${recipient.name} <${recipient.email}>`).join(", ")}
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    draft.aiUsed ? "bg-indigo-100 text-indigo-800" : "bg-zinc-200 text-zinc-600",
+                  )}
+                >
+                  {draft.aiUsed
+                    ? `Drafted by ${draft.model ?? "Claude"} from your note`
+                    : "Template draft — AI not configured"}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Slot (guaranteed in the email): {draft.slotSummary}
+              </p>
+              <input
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-900 focus:border-accent focus:outline-none"
+                aria-label="Notice subject"
+              />
+              <Textarea
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                className="mt-1.5 min-h-40 bg-white text-xs leading-5"
+                aria-label="Notice body"
+              />
+              {draft.note ? <p className="mt-1 text-[11px] text-zinc-400">{draft.note}</p> : null}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  className="px-2.5 py-1 text-xs"
+                  disabled={sending || !subject.trim() || !body.trim()}
+                  onClick={() => void sendToAll()}
+                >
+                  {sending
+                    ? "Sending…"
+                    : `Send (simulated) to ${draft.recipients.length} speaker${draft.recipients.length === 1 ? "" : "s"}`}
+                </Button>
+                <a
+                  href={draft.icsUrl}
+                  download
+                  className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-100"
+                >
+                  Download .ics
+                </a>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-2.5 py-1 text-xs"
+                  disabled={sending}
+                  onClick={() => void draftNotice()}
+                >
+                  Redraft
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-zinc-400 hover:text-zinc-700"
+                  onClick={() => setDraft(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {done ? (
+            <div
+              role="status"
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            >
+              {done}
+            </div>
+          ) : null}
+          {error ? <ErrorBanner message={error} /> : null}
+        </div>
+      )}
+    </Card>
   );
 }
 

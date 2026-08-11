@@ -33,24 +33,26 @@ export interface FeedbackDraftInput {
   onboardingTasks?: string[];
 }
 
+export interface ProviderEvidence {
+  requestId: string;
+  model: string;
+  usage: {
+    inputTokens: number;
+    cacheCreationInputTokens: number;
+    cacheCreation5mInputTokens: number;
+    cacheCreation1hInputTokens: number;
+    cacheReadInputTokens: number;
+    outputTokens: number;
+  };
+}
+
 export interface FeedbackDraft {
   subject: string;
   bodyMd: string;
   aiUsed: boolean;
   model?: string;
   note?: string;
-  providerEvidence?: {
-    requestId: string;
-    model: string;
-    usage: {
-      inputTokens: number;
-      cacheCreationInputTokens: number;
-      cacheCreation5mInputTokens: number;
-      cacheCreation1hInputTokens: number;
-      cacheReadInputTokens: number;
-      outputTokens: number;
-    };
-  };
+  providerEvidence?: ProviderEvidence;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,10 +198,16 @@ export interface AnthropicConfig {
   fetcher?: typeof fetch;
 }
 
-export async function aiDraft(
-  input: FeedbackDraftInput,
+/**
+ * The one Anthropic call in the product: force the email_draft tool, demand
+ * provider usage evidence, and hand back either a usable draft or a clear
+ * "unusable" signal. Every email feature (decision feedback, schedule
+ * notices) goes through here so evidence capture can never drift.
+ */
+export async function callDraftTool(
+  promptText: string,
   cfg: AnthropicConfig,
-): Promise<FeedbackDraft> {
+): Promise<{ subject: string | null; body: string | null; model: string; providerEvidence: ProviderEvidence }> {
   const doFetch = cfg.fetcher ?? ((req: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => fetch(req, init));
   const model = cfg.model ?? "claude-sonnet-5";
 
@@ -215,7 +223,7 @@ export async function aiDraft(
       max_tokens: 800,
       tools: [DRAFT_TOOL],
       tool_choice: { type: "tool", name: "email_draft" },
-      messages: [{ role: "user", content: prompt(input) }],
+      messages: [{ role: "user", content: promptText }],
     }),
   });
 
@@ -246,7 +254,7 @@ export async function aiDraft(
     throw new Error("Anthropic response did not contain provider usage evidence.");
   }
   const responseModel = typeof body.model === "string" && body.model ? body.model : model;
-  const providerEvidence = {
+  const providerEvidence: ProviderEvidence = {
     requestId: body.id,
     model: responseModel,
     usage: {
@@ -262,21 +270,35 @@ export async function aiDraft(
   const toolUse = (body.content ?? []).find((block) => block.type === "tool_use");
   const subject = toolUse?.input?.subject;
   const draftBody = toolUse?.input?.body;
-  if (typeof subject !== "string" || typeof draftBody !== "string" || !subject.trim() || !draftBody.trim()) {
-    return {
-      ...deterministicDraft(input),
-      model: responseModel,
-      note: "AI drafting returned no usable draft, so SpeakerOps used the safe template.",
-      providerEvidence,
-    };
-  }
-
+  const usable =
+    typeof subject === "string" && typeof draftBody === "string" && subject.trim() && draftBody.trim();
   return {
-    subject: subject.trim(),
-    bodyMd: draftBody.trim(),
-    aiUsed: true,
+    subject: usable ? (subject as string).trim() : null,
+    body: usable ? (draftBody as string).trim() : null,
     model: responseModel,
     providerEvidence,
+  };
+}
+
+export async function aiDraft(
+  input: FeedbackDraftInput,
+  cfg: AnthropicConfig,
+): Promise<FeedbackDraft> {
+  const result = await callDraftTool(prompt(input), cfg);
+  if (result.subject === null || result.body === null) {
+    return {
+      ...deterministicDraft(input),
+      model: result.model,
+      note: "AI drafting returned no usable draft, so SpeakerOps used the safe template.",
+      providerEvidence: result.providerEvidence,
+    };
+  }
+  return {
+    subject: result.subject,
+    bodyMd: result.body,
+    aiUsed: true,
+    model: result.model,
+    providerEvidence: result.providerEvidence,
   };
 }
 

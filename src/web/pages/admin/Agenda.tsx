@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import type {
   EventBundle,
   OrganizerAgendaResponse,
@@ -497,7 +498,17 @@ function SessionCard({
           </div>
         </div>
       ) : (
-        <Button type="button" variant="ghost" className="mt-2 px-2 py-1 text-xs" onClick={() => setEditing(true)}>Move session</Button>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditing(true)}>Move session</Button>
+          {session.slot && session.speakers.length > 0 ? (
+            <Link
+              to={`/admin/communications?session=${encodeURIComponent(session.id)}`}
+              className="text-xs font-medium text-accent hover:underline"
+            >
+              Notify speakers →
+            </Link>
+          ) : null}
+        </div>
       )}
     </article>
   );

@@ -43,6 +43,10 @@ Everything is walkable right now:
    approves; an honest template takes over when no key is configured.
 3. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
+   Then "Notify speakers": Claude drafts the schedule notice telling every
+   speaker on the session their confirmed day, time, and room — slot facts
+   are required verbatim and guaranteed into the body. Dragging never fires
+   an email; the organizer decides when the schedule speaks.
 4. /admin -> add a direct sponsor session — no submission behind it, by design.
 5. The portal shows derived onboarding tasks; upload a real file (R2).
 6. /admin/communications: previewed reminder, simulated send with receipt,

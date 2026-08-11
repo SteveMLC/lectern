@@ -67,6 +67,10 @@ what your JSON files say. So be rough with it.
     double-booked, and Ada in two places at once). **Drag a session to another room** —
     does a conflict clear? Does it survive a page refresh? Add a direct "Sponsor
     Keynote" — it should appear without ever being a submission.
+    Then click **Notify speakers →** on the session you just moved: the draft MUST
+    show the NEW room and time (When/Where lines), a calendar link, and the program
+    link — try a weird note here too. Multi-speaker sessions should address everyone
+    and send to each of them.
 11. **Speakers** — open the portal of the speaker you approved in step 8. They should
     ALREADY have an onboarding checklist (that's automatic; it used to be a bug).
 12. **Communications** — pick a speaker with missing tasks. The preview should list

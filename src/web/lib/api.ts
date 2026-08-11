@@ -15,6 +15,8 @@ import {
   EventsListResponse,
   FeedbackDraftRequest,
   FeedbackDraftResponse,
+  ScheduleNoticeDraftRequest,
+  ScheduleNoticeDraftResponse,
   HealthResponse,
   OrganizerAgendaResponse,
   PublicScheduleResponse,
@@ -185,6 +187,14 @@ export const apiClient = {
     request(
       FeedbackDraftResponse,
       `/api/events/${encodeURIComponent(slug)}/submissions/${encodeURIComponent(submissionId)}/feedback-draft`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  scheduleNoticeDraft: (slug: string, sessionId: string, body: ScheduleNoticeDraftRequest) =>
+    request(
+      ScheduleNoticeDraftResponse,
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/schedule-notice-draft`,
       { method: "POST", body: JSON.stringify(body) },
       { auth: true },
     ),
