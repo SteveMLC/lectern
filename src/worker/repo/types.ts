@@ -49,6 +49,7 @@ export interface SpeakerOpsRepo {
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
   getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;
   createDirectSession(input: CreateDirectSessionInput): Promise<OrganizerSession>;
+  updateSession(input: UpdateSessionInput): Promise<OrganizerSession>;
   upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse>;
   countsForEvent(eventId: string): Promise<EventCounts>;
 
@@ -61,11 +62,22 @@ export interface SpeakerOpsRepo {
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
 }
 
+export interface UpdateSessionInput {
+  sessionId: string;
+  eventId: string;
+  title: string;
+  abstract: string;
+  now: string;
+}
+
 export interface DecideSubmissionInput {
   submissionId: string;
   decision: "approve" | "maybe" | "deny";
   /** Internal note; persisted as a committee review when non-empty. */
   reasoning?: string;
+  /** Approve only: program title/abstract, when retitled on approval. */
+  sessionTitle?: string;
+  sessionAbstract?: string;
   now: string;
 }
 

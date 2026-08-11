@@ -51,7 +51,12 @@ Dashboard: point at **"8 need decision →"**.
 > speaker's company, their bio, their form answers, and the committee's earlier notes
 > right on the card. I've got what I need to judge it without leaving."
 
-Click **Approve** on the new proposal. The note box opens — type: `strong practical angle — main stage material`. Click **Draft acceptance email**.
+Click **Approve** on the new proposal. The panel opens with the program title
+pre-filled — trim it (e.g. drop a subtitle) and note the line that appears:
+> "Titles get edited — every program does it. I retitle it for the program here, and the
+> speaker's original submission still says what they pitched."
+
+Then type the note: `strong practical angle — main stage material`. Click **Draft acceptance email**.
 > "Approving isn't just a status flip. Claude drafts the acceptance around my note —
 > and look: the speaker's portal link and the exact onboarding checklist the system is
 > about to create, right in the email. The link is guaranteed, even if the model forgot it."

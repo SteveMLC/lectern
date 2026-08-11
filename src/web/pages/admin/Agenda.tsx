@@ -434,6 +434,12 @@ function SessionCard({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Retitling for the program is a normal editorial act, so it lives on the
+  // card rather than behind a detail page.
+  const [renaming, setRenaming] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [title, setTitle] = useState(session.title);
+  const [abstract, setAbstract] = useState(session.abstract);
   const speakers = session.speakers.map((speaker) => speaker.name).join(", ");
 
   async function save() {
@@ -451,6 +457,23 @@ function SessionCard({
       setError(caught instanceof ApiRequestError ? caught.message : "Placement could not be saved.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveDetails() {
+    setSavingDetails(true);
+    setError(null);
+    try {
+      await apiClient.updateSession(eventSlug, session.id, {
+        title: title.trim(),
+        abstract: abstract.trim(),
+      });
+      onPlaced(await apiClient.agenda(eventSlug));
+      setRenaming(false);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Session could not be updated.");
+    } finally {
+      setSavingDetails(false);
     }
   }
 
@@ -517,9 +540,56 @@ function SessionCard({
             {session.slot ? <Button type="button" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button> : null}
           </div>
         </div>
+      ) : renaming ? (
+        <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+          <Field label="Title in the program">
+            <Input
+              aria-label={`Program title for ${session.title}`}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </Field>
+          <Field label="Program abstract">
+            <Textarea
+              aria-label={`Program abstract for ${session.title}`}
+              value={abstract}
+              onChange={(event) => setAbstract(event.target.value)}
+              className="min-h-24 text-xs"
+            />
+          </Field>
+          {session.origin === "accepted_submission" ? (
+            <p className="text-[11px] leading-4 text-zinc-400">
+              Editing the program copy only — the speaker's original submission is kept as-is.
+            </p>
+          ) : null}
+          {error ? <ErrorBanner message={error} /> : null}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              className="flex-1"
+              disabled={savingDetails || title.trim().length < 3 || abstract.trim().length < 10}
+              onClick={() => void saveDetails()}
+            >
+              {savingDetails ? "Saving…" : "Save details"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setTitle(session.title);
+                setAbstract(session.abstract);
+                setError(null);
+                setRenaming(false);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditing(true)}>Move session</Button>
+          <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => setRenaming(true)}>Edit details</Button>
           {session.slot && session.speakers.length > 0 ? (
             <Link
               to={`/admin/communications?session=${encodeURIComponent(session.id)}`}

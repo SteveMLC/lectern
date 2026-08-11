@@ -3,6 +3,7 @@ import pkg from "../../../package.json";
 import {
   AssetKind,
   AgendaSlotRequest,
+  UpdateSessionRequest,
   CfpSubmissionRequest,
   CommunicationKind,
   type CommunicationPreviewResponse,
@@ -429,6 +430,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/admin/ai-usage", auth: "organizer", purpose: "Provider-reported AI usage events for the reimbursement audit." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
       { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
+      { method: "PATCH", path: "/events/:slug/sessions/:sessionId", auth: "organizer", purpose: "Retitle or reword a session in the published program; the source submission keeps what the speaker pitched." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
@@ -644,6 +646,8 @@ api.post("/events/:slug/submissions/:submissionId/decision", organizerAuth, asyn
       submissionId: submission.id,
       decision: parsed.data.decision,
       reasoning: parsed.data.reasoning,
+      sessionTitle: parsed.data.sessionTitle,
+      sessionAbstract: parsed.data.sessionAbstract,
       now: new Date().toISOString(),
     });
     const body: SubmissionDecisionResponse = result;
@@ -929,6 +933,44 @@ api.post("/events/:slug/sessions", organizerAuth, async (c) => {
   });
   const body: CreateDirectSessionResponse = { session };
   return c.json(body, 201);
+});
+
+/**
+ * Retitle or reword a session in the published program. The submission is
+ * untouched, so the record always shows both what the speaker pitched and
+ * what the program calls it.
+ */
+api.patch("/events/:slug/sessions/:sessionId", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = UpdateSessionRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Session details are invalid.", parsed.error.issues);
+  }
+
+  try {
+    const session = await repo.updateSession({
+      sessionId: c.req.param("sessionId"),
+      eventId: bundle.event.id,
+      title: parsed.data.title,
+      abstract: parsed.data.abstract,
+      now: new Date().toISOString(),
+    });
+    return c.json({ session });
+  } catch (error) {
+    if (error instanceof Error && error.message === "session_not_found") {
+      return errorResponse(404, "session_not_found", "No session with that id for this event.");
+    }
+    throw error;
+  }
 });
 
 api.put("/events/:slug/sessions/:sessionId/slot", organizerAuth, async (c) => {

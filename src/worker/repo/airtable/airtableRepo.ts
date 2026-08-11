@@ -20,6 +20,7 @@ import type {
   SpeakerOpsRepo,
   SimulateCommunicationInput,
   SubmissionDecisionResult,
+  UpdateSessionInput,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
@@ -251,6 +252,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async createDirectSession(_input: CreateDirectSessionInput): Promise<OrganizerSession> {
     throw new AirtableNotWiredError("createDirectSession");
+  }
+
+  async updateSession(_input: UpdateSessionInput): Promise<OrganizerSession> {
+    throw new AirtableNotWiredError("updateSession");
   }
 
   async upsertAgendaSlot(_input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {

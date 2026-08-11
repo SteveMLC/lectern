@@ -38,6 +38,7 @@ import type {
   SpeakerOpsRepo,
   SimulateCommunicationInput,
   SubmissionDecisionResult,
+  UpdateSessionInput,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
@@ -1086,6 +1087,8 @@ export class D1Repo implements SpeakerOpsRepo {
         role: speaker.role,
         sortOrder: speaker.sortOrder,
       })),
+      sessionTitle: input.sessionTitle,
+      sessionAbstract: input.sessionAbstract,
       now: input.now,
     });
 
@@ -1254,6 +1257,27 @@ export class D1Repo implements SpeakerOpsRepo {
     const created = agenda.sessions.find((session) => session.id === input.id);
     if (!created) throw new Error("Direct session not found after insert.");
     return created;
+  }
+
+  /**
+   * Retitle or reword a session in the program. Deliberately touches only the
+   * session: the submission keeps what the speaker actually pitched, so
+   * lineage always shows both the pitch and the published title.
+   */
+  async updateSession(input: UpdateSessionInput): Promise<OrganizerSession> {
+    const result = await this.db
+      .prepare(
+        `UPDATE sessions SET title = ?1, abstract = ?2, updated_at = ?3
+         WHERE id = ?4 AND event_id = ?5`,
+      )
+      .bind(input.title, input.abstract, input.now, input.sessionId, input.eventId)
+      .run();
+    if (!result.meta.changes) throw new Error("session_not_found");
+
+    const agenda = await this.getOrganizerAgenda(input.eventId);
+    const updated = agenda.sessions.find((session) => session.id === input.sessionId);
+    if (!updated) throw new Error("session_not_found");
+    return updated;
   }
 
   async upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {

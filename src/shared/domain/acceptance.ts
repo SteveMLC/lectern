@@ -25,6 +25,14 @@ const UNACCEPTABLE: ReadonlySet<string> = new Set(["draft", "withdrawn"]);
 export interface AcceptanceInput {
   submission: Submission;
   submissionSpeakers: readonly SubmissionSpeaker[];
+  /**
+   * Program title for the session, when the organizer retitles on approval.
+   * The submission keeps what the speaker pitched; only the session changes,
+   * so lineage always shows both. Empty or absent means keep the original.
+   */
+  sessionTitle?: string;
+  /** Program abstract, same rule as sessionTitle. */
+  sessionAbstract?: string;
   /** Injected clock (ISO). Keeps the function pure and testable. */
   now: string;
 }
@@ -44,13 +52,16 @@ export function buildSessionFromSubmission(input: AcceptanceInput): AcceptanceRe
     throw new Error("Cannot create a session from a submission with an empty title.");
   }
 
+  const title = input.sessionTitle?.trim() || submission.title;
+  const abstract = input.sessionAbstract?.trim() || submission.abstract;
+
   const session: Session = {
     id: sessionIdForSubmission(submission.id),
     eventId: submission.eventId,
     sourceSubmissionId: submission.id,
     trackId: submission.trackId,
-    title: submission.title,
-    abstract: submission.abstract,
+    title,
+    abstract,
     format: submission.format,
     status: "confirmed",
     origin: "accepted_submission",

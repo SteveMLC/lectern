@@ -41,7 +41,12 @@ export function Reviews() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [scope, setScope] = useState<"pending" | "all">("pending");
 
-  async function decide(submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) {
+  async function decide(
+    submission: SubmissionListItem,
+    decision: ReviewDecision,
+    reasoning: string,
+    sessionTitle?: string,
+  ) {
     setBusyId(submission.id);
     setActionError(null);
     setNotice(null);
@@ -49,6 +54,7 @@ export function Reviews() {
       const result = await apiClient.decideSubmission(eventSlug, submission.id, {
         decision,
         reasoning,
+        sessionTitle,
       });
       if (decision === "approve") {
         setNotice(
@@ -187,7 +193,12 @@ function ReviewCard({
   eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
-  onDecide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
+  onDecide: (
+    submission: SubmissionListItem,
+    decision: ReviewDecision,
+    reasoning: string,
+    sessionTitle?: string,
+  ) => Promise<void>;
 }) {
   const primary = submission.speakers[0];
   const facts = answerFacts(submission.answers);

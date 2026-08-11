@@ -43,10 +43,12 @@ Everything is walkable right now:
    same loop: write your internal note, and Claude (claude-sonnet-5) drafts
    the speaker-facing email from it for your review and edit — an acceptance
    carrying the speaker's portal link and the exact onboarding checklist the
-   system derives, or kind, specific feedback for deny/waitlist. The note
-   persists as a committee review on the card, approval creates exactly one
-   session idempotently, and nothing auto-sends. AI proposes, the human
-   approves; an honest template takes over when no key is configured.
+   system derives, or kind, specific feedback for deny/waitlist. Approving
+   also lets you retitle the talk for the program while the submission keeps
+   what the speaker pitched. The note persists as a committee review on the
+   card, approval creates exactly one session idempotently, and nothing
+   auto-sends. AI proposes, the human approves; an honest template takes
+   over when no key is configured.
 3. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Then "Notify speakers": Claude drafts the schedule notice telling every

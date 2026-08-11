@@ -46,6 +46,32 @@ describe("buildSessionFromSubmission", () => {
     expect(session.status).toBe("confirmed");
   });
 
+  it("uses the organizer's program title when they retitle on approval", () => {
+    const { session } = buildSessionFromSubmission({
+      submission: submission(),
+      submissionSpeakers: speakers,
+      sessionTitle: "Agents in Production: What Breaks First",
+      now: NOW,
+    });
+    expect(session.title).toBe("Agents in Production: What Breaks First");
+    // Lineage is intact, so the original pitch stays recoverable.
+    expect(session.sourceSubmissionId).toBe("sub_agents101");
+    // Abstract untouched when only the title is overridden.
+    expect(session.abstract).toBe(submission().abstract);
+  });
+
+  it("keeps the submitted title when the override is blank or whitespace", () => {
+    for (const sessionTitle of ["", "   ", undefined]) {
+      const { session } = buildSessionFromSubmission({
+        submission: submission(),
+        submissionSpeakers: speakers,
+        sessionTitle,
+        now: NOW,
+      });
+      expect(session.title).toBe("Agents in Production");
+    }
+  });
+
   it("copies program content from the submission", () => {
     const { session } = buildSessionFromSubmission({
       submission: submission(),

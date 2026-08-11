@@ -3,6 +3,8 @@ import {
   ApiError,
   AgendaSlotRequest,
   AssetKind,
+  OrganizerSession,
+  UpdateSessionRequest,
   AirtableMirrorStatusResponse,
   CfpSubmissionRequest,
   CommunicationKind,
@@ -162,6 +164,14 @@ export const apiClient = {
       CreateDirectSessionResponse,
       `/api/events/${encodeURIComponent(slug)}/sessions`,
       { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  updateSession: (slug: string, sessionId: string, body: UpdateSessionRequest) =>
+    request(
+      z.object({ session: OrganizerSession }),
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
       { auth: true },
     ),
 

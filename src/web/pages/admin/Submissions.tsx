@@ -28,7 +28,12 @@ type Filter = "all" | SubmissionStatusType;
 interface DecisionState {
   eventSlug: string;
   busyId: string | null;
-  decide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
+  decide: (
+    submission: SubmissionListItem,
+    decision: ReviewDecision,
+    reasoning: string,
+    sessionTitle?: string,
+  ) => Promise<void>;
 }
 
 export function Submissions() {
@@ -45,7 +50,12 @@ export function Submissions() {
 
   const submissions = data?.submissions ?? [];
 
-  async function decide(submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) {
+  async function decide(
+    submission: SubmissionListItem,
+    decision: ReviewDecision,
+    reasoning: string,
+    sessionTitle?: string,
+  ) {
     setBusyId(submission.id);
     setNotice(null);
     setActionError(null);
@@ -53,6 +63,7 @@ export function Submissions() {
       const result = await apiClient.decideSubmission(eventSlug, submission.id, {
         decision,
         reasoning,
+        sessionTitle,
       });
       if (decision === "approve") {
         setNotice(

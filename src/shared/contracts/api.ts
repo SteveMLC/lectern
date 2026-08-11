@@ -244,6 +244,13 @@ export const SubmissionDecisionRequest = z.object({
    * outlives the decision. Never shown to speakers.
    */
   reasoning: z.string().trim().max(2000).default(""),
+  /**
+   * Approve only: the title/abstract the session should carry in the
+   * program, when the organizer retitles on approval. The submission keeps
+   * what the speaker pitched. Absent or empty keeps the original.
+   */
+  sessionTitle: z.string().trim().max(200).optional(),
+  sessionAbstract: z.string().trim().max(5000).optional(),
 });
 export type SubmissionDecisionRequest = z.infer<typeof SubmissionDecisionRequest>;
 
@@ -326,6 +333,12 @@ export const OrganizerAgendaResponse = z.object({
   ),
 });
 export type OrganizerAgendaResponse = z.infer<typeof OrganizerAgendaResponse>;
+
+export const UpdateSessionRequest = z.object({
+  title: z.string().trim().min(3).max(200),
+  abstract: z.string().trim().min(10).max(5000),
+});
+export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 
 export const CreateDirectSessionRequest = z.object({
   title: z.string().trim().min(3).max(200),

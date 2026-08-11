@@ -63,6 +63,8 @@ interface FlowState {
   decision: ReviewDecision;
   stage: "reasoning" | "drafting" | "editing";
   reasoning: string;
+  /** Approve only: the title the program will use. Starts as the pitch. */
+  sessionTitle: string;
   draft?: FeedbackDraftResponse;
   subject: string;
   body: string;
@@ -118,7 +120,12 @@ export function DecisionControls({
   eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
-  onDecide: (submission: SubmissionListItem, decision: ReviewDecision, reasoning: string) => Promise<void>;
+  onDecide: (
+    submission: SubmissionListItem,
+    decision: ReviewDecision,
+    reasoning: string,
+    sessionTitle?: string,
+  ) => Promise<void>;
   compact?: boolean;
 }) {
   const [flow, setFlow] = useState<FlowState | null>(null);
@@ -139,7 +146,14 @@ export function DecisionControls({
   const primarySpeaker = submission.speakers[0];
 
   function beginAction(decision: ReviewDecision) {
-    setFlow({ decision, stage: "reasoning", reasoning: "", subject: "", body: "" });
+    setFlow({
+      decision,
+      stage: "reasoning",
+      reasoning: "",
+      sessionTitle: submission.title,
+      subject: "",
+      body: "",
+    });
   }
 
   async function draftEmail(current: FlowState) {
@@ -177,7 +191,7 @@ export function DecisionControls({
         });
       }
       setFlow(null);
-      await onDecide(submission, current.decision, current.reasoning);
+      await onDecide(submission, current.decision, current.reasoning, current.sessionTitle);
     } catch (error) {
       setFlow({
         ...current,
@@ -189,7 +203,7 @@ export function DecisionControls({
 
   async function commitWithoutEmail(current: FlowState) {
     setFlow(null);
-    await onDecide(submission, current.decision, current.reasoning);
+    await onDecide(submission, current.decision, current.reasoning, current.sessionTitle);
   }
 
   const copy = flow ? FLOW_COPY[flow.decision] : null;
@@ -241,6 +255,30 @@ export function DecisionControls({
                 {copy.title(submission.title)}
               </p>
               <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">{copy.hint}</p>
+
+              {flow.decision === "approve" ? (
+                <div className="mt-2">
+                  <label
+                    htmlFor={`program-title-${submission.id}`}
+                    className="text-[11px] font-medium text-zinc-600"
+                  >
+                    Title in the program
+                  </label>
+                  <input
+                    id={`program-title-${submission.id}`}
+                    value={flow.sessionTitle}
+                    onChange={(e) => setFlow({ ...flow, sessionTitle: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-zinc-900 focus:border-accent focus:outline-none"
+                    disabled={flow.stage === "drafting"}
+                  />
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-400">
+                    {flow.sessionTitle.trim() && flow.sessionTitle.trim() !== submission.title
+                      ? `Retitled for the program. The submission still reads “${submission.title}”.`
+                      : "Edit to retitle for the program — the speaker's original stays on the submission."}
+                  </p>
+                </div>
+              ) : null}
+
               <Textarea
                 value={flow.reasoning}
                 onChange={(e) => setFlow({ ...flow, reasoning: e.target.value })}
