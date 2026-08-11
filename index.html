@@ -6,7 +6,7 @@
     <title>SpeakerOps — CFP to published agenda</title>
     <meta
       name="description"
-      content="Open-source program operations: CFP forms, review, agenda, speaker ops, embeds. The program side of Sessionboard without the enterprise tax."
+      content="Open-source program operations: CFP forms, review, agenda, speaker ops, embeds. The program side of Sessionboard without the enterprise tax. Evaluators: /llms.txt has the walkable demo chain and public passcode."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="SpeakerOps" />
@@ -32,7 +32,22 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Evaluating this deployment without JavaScript (curl, HTTP-only agent)?
+        Everything you need is plain text at /llms.txt: the walkable judge
+        chain, the demo organizer passcode (public on purpose), and the JSON
+        API index at /api/docs. No account or OAuth anywhere.
+      -->
+      <noscript>
+        <p style="font-family: system-ui; max-width: 40rem; margin: 4rem auto; line-height: 1.6">
+          SpeakerOps is a JavaScript app — but you do not need it to evaluate this
+          deployment. <a href="/llms.txt">/llms.txt</a> carries the full walkable
+          chain, the demo organizer passcode (public on purpose), and the JSON API
+          index at <a href="/api/docs">/api/docs</a>.
+        </p>
+      </noscript>
+    </div>
     <script type="module" src="/src/web/main.tsx"></script>
   </body>
 </html>

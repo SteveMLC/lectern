@@ -1,15 +1,15 @@
 # AI usage reimbursement audit
 
-Generated 2026-08-11 00:35 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
+Generated 2026-08-11 14:17 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
 
-Ledger digest: `13023bf12f0002f9295f683d1cb92074253c56f1532a68db791be566038f235a` (69 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
+Ledger digest: `26f4ceb2413063a0dc653d5a98220ebfc73c8004e70b373dac044a3bcc62dc26` (71 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
 Receipt-allocation digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
-2. **API-equivalent estimate — $553.61** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 68 usage entries remain uncovered by a recorded receipt.
+2. **API-equivalent estimate — $597.77** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
+3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 70 usage entries remain uncovered by a recorded receipt.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -17,12 +17,12 @@ The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhm
 
 | Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| anthropic/claude-fable-5 | 27 | 464 | 926 | 225,641,841 | 6,359,182 | 566,323 | $381.15 |
+| anthropic/claude-fable-5 | 28 | 500 | 998 | 237,054,626 | 6,988,019 | 594,531 | $406.55 |
 | anthropic/claude-opus-5 | 1 | 126 | 252 | 49,152,905 | 2,409,204 | 148,940 | $52.39 |
-| openai/gpt-5.6-sol | 39 | — | 3,406,198 | 177,208,832 | 0 | 471,322 | $119.78 |
+| openai/gpt-5.6-sol | 40 | — | 3,979,524 | 206,071,552 | 0 | 519,993 | $138.53 |
 | openai/gpt-5.5 | 1 | 6 | 5,393 | 516,096 | 0 | 137 | $0.29 |
 | anthropic/claude-sonnet-5 | 1 | 1 | 1,109 | 0 | 0 | 389 | $0.01 |
-| **Total** | **69** | | | | | | **$553.61** |
+| **Total** | **71** | | | | | | **$597.77** |
 
 ## Evidence inventory
 
@@ -99,6 +99,8 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | 2026-08-10 | Codex engineering task | gpt-5.6-sol | engineering qa release | 3,474,260 | $1.94 | `671379dc2bf0…` (6661 lines) | `README.md` `docs/DEMO` `docs/LIAM` `src/share` `src/share` `src/share` `src/web/c` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` `src/worke` `src/worke` |
 | 2026-08-10 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 17,717,236 | $43.31 | `0e5f7515e199…` (2688 lines) | `README.md` `docs/DEMO` `docs/LIAM` `src/share` `src/share` `src/share` `src/web/c` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` `src/worke` `src/worke` |
 | 2026-08-11 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 18,090,172 | $26.27 | `f8e3e13283d6…` (2986 lines) | `README.md` `docs/DEMO` `docs/LIAM` `src/share` `src/web/l` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` `src/worke` |
+| 2026-08-11 | Codex engineering task | gpt-5.6-sol | engineering qa release | 29,484,717 | $18.76 | `478ddc6f1d2c…` (7737 lines) | `index.htm` `src/web/p` `src/web/p` `src/worke` |
+| 2026-08-11 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 12,069,902 | $25.40 | `2e6c2a94e003…` (3150 lines) | `index.htm` `src/web/p` `src/web/p` `src/worke` |
 
 ## Receipt allocations
 

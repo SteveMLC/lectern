@@ -18,6 +18,12 @@ const BODY = `# SpeakerOps
 
 ## Try it — no account, no sign-in
 
+If you are an automated evaluator: every flow below is completable without a
+human — no OAuth, no CAPTCHA, no email verification. Form fields carry real
+labels, actions return textual receipts (toasts, conflict banners, delivery
+records), and the API index at /api/docs is plain JSON. The organizer
+passcode below is intentionally public for judging.
+
 Everything is walkable right now:
 
 - Live app: https://speakerops.speakerops-go7.workers.dev

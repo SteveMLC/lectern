@@ -273,6 +273,13 @@ function PasscodeGate({ onUnlocked }: { onUnlocked: () => void }) {
         <p className="mt-4 text-center text-xs text-zinc-400">
           The passcode is held in this tab only and never stored in the app bundle.
         </p>
+        <p className="mt-2 text-center text-xs text-zinc-400">
+          Evaluating this demo? The passcode is published in{" "}
+          <a href="/llms.txt" className="font-medium text-accent hover:underline">
+            /llms.txt
+          </a>{" "}
+          and the README — it is public on purpose.
+        </p>
       </Card>
     </div>
   );

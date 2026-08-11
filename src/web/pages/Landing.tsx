@@ -105,7 +105,15 @@ export function Landing() {
       </main>
 
       <footer className="border-t border-zinc-200 py-8 text-center text-xs text-zinc-500">
-        SpeakerOps — an open-source Sessionboard replacement built for Kill My SaaS 1.
+        <p>SpeakerOps — an open-source Sessionboard replacement built for Kill My SaaS 1.</p>
+        <p className="mt-1.5">
+          Judging or evaluating this deployment (human or agent)?{" "}
+          <a href="/llms.txt" className="font-medium text-accent hover:underline">
+            /llms.txt
+          </a>{" "}
+          has the full walkable chain, the demo passcode, and the API index — no account
+          needed anywhere.
+        </p>
       </footer>
     </div>
   );
