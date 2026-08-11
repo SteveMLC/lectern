@@ -14,7 +14,7 @@
       "cacheWrite1h": 4,
       "output": 10,
       "source": "https://www.anthropic.com/news/claude-sonnet-5",
-      "assumption": "Anthropic introductory global API price through 2026-08-31. Cache reads/writes use the published 0.1x, 1.25x, and 2x prompt-caching multipliers."
+      "assumption": "Anthropic global API price, made permanent on 2026-08-10. Cache reads/writes use the published 0.1x, 1.25x, and 2x prompt-caching multipliers."
     },
     "anthropic-claude-fable-5-2026-08-10": {
       "provider": "anthropic",

@@ -15,6 +15,22 @@ const sourcesPath = resolve(root, "usage/private/sources.json");
 const runtimeEvidencePath = resolve(root, "usage/private/runtime-ai-usage.json");
 const privateEvidenceRoot = resolve(root, "usage/private");
 const defaultRuntimeUrl = "https://speakerops.speakerops-go7.workers.dev";
+const runtimePrivacyNotice = "Provider counters only; prompts, reviewer notes, and generated content are not stored.";
+const runtimeColumns = [
+  "provider",
+  "provider_request_id",
+  "model",
+  "purpose",
+  "occurred_at",
+  "input_tokens",
+  "cache_creation_input_tokens",
+  "cache_creation_5m_input_tokens",
+  "cache_creation_1h_input_tokens",
+  "cache_read_input_tokens",
+  "output_tokens",
+  "evidence_sha256",
+  "measurement",
+];
 const defaultSourceRoots = {
   codex: "~/.codex/sessions",
   claude: "~/.claude/projects",
@@ -340,6 +356,7 @@ function cliArgs(argv) {
     if (key === "dry-run") options.dryRun = true;
     else if (key === "quiet") options.quiet = true;
     else if (key === "check") options.check = true;
+    else if (key === "d1") options.d1 = true;
     else options[key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = argv[++index];
   }
   return options;
@@ -486,11 +503,40 @@ export function runtimeEventToEntry(event, pricing, options = {}) {
   };
 }
 
-async function runtime(options = {}) {
-  const baseUrl = (options.url ?? process.env.SPEAKEROPS_BASE_URL ?? defaultRuntimeUrl).replace(/\/$/, "");
-  const passcode = options.passcode ?? process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
-  if (!passcode) throw new Error("runtime requires --passcode or SPEAKEROPS_ORGANIZER_PASSCODE");
+export function runtimePayloadFromD1Results(results, generatedAt = new Date().toISOString()) {
+  if (!Array.isArray(results) || results.some((batch) => batch?.success !== true || !Array.isArray(batch?.results))) {
+    throw new Error("Wrangler D1 export did not return successful result batches.");
+  }
+  return {
+    schemaVersion: 1,
+    generatedAt,
+    privacy: runtimePrivacyNotice,
+    events: results.flatMap((batch) => batch.results),
+  };
+}
 
+async function loadRuntimePayload(options, baseUrl) {
+  if (options.d1 && options.file) throw new Error("runtime accepts either --d1 or --file, not both");
+  if (options.d1) {
+    const database = options.database ?? "speakerops-db";
+    const sql = `SELECT ${runtimeColumns.join(", ")} FROM ai_usage_events ORDER BY occurred_at ASC, provider_request_id ASC`;
+    const result = spawnSync("pnpm", ["exec", "wrangler", "d1", "execute", database, "--remote", "--json", "--command", sql], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    if (result.status !== 0) {
+      throw new Error(`Wrangler D1 runtime export failed: ${(result.stderr || result.stdout || "unknown error").trim()}`);
+    }
+    return runtimePayloadFromD1Results(JSON.parse(result.stdout));
+  }
+  if (options.file) {
+    const payload = JSON.parse(await readFile(expandLocalPath(options.file), "utf8"));
+    return payload;
+  }
+
+  const passcode = options.passcode ?? process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
+  if (!passcode) throw new Error("runtime requires --passcode, SPEAKEROPS_ORGANIZER_PASSCODE, --file, or --d1");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   let response;
@@ -503,7 +549,12 @@ async function runtime(options = {}) {
     clearTimeout(timeout);
   }
   if (!response.ok) throw new Error(`Runtime AI usage export returned HTTP ${response.status}.`);
-  const payload = await response.json();
+  return response.json();
+}
+
+async function runtime(options = {}) {
+  const baseUrl = (options.url ?? process.env.SPEAKEROPS_BASE_URL ?? defaultRuntimeUrl).replace(/\/$/, "");
+  const payload = await loadRuntimePayload(options, baseUrl);
   if (payload?.schemaVersion !== 1 || !Array.isArray(payload.events)) {
     throw new Error("Runtime AI usage export did not return the expected schema.");
   }

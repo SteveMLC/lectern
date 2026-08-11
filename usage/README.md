@@ -29,6 +29,15 @@ SPEAKEROPS_ORGANIZER_PASSCODE=... pnpm usage:runtime
 
 The command fetches the organizer-only `/api/admin/ai-usage` counter feed, saves its sanitized raw response in ignored `usage/private/`, deduplicates by provider request id, selects pricing from `pricing.json`, appends only unseen events, and regenerates `REPORT.md`. `pnpm usage:runtime -- --check` is read-only and fails when a production event has not yet reached the ledger; the submission preflight runs this check.
 
+When the local organizer passcode is unavailable or stale but Wrangler is authenticated, use the equivalent direct D1 path:
+
+```bash
+pnpm usage:runtime -- --d1
+pnpm usage:runtime -- --d1 --check
+```
+
+This path selects only the same privacy-safe counter columns exposed by the organizer endpoint. It does not read prompts, reviewer notes, or generated content, and it uses the same provider-request-id deduplication and evidence validation before appending anything.
+
 Copy the safe template to the gitignored local configuration and add the stable session IDs used for this repository:
 
 ```bash

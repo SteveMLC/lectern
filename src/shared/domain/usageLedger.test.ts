@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, selectRateId, unexpectedTrackedPrivatePaths, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, runtimePayloadFromD1Results, selectRateId, unexpectedTrackedPrivatePaths, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -145,6 +145,39 @@ describe("usage ledger", () => {
     expect(entry).not.toHaveProperty("prompt");
     expect(entry).not.toHaveProperty("reviewerNotes");
     expect(entry).not.toHaveProperty("generatedContent");
+  });
+
+  it("normalizes authenticated Wrangler D1 results into the runtime export schema", () => {
+    const event = {
+      provider: "anthropic",
+      provider_request_id: "msg_runtime_2",
+      model: "claude-sonnet-5",
+      purpose: "schedule_notice_draft",
+      occurred_at: "2026-08-11T12:00:00.000Z",
+      input_tokens: 10,
+      cache_creation_input_tokens: 0,
+      cache_creation_5m_input_tokens: 0,
+      cache_creation_1h_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      output_tokens: 5,
+      evidence_sha256: "f".repeat(64),
+      measurement: "provider_reported",
+    };
+    const payload = runtimePayloadFromD1Results(
+      [{ success: true, results: [event] }],
+      "2026-08-11T12:01:00.000Z",
+    );
+    expect(payload).toEqual({
+      schemaVersion: 1,
+      generatedAt: "2026-08-11T12:01:00.000Z",
+      privacy: "Provider counters only; prompts, reviewer notes, and generated content are not stored.",
+      events: [event],
+    });
+  });
+
+  it("rejects unsuccessful Wrangler D1 result batches", () => {
+    expect(() => runtimePayloadFromD1Results([{ success: false, results: [] }]))
+      .toThrow("successful result batches");
   });
 
   it("rejects duplicate evidence ids", () => {
