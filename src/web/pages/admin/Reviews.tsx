@@ -261,6 +261,7 @@ function ReviewCard({
                 className="text-xs leading-5 text-zinc-700"
               >
                 <span className="font-medium text-zinc-900">{review.reviewerName}</span>
+                <span className="sr-only">, recommendation </span>
                 <span
                   className={cn(
                     "ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
@@ -273,7 +274,12 @@ function ReviewCard({
                 >
                   {review.recommendation}
                 </span>
-                {review.comment ? <span className="ml-1.5">{review.comment}</span> : null}
+                {review.comment ? (
+                  <>
+                    <span className="sr-only">: </span>
+                    <span className="ml-1.5">{review.comment}</span>
+                  </>
+                ) : null}
               </p>
             ))}
           </div>

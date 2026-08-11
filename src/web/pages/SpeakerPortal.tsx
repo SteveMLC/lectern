@@ -199,6 +199,7 @@ export function SpeakerPortal() {
                   ) : null}
                   <Button
                     type="button"
+                    aria-label={`${task.status === "complete" ? "Mark pending" : "Mark complete"}: ${definition.label}`}
                     variant={task.status === "complete" ? "ghost" : "secondary"}
                     className="mt-3 w-full px-3 py-1.5 text-xs"
                     disabled={taskBusyId !== null}
@@ -225,6 +226,7 @@ export function SpeakerPortal() {
                   <a
                     key={asset.id}
                     href={`/api/assets/${asset.id}`}
+                    aria-label={`Download ${asset.filename} (${asset.kind})`}
                     className="block rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
                   >
                     <span className="font-medium text-zinc-900">{asset.filename}</span>
