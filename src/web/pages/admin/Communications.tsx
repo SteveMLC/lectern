@@ -180,7 +180,7 @@ function ScheduleNoticeCard({ eventSlug, preselect }: { eventSlug: string; prese
         });
       }
       setDone(
-        `Recorded ${draft.recipients.length} simulated deliver${draft.recipients.length === 1 ? "y" : "ies"} — ${draft.recipients.map((recipient) => recipient.name).join(", ")} now know their slot.`,
+        `Recorded ${draft.recipients.length} simulated deliver${draft.recipients.length === 1 ? "y" : "ies"} — ${draft.recipients.map((recipient) => recipient.name).join(", ")} now ${draft.recipients.length === 1 ? "knows" : "know"} their slot.`,
       );
       setDraft(null);
       setNote("");

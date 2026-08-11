@@ -86,7 +86,7 @@ export function Reviews() {
     <div>
       <PageHeader
         title="Review decisions"
-        subtitle={`${pendingCount} proposal(s) waiting on a call. Approval creates exactly one live session.`}
+        subtitle={`${pendingCount} ${pendingCount === 1 ? "proposal" : "proposals"} waiting on a call. Approval creates exactly one live session.`}
         actions={
           <Button variant="secondary" onClick={reload}>
             Refresh

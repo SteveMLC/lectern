@@ -251,7 +251,9 @@ export function Agenda() {
                   >
                     <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
                       <p className="font-semibold text-zinc-900">{room.name}</p>
-                      <p className="text-xs text-zinc-500">{roomSessions.length} sessions</p>
+                      <p className="text-xs text-zinc-500">
+                        {roomSessions.length} {roomSessions.length === 1 ? "session" : "sessions"}
+                      </p>
                     </div>
                     <div className="space-y-3 p-3">
                       {roomSessions.length === 0 ? (
