@@ -62,7 +62,7 @@ Everything is walkable right now:
 ## Source and docs
 
 - GitHub: https://github.com/SteveMLC/speakerops (MIT)
-- README covers local dev (one command, zero cloud accounts), deploy, the
+- README covers local dev (zero cloud accounts), deploy, the
   domain invariants, and the tamper-evident AI-usage reimbursement audit in
   usage/REPORT.md.
 

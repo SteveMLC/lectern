@@ -63,7 +63,7 @@ Latest organizer FAQ from Discord:
 - **Data:** D1 (SQLite) with plain SQL migrations; R2 for uploaded files.
 - **Contracts:** Zod schemas in `src/shared/contracts`, used by the API for request validation and by the web app for response validation. Drift fails loudly.
 - **Domain logic:** pure, tested functions in `src/shared/domain` (conflicts, acceptance, CFP window, conditional rules). No I/O, injected clocks.
-- **Persistence boundary:** `src/worker/repo` — handlers only see the `SpeakerOpsRepo` interface. `D1Repo` is the working default; `AirtableRepo` is the compiling boundary for live Airtable persistence (`DATA_BACKEND` switches).
+- **Persistence boundary:** `src/worker/repo` — handlers only see the `SpeakerOpsRepo` interface, and `D1Repo` is the complete product backend. Airtable stays in the rate-safe operational mirror boundary rather than the judging request path.
 
 ## Local development
 
@@ -179,9 +179,10 @@ The JSON API the app uses is the public API.
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Bearer passcode | Create or move an agenda placement |
 | GET | `/api/events/:slug/communications/preview` | Bearer passcode | Preview a reminder or session update |
 | POST | `/api/events/:slug/communications/simulate` | Bearer passcode | Persist a simulated delivery receipt |
-| GET | `/api/integrations/airtable/status` | Bearer passcode | Airtable proof connectivity and D1 fallback state |
+| GET | `/api/airtable/status` | Bearer passcode | Airtable mirror connectivity, schema, mapping, and reset-safety state |
+| POST | `/api/airtable/events/:slug/sync` | Bearer passcode | Idempotently mirror one event into Airtable |
 | POST | `/api/speakers/:speakerId/assets` | Bearer passcode | Upload a speaker file to R2 (multipart: `file`, `kind`) |
-| GET | `/api/assets/:assetId` | — | Download/stream a stored asset |
+| GET | `/api/assets/:assetId` | Asset link | Download/stream a stored asset |
 | GET | `/api/admin/ping` | Bearer passcode | Passcode verification (204) |
 
 Errors are uniform: `{ "error": { "code", "message", "issues?" } }`.

@@ -48,7 +48,8 @@ what your JSON files say. So be rough with it.
 8. **Approve it.** A note box opens — type something short ("great topic"), then
    **Draft acceptance email**. Check hard:
    - The email must contain the speaker's **portal link** and the **onboarding
-     checklist** (headshot, bio, slides, AV check). Always — even weird notes.
+     checklist** (confirm bio, upload headshot, upload draft slides, sign recording
+     release). Always — even weird notes.
    - **Send (simulated) & approve**: green toast, queue count drops by one.
    - Reload and switch the scope chip to **All**: your note should now sit on the
      card as a committee note. ("Approve without email" must also save the note.)

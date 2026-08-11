@@ -1,6 +1,6 @@
 # SpeakerOps API and Embeds
 
-SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. Public routes do not require auth and do not include speaker email addresses, review data, private tasks, or organizer notes.
+SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. Public event routes do not require auth and do not include speaker email addresses, review data, private tasks, or organizer notes. Speaker-portal tokens and asset ids are scoped capability links: anyone holding one can access only that linked speaker or file.
 
 ## Public JSON
 
@@ -37,7 +37,8 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Create or move a session placement |
 | GET | `/api/events/:slug/communications/preview` | Render task-reminder or session-update email |
 | POST | `/api/events/:slug/communications/simulate` | Persist a simulated send and delivery receipt |
-| GET | `/api/integrations/airtable/status` | Airtable proof connectivity, throttling, and D1 fallback state |
+| GET | `/api/airtable/status` | Airtable mirror connectivity, schema, mapping, and reset-safety state |
+| POST | `/api/airtable/events/:slug/sync` | Idempotently mirror one event into Airtable |
 | POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
 | GET | `/api/admin/ping` | Passcode verification |
 

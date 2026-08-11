@@ -108,8 +108,8 @@ Complete one task. Upload any small image as a headshot.
 
 **2:50 — Communications**
 Pick the accepted speaker, show the preview.
-> "Reminders merge their actual outstanding tasks. Sends are simulated by default with a
-> receipt — flip one env var for real email — and the calendar invite is a real .ics."
+> "Reminders merge their actual outstanding tasks. Sends are deliberately simulated with
+> a persisted receipt, and the calendar invite is a real .ics."
 
 Download the .ics, show it in the downloads shelf.
 

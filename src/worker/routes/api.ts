@@ -339,7 +339,7 @@ api.get("/docs", (c) =>
     version: pkg.version,
     basePath: "/api",
     auth: {
-      public: "No auth. Public routes never include speaker emails or organizer-only review data.",
+      public: "Public event routes require no auth and never include speaker emails or organizer-only review data. Speaker and asset links are scoped capability URLs.",
       organizer: "Bearer passcode in the Authorization header.",
     },
     endpoints: [
@@ -353,7 +353,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/embeds/events/:slug/sessions", auth: "public", purpose: "Drop-in sessions iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
-      { method: "GET", path: "/speaker-portal/:token", auth: "public", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
+      { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
@@ -372,7 +372,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
-      { method: "GET", path: "/assets/:assetId", auth: "public", purpose: "Stream a stored asset." },
+      { method: "GET", path: "/assets/:assetId", auth: "asset link", purpose: "Stream a stored asset." },
     ],
     embeds: {
       schedule:

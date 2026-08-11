@@ -32,7 +32,7 @@ SpeakerOps is an open-source, cloneable replacement for the core conference-prog
 
 | Claim | Evidence |
 | --- | --- |
-| Open-source replacement | Public MIT repository, one-command local D1, one Worker architecture |
+| Open-source replacement | Public MIT repository, documented local D1 setup, one Worker architecture |
 | Complete program job | CFP → decision → session → agenda → speaker portal → communication → public embeds |
 | Correct data model | Submission/session separation, lineage constraint, direct-session origin |
 | Reliable scheduling | Pure tested conflict engine and visible live room/speaker overlaps |
