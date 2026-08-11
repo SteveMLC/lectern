@@ -30,12 +30,14 @@
     "demo:check": "vitest run src/shared/domain/demoData.check.test.ts --reporter=verbose",
     "db:migrate:local": "wrangler d1 migrations apply speakerops-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply speakerops-db --remote",
-    "db:seed:local": "wrangler d1 execute speakerops-db --local --file seed/seed.sql",
-    "db:seed:remote": "wrangler d1 execute speakerops-db --remote --file seed/seed.sql",
+    "db:seed:local": "wrangler d1 execute speakerops-db --local --file seed/seed.sql && node scripts/seed-headshots.mjs --local",
+    "db:seed:remote": "wrangler d1 execute speakerops-db --remote --file seed/seed.sql && node scripts/seed-headshots.mjs --remote",
     "db:reset:local": "pnpm db:seed:local",
     "db:reset:remote": "pnpm demo:reset:remote",
     "cf:provision": "wrangler d1 create speakerops-db && wrangler r2 bucket create speakerops-assets",
-    "deploy": "vite build && wrangler deploy"
+    "deploy": "vite build && wrangler deploy",
+    "headshots:seed:local": "node scripts/seed-headshots.mjs --local",
+    "headshots:seed:remote": "node scripts/seed-headshots.mjs --remote"
   },
   "dependencies": {
     "clsx": "^2.1.0",

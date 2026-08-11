@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "./ui";
 
 /**
@@ -46,15 +47,19 @@ export function SpeakerAvatar({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
+  // A record can outlive its object (a wiped bucket, a half-run seed). Falling
+  // back to initials keeps that a non-event instead of a broken image.
+  const [imageFailed, setImageFailed] = useState(false);
   const dimensions = size === "sm" ? "size-9 text-xs" : size === "lg" ? "size-20 text-xl" : "size-12 text-sm";
 
-  if (headshotUrl) {
+  if (headshotUrl && !imageFailed) {
     return (
       <img
         src={headshotUrl}
         alt={`${name} headshot`}
         loading="lazy"
-        className={cn("shrink-0 rounded-full object-cover", dimensions, className)}
+        onError={() => setImageFailed(true)}
+        className={cn("shrink-0 rounded-full bg-zinc-100 object-cover", dimensions, className)}
       />
     );
   }
