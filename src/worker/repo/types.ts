@@ -36,6 +36,7 @@ import type {
   TaskDefinition,
 } from "../../shared/contracts";
 import type { SpeakerCsvRow } from "../../shared/domain/speakerCsv";
+import type { EmailDeliveryResult } from "../integrations/emailDelivery";
 
 /**
  * Persistence boundary. Route handlers and domain code talk to this interface
@@ -101,7 +102,7 @@ export interface SpeakerOpsRepo {
   createTrack(input: CreateTrackInput): Promise<EventBundle>;
   createRoom(input: CreateRoomInput): Promise<EventBundle>;
   createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
-  simulateCommunication(input: SimulateCommunicationInput): Promise<void>;
+  simulateCommunication(input: SimulateCommunicationInput): Promise<EmailDeliveryResult>;
   queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
   listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;

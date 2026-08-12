@@ -810,8 +810,11 @@ export type SimulateCommunicationRequest = z.infer<typeof SimulateCommunicationR
 
 export const SimulateCommunicationResponse = z.object({
   messageId: z.string(),
-  status: z.literal("sent_simulated"),
-  deliveredAt: z.iso.datetime({ offset: true }),
+  status: z.enum(["sent_simulated", "sent", "failed"]),
+  mode: z.enum(["simulated", "resend"]),
+  deliveredAt: z.iso.datetime({ offset: true }).nullable(),
+  providerId: z.string().nullable(),
+  error: z.string().nullable(),
 });
 export type SimulateCommunicationResponse = z.infer<typeof SimulateCommunicationResponse>;
 

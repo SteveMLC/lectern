@@ -52,6 +52,7 @@ import type {
   BulkTaskReminderInput,
   CreateAssetCommentInput,
 } from "../types";
+import { createEmailDelivery, type EmailDelivery } from "../../integrations/emailDelivery";
 
 /**
  * Airtable persistence proof adapter.
@@ -131,7 +132,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
   private lastRequestAt = Number.NEGATIVE_INFINITY;
   private readonly cache = new Map<string, { expiresAt: number; records: AirtableRecord[] }>();
 
-  constructor(private readonly cfg: AirtableConfig) {
+  constructor(
+    private readonly cfg: AirtableConfig,
+    private readonly emailDelivery: EmailDelivery = createEmailDelivery({}),
+  ) {
     this.fetcher = cfg.fetcher ?? globalThis.fetch.bind(globalThis);
     this.clock = cfg.clock ?? Date.now;
     this.sleep = cfg.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -418,7 +422,13 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("submitReviewerScorecard");
   }
 
-  async simulateCommunication(input: SimulateCommunicationInput): Promise<void> {
+  async simulateCommunication(input: SimulateCommunicationInput) {
+    const delivery = await this.emailDelivery.send({
+      messageId: input.messageId,
+      toEmail: input.toEmail,
+      subject: input.subject,
+      bodyMd: input.bodyMd,
+    });
     const response = await this.airtableFetch(AIRTABLE_TABLES.messages, {
       method: "POST",
       body: JSON.stringify({
@@ -432,12 +442,14 @@ export class AirtableRepo implements SpeakerOpsRepo {
               "To Email": input.toEmail,
               Subject: input.subject,
               "Body Markdown": input.bodyMd,
-              Status: "sent_simulated",
+              Status: delivery.messageStatus,
               "Created At": input.now,
               "Delivery Attempt ID": input.attemptId,
-              "Delivery Mode": "simulated",
-              "Delivery Status": "success",
-              "Delivered At": input.now,
+              "Delivery Mode": delivery.mode,
+              "Delivery Status": delivery.status,
+              "Delivery Provider ID": delivery.providerId,
+              "Delivery Error": delivery.error,
+              "Delivered At": delivery.status === "success" ? input.now : null,
             },
           },
         ],
@@ -447,6 +459,7 @@ export class AirtableRepo implements SpeakerOpsRepo {
       throw new Error(`Airtable Messages write failed (${response.status}): ${await response.text()}`);
     }
     this.cache.delete(AIRTABLE_TABLES.messages);
+    return delivery;
   }
 
   async queueDueTaskReminders(_now: string, _dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {

@@ -416,7 +416,7 @@ export function DecisionControls({
                 >
                   {flow.sending
                     ? "Sending…"
-                    : `Send (simulated) & ${DECISION_VERB[flow.decision]}`}
+                    : `Deliver & ${DECISION_VERB[flow.decision]}`}
                 </Button>
                 <Button
                   type="button"

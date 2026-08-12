@@ -35,7 +35,10 @@
     // RESEND_API_KEY) go in .dev.vars locally and `wrangler secret put` in prod.
     "DATA_BACKEND": "d1",
     // Cost safety: an API key alone can never enable paid model calls.
-    "AI_RUNTIME_MODE": "disabled"
+    "AI_RUNTIME_MODE": "disabled",
+    // Delivery safety: a Resend key alone cannot send mail. Set this to
+    // "resend" only after RESEND_FROM_EMAIL is verified and a test succeeds.
+    "EMAIL_DELIVERY_MODE": "disabled"
   },
   "observability": {
     "enabled": true

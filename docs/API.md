@@ -38,7 +38,7 @@ Organizer routes require `Authorization: Bearer <ORGANIZER_PASSCODE>`.
 | POST | `/api/events/:slug/sessions` | Add a direct invited/sponsor session |
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Create or move a session placement |
 | GET | `/api/events/:slug/communications/preview` | Render task-reminder or session-update email |
-| POST | `/api/events/:slug/communications/simulate` | Persist a simulated send and delivery receipt |
+| POST | `/api/events/:slug/communications/simulate` | Deliver through Resend when explicitly enabled and allowlisted; otherwise persist a simulated receipt |
 | GET | `/api/airtable/status` | Airtable mirror connectivity, schema, mapping, and reset-safety state |
 | POST | `/api/airtable/events/:slug/sync` | Idempotently mirror one event into Airtable |
 | POST | `/api/speakers/:speakerId/assets` | Multipart R2 asset upload with `file` and `kind` |
