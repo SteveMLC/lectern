@@ -45,19 +45,15 @@ Lectern is an open-source, cloneable replacement for the core conference-program
 - [x] Add deployed URL here.
 - [x] Record and decode-validate a clean 1280×720 walkthrough; local ignored submission cut is 2:59.76, and production was reset afterward.
 - [x] Persist provider-reported counters for every runtime AI draft and export them into the append-only reimbursement ledger without request content.
-- [x] Publish the narrated walkthrough through the project Worker/R2 at a stable URL.
 - [ ] Add the organizer form URL when it is sent in Discord and submit with buffer.
 
 ## Submission Assets
 
-- Local full walkthrough: `output/playwright/lectern-walkthrough-draft.webm` (5:23, ignored by git).
-- Local submission cut: `output/playwright/lectern-walkthrough-submission.mp4` (2:59.76, H.264, 1280×720, ignored by git).
-- Narration script: `docs/WALKTHROUGH_NARRATION.txt`; run `pnpm walkthrough:narrate` on macOS to reproducibly build the narrated local fallback at `output/playwright/lectern-walkthrough-final.mp4`.
-- Published narrated walkthrough: https://lectern.lectern-go7.workers.dev/api/public/walkthrough.mp4; run `pnpm walkthrough:publish` to replace the R2 object from the reproducible local final.
-- Machine-readable handoff: `submission.json` keeps the repository, demo, walkthrough, deadline, reimbursement cap, and eventual organizer-form URL in one validated place.
+- The walkthrough video was withdrawn from the submission package on 2026-08-12 (the brief requires no video). Local drafts stay in `output/playwright/` (ignored by git); declaring a `videoUrl` in `submission.json` re-arms every preflight video check.
+- Machine-readable handoff: `submission.json` keeps the repository, demo, deadline, reimbursement cap, and eventual organizer-form URL in one validated place.
 - The current official brief says the form will be sent out; it does not contain a submission-form URL as of August 10, 2026. Watch the organizer Discord before final submission.
 
-Run `pnpm usage:runtime` after any production AI-assisted draft, then run `pnpm submission:preflight` immediately before upload. Preflight re-runs the release gate and strict production smoke test, fails if a persisted runtime event is missing from the ledger, checks the public GitHub repository, validates the local walkthrough codec/resolution/duration/audio, confirms the current commit is on `origin/main`, and reports missing organizer/video URLs or receipt evidence without inventing them. Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form and uploaded video URLs exist.
+Run `pnpm usage:runtime` after any production AI-assisted draft, then run `pnpm submission:preflight` immediately before upload. Preflight re-runs the release gate and strict production smoke test, fails if a persisted runtime event is missing from the ledger, checks the public GitHub repository, confirms the current commit is on `origin/main`, and reports a missing organizer-form URL or receipt evidence without inventing them. (Video checks are dormant while no `videoUrl` is declared.) Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form URL exists.
 
 ## Known Intentional Limits
 
