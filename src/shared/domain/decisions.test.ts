@@ -32,14 +32,14 @@ describe("reviewerIdentity", () => {
     for (const input of [undefined, "", "   "]) {
       expect(reviewerIdentity(input)).toEqual({
         name: "Organizer",
-        email: "organizer@speakerops.local",
+        email: "organizer@lectern.local",
       });
     }
   });
 
   it("gives each name a stable address: same name replaces, different names stack", () => {
     const priya = reviewerIdentity("Priya Sharma");
-    expect(priya).toEqual({ name: "Priya Sharma", email: "priya.sharma@reviewers.speakerops.local" });
+    expect(priya).toEqual({ name: "Priya Sharma", email: "priya.sharma@reviewers.lectern.local" });
     // Deterministic: the same name always maps to the same address.
     expect(reviewerIdentity("Priya Sharma")).toEqual(priya);
     // Different people never collide onto one row.
@@ -49,13 +49,13 @@ describe("reviewerIdentity", () => {
   it("normalizes punctuation and case without losing the display name", () => {
     const identity = reviewerIdentity("  O'Brien, Sam  ");
     expect(identity.name).toBe("O'Brien, Sam");
-    expect(identity.email).toBe("o.brien.sam@reviewers.speakerops.local");
+    expect(identity.email).toBe("o.brien.sam@reviewers.lectern.local");
   });
 
   it("keeps a stable identity for names with no ascii alphanumerics", () => {
     const first = reviewerIdentity("李华");
     expect(first.name).toBe("李华");
-    expect(first.email).toMatch(/^reviewer\.[0-9a-f]+@reviewers\.speakerops\.local$/);
+    expect(first.email).toMatch(/^reviewer\.[0-9a-f]+@reviewers\.lectern\.local$/);
     expect(reviewerIdentity("李华")).toEqual(first);
     expect(reviewerIdentity("田中")).not.toEqual(first);
   });

@@ -42,7 +42,7 @@ export function Landing() {
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
               S
             </span>
-            SpeakerOps
+            Lectern
           </span>
           <nav className="flex items-center gap-4 text-sm text-zinc-600">
             <Link to={`/e/${demoSlug}`} className="hover:text-zinc-900">
@@ -73,7 +73,7 @@ export function Landing() {
             CFP to published agenda, without the enterprise tax.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600">
-            SpeakerOps is the program side of event software: submissions, review, scheduling,
+            Lectern is the program side of event software: submissions, review, scheduling,
             speaker operations, and public embeds. One deploy, your data, no sales call.
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
@@ -105,7 +105,7 @@ export function Landing() {
       </main>
 
       <footer className="border-t border-zinc-200 py-8 text-center text-xs text-zinc-500">
-        <p>SpeakerOps — an open-source Sessionboard replacement built for Kill My SaaS 1.</p>
+        <p>Lectern — an open-source Sessionboard replacement built for Kill My SaaS 1.</p>
         <p className="mt-1.5">
           Judging or evaluating this deployment (human or agent)?{" "}
           <a href="/llms.txt" className="font-medium text-accent hover:underline">

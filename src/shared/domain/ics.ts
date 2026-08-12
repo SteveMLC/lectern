@@ -42,7 +42,7 @@ export function buildCalendarInvite(input: CalendarInviteInput): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//SpeakerOps//Program Calendar//EN",
+    "PRODID:-//Lectern//Program Calendar//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -70,7 +70,7 @@ export function buildCalendarCollection(inputs: CalendarInviteInput[]): string {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//SpeakerOps//Personal Schedule//EN",
+    "PRODID:-//Lectern//Personal Schedule//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     ...events.map((event) => event.trimEnd()),

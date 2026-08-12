@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "speakerops",
+  "name": "lectern",
   "main": "src/worker/index.ts",
   "compatibility_date": "2025-12-01",
   "workers_dev": true,
@@ -14,6 +14,9 @@
     // the Worker, which makes this a nasty one to catch).
     "run_worker_first": ["/demo", "/llms.txt", "/api/*"]
   },
+  // D1/R2 resource names predate the Lectern rename (the product began as
+  // "SpeakerOps"). Cloudflare cannot rename provisioned resources, and the
+  // binding names the code sees (DB, BUCKET) are unaffected.
   "d1_databases": [
     {
       "binding": "DB",

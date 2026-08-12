@@ -46,7 +46,7 @@ export type ApiError = z.infer<typeof ApiError>;
 
 export const HealthResponse = z.object({
   ok: z.boolean(),
-  service: z.literal("speakerops"),
+  service: z.literal("lectern"),
   version: z.string(),
   dataBackend: z.enum(["d1", "airtable"]),
   time: z.iso.datetime({ offset: true }),

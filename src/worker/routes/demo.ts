@@ -22,7 +22,7 @@ import { errorResponse } from "../lib/http";
  * `demo-data/` and the running app. This is what makes a non-engineer's JSON
  * edit visible in the product in one click.
  *
- * Deliberately talks to D1 directly rather than through SpeakerOpsRepo:
+ * Deliberately talks to D1 directly rather than through LecternRepo:
  * loading fixtures is the same class of operation as seeding, it is
  * inherently storage-shaped, and keeping it out of the repository interface
  * means feature lanes can evolve that interface without this tool colliding.

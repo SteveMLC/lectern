@@ -4,7 +4,7 @@ import { createEmailDelivery } from "./emailDelivery";
 const message = {
   messageId: "msg_123",
   toEmail: "authorized@example.com",
-  subject: "SpeakerOps delivery test",
+  subject: "Lectern delivery test",
   bodyMd: "This is a labeled transport test.",
 };
 
@@ -12,7 +12,7 @@ describe("email delivery", () => {
   it("stays simulated unless real delivery is explicitly enabled", async () => {
     const fetcher = vi.fn();
     const result = await createEmailDelivery(
-      { RESEND_API_KEY: "re_present_but_inert", RESEND_FROM_EMAIL: "SpeakerOps <updates@example.com>" },
+      { RESEND_API_KEY: "re_present_but_inert", RESEND_FROM_EMAIL: "Lectern <updates@example.com>" },
       fetcher as unknown as typeof fetch,
     ).send(message);
 
@@ -46,7 +46,7 @@ describe("email delivery", () => {
         EMAIL_DELIVERY_MODE: "resend",
         EMAIL_DELIVERY_ALLOWLIST: "authorized@example.com",
         RESEND_API_KEY: "re_test",
-        RESEND_FROM_EMAIL: "SpeakerOps <updates@example.com>",
+        RESEND_FROM_EMAIL: "Lectern <updates@example.com>",
       },
       fetcher as unknown as typeof fetch,
     ).send({ ...message, toEmail: "fictional-speaker@example.test" });
@@ -62,7 +62,7 @@ describe("email delivery", () => {
       {
         EMAIL_DELIVERY_MODE: "resend",
         RESEND_API_KEY: "re_test",
-        RESEND_FROM_EMAIL: "SpeakerOps <updates@example.com>",
+        RESEND_FROM_EMAIL: "Lectern <updates@example.com>",
       },
       fetcher as unknown as typeof fetch,
     ).send(message);
@@ -78,12 +78,12 @@ describe("email delivery", () => {
     expect(url).toBe("https://api.resend.com/emails");
     expect(init?.headers).toMatchObject({
       authorization: "Bearer re_test",
-      "idempotency-key": "speakerops/msg_123",
+      "idempotency-key": "lectern/msg_123",
     });
     expect(JSON.parse(String(init?.body))).toEqual({
-      from: "SpeakerOps <updates@example.com>",
+      from: "Lectern <updates@example.com>",
       to: ["authorized@example.com"],
-      subject: "SpeakerOps delivery test",
+      subject: "Lectern delivery test",
       text: "This is a labeled transport test.",
     });
   });
@@ -97,7 +97,7 @@ describe("email delivery", () => {
       {
         EMAIL_DELIVERY_MODE: "resend",
         RESEND_API_KEY: "re_test",
-        RESEND_FROM_EMAIL: "SpeakerOps <updates@example.com>",
+        RESEND_FROM_EMAIL: "Lectern <updates@example.com>",
       },
       fetcher as unknown as typeof fetch,
     ).send(message);

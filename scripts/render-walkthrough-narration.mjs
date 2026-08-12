@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const source = resolve(root, process.env.SPEAKEROPS_WALKTHROUGH_SOURCE ?? "output/playwright/speakerops-walkthrough-submission.mp4");
-const narration = resolve(root, process.env.SPEAKEROPS_NARRATION_SCRIPT ?? "docs/WALKTHROUGH_NARRATION.txt");
-const audio = resolve(root, process.env.SPEAKEROPS_NARRATION_AUDIO ?? "output/playwright/speakerops-walkthrough-narration.aiff");
-const output = resolve(root, process.env.SPEAKEROPS_WALKTHROUGH_OUTPUT ?? "output/playwright/speakerops-walkthrough-final.mp4");
-const voice = process.env.SPEAKEROPS_NARRATION_VOICE ?? "Samantha";
-const rate = process.env.SPEAKEROPS_NARRATION_RATE ?? "150";
+const source = resolve(root, process.env.LECTERN_WALKTHROUGH_SOURCE ?? "output/playwright/lectern-walkthrough-submission.mp4");
+const narration = resolve(root, process.env.LECTERN_NARRATION_SCRIPT ?? "docs/WALKTHROUGH_NARRATION.txt");
+const audio = resolve(root, process.env.LECTERN_NARRATION_AUDIO ?? "output/playwright/lectern-walkthrough-narration.aiff");
+const output = resolve(root, process.env.LECTERN_WALKTHROUGH_OUTPUT ?? "output/playwright/lectern-walkthrough-final.mp4");
+const voice = process.env.LECTERN_NARRATION_VOICE ?? "Samantha";
+const rate = process.env.LECTERN_NARRATION_RATE ?? "150";
 
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, encoding: "utf8", timeout: 120_000 });

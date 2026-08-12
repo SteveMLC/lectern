@@ -1,4 +1,4 @@
--- SpeakerOps deterministic seed. Running this file is also the demo reset:
+-- Lectern deterministic seed. Running this file is also the demo reset:
 -- it deletes all rows (children first) and re-inserts identical fixed data.
 -- Every id and timestamp is hand-written, so seed -> use -> seed always
 -- returns the database to the exact same state.
@@ -54,7 +54,7 @@ INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, ti
  'Two days on building software that ships.',
  'Horizon Dev Summit brings 600 engineers together for two days of talks, workshops, and panels on AI engineering, developer experience, infrastructure, and product craft.',
  '2026-10-14', '2026-10-15', 'America/Los_Angeles',
- 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026', '2026-08-01T09:00:00Z',
+ 'Fort Mason Center, San Francisco', 'https://lectern.lectern-go7.workers.dev/e/horizon-2026', '2026-08-01T09:00:00Z',
  '2026-07-15T09:00:00Z', '2026-08-01T09:00:00Z');
 
 INSERT INTO tracks (id, event_id, name, description, color, sort_order) VALUES
@@ -336,7 +336,7 @@ Welcome to Horizon Dev Summit 2026. Everything you need before the event:
 - **Slides:** 16:9, PDF or Keynote. Upload a draft by October 1.
 - **Recording:** all Main Hall sessions are recorded. Sign the release in your portal.
 - **AV:** HDMI and USB-C at the podium. Confidence monitor with timer.',
- '<iframe src="https://speakerops.speakerops-go7.workers.dev/api/embeds/events/horizon-2026/schedule" title="Live event schedule" width="100%" height="360" loading="lazy"></iframe>',
+ '<iframe src="https://lectern.lectern-go7.workers.dev/api/embeds/events/horizon-2026/schedule" title="Live event schedule" width="100%" height="360" loading="lazy"></iframe>',
  1, '2026-08-02T12:00:00Z');
 
 INSERT INTO integration_connections (id, event_id, system, status, config_json, updated_at) VALUES

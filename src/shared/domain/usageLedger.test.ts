@@ -78,7 +78,7 @@ describe("usage ledger", () => {
   });
 
   it("streams and hashes large bounded evidence without retaining irrelevant records", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "speakerops-usage-"));
+    const directory = await mkdtemp(join(tmpdir(), "lectern-usage-"));
     const file = join(directory, "claude.jsonl");
     const old = JSON.stringify({ type: "assistant", timestamp: "2026-08-01T00:00:00Z", message: { id: "old", model: "claude-opus-5", usage: { input_tokens: 1 } } });
     const irrelevant = JSON.stringify({ type: "attachment", timestamp: "2026-08-01T00:00:01Z", payload: "x".repeat(1_000_000) });
@@ -151,7 +151,7 @@ describe("usage ledger", () => {
       evidence_sha256: "e".repeat(64),
       measurement: "provider_reported",
     }, pricing, {
-      surface: "https://speakerops.example",
+      surface: "https://lectern.example",
       commit: "abc123",
       recordedAt: "2026-08-10T17:01:00.000Z",
     });
@@ -165,7 +165,7 @@ describe("usage ledger", () => {
       reasoningOutput: 0,
       providerTotal: 190,
     });
-    expect(entry.source).toMatchObject({ kind: "speakerops_runtime_d1", sessionId: "msg_runtime_1" });
+    expect(entry.source).toMatchObject({ kind: "lectern_runtime_d1", sessionId: "msg_runtime_1" });
     expect(entry.cost).toMatchObject({ rateId: "sonnet", receiptStatus: "pending_provider_invoice" });
     expect(entry).not.toHaveProperty("prompt");
     expect(entry).not.toHaveProperty("reviewerNotes");
@@ -343,7 +343,7 @@ describe("usage ledger", () => {
   });
 
   it("refuses to ingest an unrelated receipt outside the private evidence directory", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "speakerops-receipt-boundary-"));
+    const directory = await mkdtemp(join(tmpdir(), "lectern-receipt-boundary-"));
     const privateDirectory = join(directory, "usage", "private");
     const outsideReceipt = join(directory, "unrelated-invoice.pdf");
     const privateReceipt = join(privateDirectory, "provider-receipt.pdf");
@@ -363,7 +363,7 @@ describe("usage ledger", () => {
   });
 
   it("refuses a private-directory symlink that resolves to an outside receipt", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "speakerops-receipt-symlink-"));
+    const directory = await mkdtemp(join(tmpdir(), "lectern-receipt-symlink-"));
     const privateDirectory = join(directory, "usage", "private");
     const outsideReceipt = join(directory, "outside.pdf");
     const linkedReceipt = join(privateDirectory, "linked.pdf");

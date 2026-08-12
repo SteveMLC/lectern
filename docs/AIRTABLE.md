@@ -1,18 +1,18 @@
 # Airtable mirror
 
-SpeakerOps keeps D1 as the authoritative backend. Airtable is a mirror for event teams that want to see operational records in a familiar base: event setup, tracks, rooms, speakers, submissions, sessions, agenda slots, and speaker tasks.
+Lectern keeps D1 as the authoritative backend. Airtable is a mirror for event teams that want to see operational records in a familiar base: event setup, tracks, rooms, speakers, submissions, sessions, agenda slots, and speaker tasks.
 
 The mirror creates its own Airtable tables. Start with an empty base; do not build the schema by hand.
 
 ## Required Airtable Setup
 
-1. Create an empty Airtable base, for example `SpeakerOps Mirror`.
+1. Create an empty Airtable base, for example `Lectern Mirror`.
 2. Copy the base id from the URL. It starts with `app`, for example `appXXXXXXXXXXXXXX`.
 3. Create a personal access token at `https://airtable.com/create/tokens`.
 4. Grant the token only this base, not all bases.
 5. Give the token exactly these scopes:
 
-| Scope | Why SpeakerOps needs it |
+| Scope | Why Lectern needs it |
 | --- | --- |
 | `schema.bases:read` | Check which mirror tables already exist. |
 | `schema.bases:write` | Create missing mirror tables automatically. |
@@ -43,7 +43,7 @@ The first sync creates these eight tables if they do not already exist:
 | Agenda | Scheduled session slots. |
 | Tasks | Speaker onboarding tasks. |
 
-Every table includes `SpeakerOps ID`, the stable internal id used for idempotent updates.
+Every table includes `SpeakerOps ID`, the stable internal id used for idempotent updates. (The column keeps the product's original name — Lectern launched as SpeakerOps — because renaming it would orphan rows in every provisioned base.)
 
 ## API
 
@@ -62,12 +62,12 @@ horizon-2026
 
 ## Why Re-Syncing Is Safe
 
-SpeakerOps records every created Airtable record id in `external_id_map`. On the next sync, known rows are updated in place and only genuinely new rows are created. Re-running the same event should not create duplicates.
+Lectern records every created Airtable record id in `external_id_map`. On the next sync, known rows are updated in place and only genuinely new rows are created. Re-running the same event should not create duplicates.
 
 For live demo resets, use the guarded command rather than the raw seed:
 
 ```sh
-SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+LECTERN_ORGANIZER_PASSCODE=lectern-judge-2026 pnpm demo:reset:remote
 ```
 
 It refuses before mutating D1 unless `data.records:read` works, then reseeds, reconciles mappings, explicitly deduplicates app-owned IDs, and requires the strict production smoke gate to pass. Rows without a `SpeakerOps ID` are never deleted.

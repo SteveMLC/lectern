@@ -1,3 +1,5 @@
+> **Note (2026-08-12):** the product was renamed **Lectern** later this day; names and URLs in this dated record describe the pre-rename deployment.
+
 # Evaluation gap ledger
 
 Baseline: official sbek run `2026-08-12T00-14-16`. The run emitted 84 rubric rows: 46 received product verdicts and 38 could not be judged because the evaluator's capped Anthropic credit was exhausted. The source specifications contain **86 required items**; CFP-08 and SPK-16 were absent from the run output and are now explicitly tracked below. No sbek scenario was re-run during this work.

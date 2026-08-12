@@ -1,9 +1,9 @@
-# SpeakerOps — Tester's Guide
+# Lectern — Tester's Guide
 
 Written for Liam. No setup, no account, no code — everything runs in your browser.
 
-**The app:** https://speakerops.speakerops-go7.workers.dev
-**Organizer passcode** (it's public on purpose): `speakerops-judge-2026`
+**The app:** https://lectern.lectern-go7.workers.dev
+**Organizer passcode** (it's public on purpose): `lectern-judge-2026`
 
 ## What this thing is
 
@@ -102,7 +102,7 @@ what your JSON files say. So be rough with it.
 
 ## How to report
 
-Best: GitHub issues at https://github.com/SteveMLC/speakerops/issues — templates exist
+Best: GitHub issues at https://github.com/SteveMLC/lectern/issues — templates exist
 for **speaker-qa** (friction you hit), **bug** (broken things), and **ux-polish**
 (bad wording). One issue per finding, with what you did → expected → actually happened.
 Screenshots help a lot. If GitHub is annoying in the moment, a text to Dad with a

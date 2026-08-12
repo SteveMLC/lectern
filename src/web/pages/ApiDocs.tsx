@@ -54,7 +54,7 @@ export function ApiDocs() {
       <header className="border-b border-zinc-200 bg-zinc-50/60">
         <div className="mx-auto max-w-5xl px-6 py-10">
           <Link to="/" className="text-xs font-medium text-zinc-500 hover:text-zinc-800">
-            SpeakerOps
+            Lectern
           </Link>
           <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
             <div>

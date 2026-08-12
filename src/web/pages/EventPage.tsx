@@ -37,7 +37,7 @@ export function EventPage() {
       <header className="border-b border-zinc-200 bg-zinc-50/60">
         <div className="mx-auto max-w-4xl px-6 py-12">
           <Link to="/" className="text-xs font-medium text-zinc-500 hover:text-zinc-800">
-            ← SpeakerOps
+            ← Lectern
           </Link>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900">
             {event.name}

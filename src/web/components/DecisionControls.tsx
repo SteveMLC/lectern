@@ -78,7 +78,7 @@ interface FlowState {
   sending?: boolean;
 }
 
-const REVIEWER_NAME_KEY = "speakerops.reviewer.name";
+const REVIEWER_NAME_KEY = "lectern.reviewer.name";
 
 const FLOW_COPY: Record<
   ReviewDecision,

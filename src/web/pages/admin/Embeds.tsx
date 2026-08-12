@@ -36,7 +36,7 @@ const FORMATS: Array<{ value: OutputFormat; label: string }> = [
   { value: "ical", label: "iCal feed" },
 ];
 
-function storageKey(slug: string) { return `speakerops.embeds.${slug}`; }
+function storageKey(slug: string) { return `lectern.embeds.${slug}`; }
 
 function readSaved(slug: string): SavedEmbed[] {
   try {

@@ -41,14 +41,16 @@ function assert(condition, message) {
 }
 
 await check("Submission manifest and deadline", async () => {
-  for (const field of ["repositoryUrl", "demoUrl", "videoUrl", "deadline"]) {
+  for (const field of ["repositoryUrl", "demoUrl", "deadline"]) {
     assert(typeof submission[field] === "string" && submission[field], `submission.json ${field} is required`);
   }
   const repository = new URL(submission.repositoryUrl);
   const demo = new URL(submission.demoUrl);
-  const video = new URL(submission.videoUrl);
+  // The walkthrough video was withdrawn from the submission package on
+  // 2026-08-12; video checks run only when a videoUrl is declared again.
+  const video = submission.videoUrl ? new URL(submission.videoUrl) : null;
   assert(repository.protocol === "https:" && repository.hostname === "github.com", "repositoryUrl must be an HTTPS GitHub URL");
-  assert(demo.protocol === "https:" && video.protocol === "https:", "demo and video URLs must use HTTPS");
+  assert(demo.protocol === "https:" && (!video || video.protocol === "https:"), "demo and video URLs must use HTTPS");
   const deadline = Date.parse(submission.deadline);
   assert(Number.isFinite(deadline), "submission deadline must be ISO-8601");
   assert(Date.now() < deadline, `submission deadline passed at ${submission.deadline}`);
@@ -63,8 +65,8 @@ await check("Strict production and Airtable smoke test", async () => {
   run("pnpm", ["smoke:production"], {
     env: {
       REQUIRE_AIRTABLE: "1",
-      SPEAKEROPS_BASE_URL: process.env.SPEAKEROPS_BASE_URL ?? submission.demoUrl,
-      SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
+      LECTERN_BASE_URL: process.env.LECTERN_BASE_URL ?? submission.demoUrl,
+      LECTERN_ORGANIZER_PASSCODE: process.env.LECTERN_ORGANIZER_PASSCODE ?? "lectern-judge-2026",
     },
   });
 });
@@ -72,7 +74,7 @@ await check("Strict production and Airtable smoke test", async () => {
 await check("Public GitHub repository and MIT license", async () => {
   const repositoryPath = new URL(submission.repositoryUrl).pathname.replace(/^\/+|\/+$/g, "");
   const response = await fetch(`https://api.github.com/repos/${repositoryPath}`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "speakerops-submission-preflight" },
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "lectern-submission-preflight" },
   });
   assert(response.ok, `GitHub repository lookup returned HTTP ${response.status}`);
   const repository = await response.json();
@@ -90,11 +92,12 @@ await check("Clean tree and current commit published on main", async () => {
   assert(head === remote, `HEAD ${head.slice(0, 12)} is not origin/main ${remote.slice(0, 12)}`);
 });
 
-await check("Walkthrough media is submission-ready", async () => {
+const videoDeclared = Boolean(process.env.LECTERN_VIDEO_URL ?? submission.videoUrl);
+if (videoDeclared) await check("Walkthrough media is submission-ready", async () => {
   const candidates = [
-    process.env.SPEAKEROPS_WALKTHROUGH_FILE,
-    "output/playwright/speakerops-walkthrough-final.mp4",
-    "output/playwright/speakerops-walkthrough-submission.mp4",
+    process.env.LECTERN_WALKTHROUGH_FILE,
+    "output/playwright/lectern-walkthrough-final.mp4",
+    "output/playwright/lectern-walkthrough-submission.mp4",
   ].filter(Boolean);
   let video;
   for (const candidate of candidates) {
@@ -121,8 +124,8 @@ await check("Walkthrough media is submission-ready", async () => {
   if (!audio) warnings.push(`Walkthrough ${video} has no audio; use the narrated final or record a human voiceover.`);
 });
 
-const videoUrl = process.env.SPEAKEROPS_VIDEO_URL ?? submission.videoUrl;
-await check("Published walkthrough URL is submission-ready", async () => {
+const videoUrl = process.env.LECTERN_VIDEO_URL ?? submission.videoUrl;
+if (videoDeclared) await check("Published walkthrough URL is submission-ready", async () => {
   assert(videoUrl, "no published walkthrough URL is configured");
   const response = await fetch(videoUrl, { method: "HEAD" });
   assert(response.ok, `published walkthrough returned HTTP ${response.status}`);
@@ -143,8 +146,8 @@ await check("Narration and reimbursement audit artifacts", async () => {
 await check("Production AI calls are exported to the reimbursement ledger", async () => {
   run("pnpm", ["usage:runtime", "--", "--check", "--quiet"], {
     env: {
-      SPEAKEROPS_ORGANIZER_PASSCODE: process.env.SPEAKEROPS_ORGANIZER_PASSCODE ?? "speakerops-judge-2026",
-      SPEAKEROPS_BASE_URL: process.env.SPEAKEROPS_BASE_URL ?? submission.demoUrl,
+      LECTERN_ORGANIZER_PASSCODE: process.env.LECTERN_ORGANIZER_PASSCODE ?? "lectern-judge-2026",
+      LECTERN_BASE_URL: process.env.LECTERN_BASE_URL ?? submission.demoUrl,
     },
   });
 });
@@ -162,12 +165,14 @@ if (receiptCount === 0) {
   else warnings.push(message);
 }
 
+// The walkthrough is withdrawn (no videoUrl declared), so only the organizer
+// form URL is tracked as a missing-submission input here.
 for (const [name, value] of [
-  ["organizer submission form", process.env.SPEAKEROPS_SUBMISSION_FORM_URL ?? submission.submissionFormUrl],
-  ["uploaded walkthrough", videoUrl],
+  ["organizer submission form", process.env.LECTERN_SUBMISSION_FORM_URL ?? submission.submissionFormUrl],
+  ...(videoDeclared ? [["uploaded walkthrough", videoUrl]] : []),
 ]) {
   if (!value) {
-    const message = `Missing ${name} URL; provide it as ${name === "organizer submission form" ? "SPEAKEROPS_SUBMISSION_FORM_URL" : "SPEAKEROPS_VIDEO_URL"}.`;
+    const message = `Missing ${name} URL; provide it as ${name === "organizer submission form" ? "LECTERN_SUBMISSION_FORM_URL" : "LECTERN_VIDEO_URL"}.`;
     if (requiredUrls) checks.push({ name: `${name} URL`, ok: false, error: message });
     else warnings.push(message);
   } else {

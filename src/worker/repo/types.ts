@@ -48,7 +48,7 @@ import type { EmailDeliveryResult } from "../integrations/emailDelivery";
  *   stays deterministic and testable. Upserts may return a pre-existing id.
  * - All timestamps are passed in as ISO strings (injected clock).
  */
-export interface SpeakerOpsRepo {
+export interface LecternRepo {
   /** Cheap connectivity probe for /api/health. */
   health(): Promise<boolean>;
 

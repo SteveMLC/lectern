@@ -7,20 +7,20 @@ then show the product removing it. Never name competitors.
 ## Before you hit record
 
 ```bash
-cd workspace/repos/speakerops
-SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+cd workspace/repos/lectern
+LECTERN_ORGANIZER_PASSCODE=lectern-judge-2026 pnpm demo:reset:remote
 # Fails before mutation unless Airtable can reconcile, then restores the pristine seed and strict 6/6 proof.
 ```
 
-- Open tabs in order, left to right: ①`https://speakerops.speakerops-go7.workers.dev` ②an
+- Open tabs in order, left to right: ①`https://lectern.lectern-go7.workers.dev` ②an
   incognito window (proves no-login), ③nothing else.
 - Do NOT rotate secrets or deploy within 10 minutes of recording (edge propagation).
-- Passcode you will type on camera: `speakerops-judge-2026` — it is deliberately public.
+- Passcode you will type on camera: `lectern-judge-2026` — it is deliberately public.
 
 ## The walk
 
 **0:00 — Landing (tab 1)**
-> "This is SpeakerOps — the program side of Sessionboard, open source, running on
+> "This is Lectern — the program side of Sessionboard, open source, running on
 > Cloudflare Workers for about zero dollars. Everything you're about to see is the live
 > deployed site, and there is no login — you can click along right now."
 
@@ -132,7 +132,7 @@ Narrow the window briefly.
 > "Judges will break things, so the demo expects it: this second, hand-authored
 > conference loads in one click and resets to its files in one click. The repo is MIT,
 > the API is public and documented, there's an llms.txt if your agent is doing the
-> judging — and the Airtable mirror is wired for teams who live there. SpeakerOps:
+> judging — and the Airtable mirror is wired for teams who live there. Lectern:
 > the $40k workflow, without the $40k."
 
 Stop recording.
@@ -140,7 +140,7 @@ Stop recording.
 ## After recording
 
 ```bash
-SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+LECTERN_ORGANIZER_PASSCODE=lectern-judge-2026 pnpm demo:reset:remote
 # Returns prod to pristine and removes only duplicate app-owned Airtable rows.
 ```
 

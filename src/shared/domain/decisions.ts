@@ -43,7 +43,7 @@ export function reviewerIdentity(name?: string): { name: string; email: string }
   if (!trimmed) {
     // Must stay byte-identical to the pre-feature identity so an upgrade
     // never duplicates the default reviewer's earlier notes.
-    return { name: "Organizer", email: "organizer@speakerops.local" };
+    return { name: "Organizer", email: "organizer@lectern.local" };
   }
 
   let slug = trimmed
@@ -62,5 +62,5 @@ export function reviewerIdentity(name?: string): { name: string; email: string }
     slug = `reviewer.${hash.toString(16)}`;
   }
 
-  return { name: trimmed, email: `${slug}@reviewers.speakerops.local` };
+  return { name: trimmed, email: `${slug}@reviewers.lectern.local` };
 }

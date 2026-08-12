@@ -30,7 +30,7 @@ const NAV = [
   { to: "/admin/integrations", label: "Integrations", end: false },
 ];
 
-const ACTIVE_EVENT_KEY = "speakerops.organizer.event";
+const ACTIVE_EVENT_KEY = "lectern.organizer.event";
 
 export function AdminLayout() {
   const [unlocked, setUnlocked] = useState(() => getPasscode() !== null);
@@ -82,7 +82,7 @@ function AdminShell({ onLock }: { onLock: () => void }) {
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
               S
             </span>
-            SpeakerOps
+            Lectern
           </Link>
           <button
             type="button"
@@ -127,7 +127,7 @@ function AdminShell({ onLock }: { onLock: () => void }) {
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
               S
             </span>
-            SpeakerOps
+            Lectern
           </Link>
           <div className="mt-3">
             <EventPicker events={events} value={event.slug} onChange={selectEvent} />
