@@ -430,29 +430,33 @@ function ProposalCard({
             </div>
             {coSpeakers.map((speaker, index) => (
               <div key={index} className="mt-3 grid gap-3 border-t border-zinc-100 pt-3 sm:grid-cols-2">
-                <Field label="Full name" required>
+                <Field label="Full name" htmlFor={`portal-co-name-${index}`} required>
                   <Input
+                    id={`portal-co-name-${index}`}
                     value={speaker.name}
                     required
                     onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
                   />
                 </Field>
-                <Field label="Email" required>
+                <Field label="Email" htmlFor={`portal-co-email-${index}`} required>
                   <Input
+                    id={`portal-co-email-${index}`}
                     type="email"
                     value={speaker.email}
                     required
                     onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, email: event.target.value } : item))}
                   />
                 </Field>
-                <Field label="Company">
+                <Field label="Company" htmlFor={`portal-co-company-${index}`}>
                   <Input
+                    id={`portal-co-company-${index}`}
                     value={speaker.company}
                     onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, company: event.target.value } : item))}
                   />
                 </Field>
-                <Field label="Role label">
+                <Field label="Role label" htmlFor={`portal-co-role-${index}`}>
                   <Input
+                    id={`portal-co-role-${index}`}
                     value={speaker.role}
                     onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, role: event.target.value } : item))}
                   />
