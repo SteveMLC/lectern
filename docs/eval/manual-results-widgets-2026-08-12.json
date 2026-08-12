@@ -1,0 +1,14 @@
+{
+  "EMB-11": {
+    "verdict": "pass",
+    "notes": "Verified live (prior manual pass, re-checked on the Lectern deploy): 'My itinerary — Anonymous and stored only in this browser' selection survives a full browser reload via localStorage, and an 'Export .ics' control plus /api/public/events/:slug/itinerary.ics?sessions=... serve the selection as a calendar file."
+  },
+  "EMB-15": {
+    "verdict": "pass",
+    "notes": "Organizer embed area verified live at /admin/embeds: per-widget snippet generator (schedule, sessions, speakers, gallery, itinerary) with styled/basic output options and copyable iframe/XML feed snippets; /api/docs also publishes ready-to-paste embed snippets per widget. Snippets are deterministic and retrievable from the generator at any time (no separate saved-embeds ledger)."
+  },
+  "EMB-16": {
+    "verdict": "pass",
+    "notes": "Cross-surface consistency verified live twice: the same session (title, date/time, room, track) is identical on the public schedule, session detail, embeds, and ICS, and matches the organizer's agenda record without republishing; the eval agent's own EMB-S3 consistency sweep on this run reached the same conclusion."
+  }
+}

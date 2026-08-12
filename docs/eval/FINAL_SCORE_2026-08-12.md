@@ -10,7 +10,7 @@ Measured in three passes on 2026-08-12:
 2. **First finalized pass**: 82.3% — but the Call for Papers, Speaker
    Management, and Content Management auto-verdicts predated the
    deliverables uplift, so those areas carried stale numbers.
-3. **Targeted re-grade** of those three areas against the shipped build,
+3. **Targeted re-grades** of those three areas, then of Public Widgets, against the shipped build,
    plus live-probed manual verdicts for every remaining manual item in
    them (`manual-results-regrade-2026-08-12.json`).
 
@@ -21,15 +21,16 @@ Measured in three passes on 2026-08-12:
 | Speaker Management | 15% | 57.8% | 67.2% | **89.4%** |
 | Content Management | 15% | 48.4% | 50.0% | **85.5%** |
 | AI Agenda | 10% | never judged | 93.8% | **94.4%** |
-| Public Widgets | 20% | never judged | manual-only | 90.6%† |
+| Public Widgets | 20% | never judged | manual-only | **92.9%** |
 
-**Overall: 37% → 89.9% (coverage: 89.6% of total rubric weight judged).**
+**Overall: 37% → 90.4% at 100% rubric coverage — every weighted item
+judged, zero manual items pending.**
 
-† Public Widgets carries the weakest evidence: the original run's judge
-calls died on exhausted API credits, so 90.6% rests on manually verified
-items covering only 45.7% of the area's weight. A dedicated
-public-widgets re-run is in flight to close that coverage hole honestly;
-this file will be updated with its result.
+Public Widgets was the last coverage hole (the original run's judge
+calls died on exhausted API credits). A dedicated re-run on the Lectern
+deployment judged all 35 weight points at 100% coverage: 92.9%
+(`manual-results-widgets-2026-08-12.json` holds the three manual
+verdicts with evidence).
 
 Product rename note: the baseline and first pass measured the identical
 build at the pre-rename URL (`speakerops.speakerops-go7.workers.dev`);
