@@ -15,6 +15,9 @@ Lectern exposes the same public program data as JSON and iframe-ready HTML. Publ
 | GET | `/api/public/events/:slug/sessions/:sessionId/calendar.ics` | Download a scheduled session calendar file |
 | GET | `/api/public/events/:slug/agenda.ics` | Download the whole published agenda as iCal |
 | GET | `/api/public/events/:slug/{schedule,sessions,speakers,itinerary,gallery}.xml` | Public XML widget feeds |
+| POST | `/api/events/:slug/submitter-accounts` | Create an optional submitter account and seven-day session |
+| POST | `/api/events/:slug/submitter-sessions` | Sign in to a submitter account |
+| GET | `/api/events/:slug/submitter-dashboard` | Signed-in submitter proposals and statuses (`X-Lectern-Submitter` header) |
 | POST | `/api/events/:slug/submissions` | Public CFP proposal intake |
 | GET | `/api/speaker-portal/:token` | Magic-link speaker portal bundle |
 | PATCH | `/api/speaker-portal/:token/profile` | Update the linked speaker profile |

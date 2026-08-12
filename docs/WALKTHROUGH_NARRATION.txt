@@ -2,7 +2,7 @@ This is Lectern — an open-source replacement for Sessionboard's programme side
 
 Every conference gets a public home: the programme, the schedule, and a speaker gallery, all rendered from the same data the organizer manages. [[slnc 2025]]
 
-The call for papers is a real form with conditional logic — and there are no accounts anywhere. A speaker who loses their link asks for it by email, right here. [[slnc 1125]] Pick Workshop as the format and a required workshop-length field appears. The API enforces the same rule, so a hidden field is never demanded. [[slnc 900]] Co-presenters attach with role labels, and they stay attached through review, acceptance, and the published session. [[slnc 1125]] Submitting shows a reference id on screen and sends a receipted confirmation email — every send in Lectern is logged with a receipt. [[slnc 2700]]
+The call for papers is a real form with optional submitter accounts and conditional logic. Speakers can create an account for a proposal-status dashboard, or submit without one and recover their private link by email. [[slnc 1125]] Pick Workshop as the format and a required workshop-length field appears. The API enforces the same rule, so a hidden field is never demanded. [[slnc 900]] Co-presenters attach with role labels, and they stay attached through review, acceptance, and the published session. [[slnc 1125]] Submitting shows a reference id on screen and sends a receipted confirmation email — every send in Lectern is logged with a receipt. [[slnc 2700]]
 
 The organizer console is one passcode, published deliberately so judges can walk in. [[slnc 2025]]
 

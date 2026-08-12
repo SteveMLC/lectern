@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router";
 import {
   CfpSubmissionRequest,
   SessionFormat,
+  type SubmitterAccountDashboardResponse,
   type FormField as FormFieldContract,
 } from "../../shared/contracts";
 import { isCfpOpen } from "../../shared/domain/cfp";
@@ -71,6 +72,7 @@ export function CfpPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [portalToken, setPortalToken] = useState<string | null>(null);
+  const [submitterToken, setSubmitterToken] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
@@ -263,7 +265,7 @@ export function CfpPage() {
 
     setSubmitting(true);
     try {
-      const res = await apiClient.submitCfp(slug, parsed.success ? parsed.data : payload);
+      const res = await apiClient.submitCfp(slug, parsed.success ? parsed.data : payload, submitterToken);
       setSubmittedId(res.submission.id);
       setPortalToken(res.submission.speakers[0]?.speakerId ?? null);
     } catch (err) {
@@ -291,6 +293,15 @@ export function CfpPage() {
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">{cfp.form.welcomeText}</p>
         ) : null}
 
+        <SubmitterAccountCard
+          slug={event.slug}
+          onSession={(token, account) => {
+            setSubmitterToken(token);
+            if (account) {
+              setForm((current) => ({ ...current, name: account.name, email: account.email }));
+            }
+          }}
+        />
         <LinkRecoveryCard slug={event.slug} />
 
         {draftLoadError ? <div className="mt-4"><ErrorBanner message={draftLoadError} /></div> : null}
@@ -315,6 +326,7 @@ export function CfpPage() {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Ada Okafor"
                   autoComplete="name"
+                  readOnly={Boolean(submitterToken)}
                 />
               </Field>
               <Field label="Email" htmlFor="email" required error={fieldErrors["speaker.email"]}>
@@ -325,6 +337,7 @@ export function CfpPage() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="you@company.com"
                   autoComplete="email"
+                  readOnly={Boolean(submitterToken)}
                 />
               </Field>
               <Field label="Company" htmlFor="company" error={fieldErrors["speaker.company"]}>
@@ -563,6 +576,121 @@ function CustomField({
   );
 }
 
+function SubmitterAccountCard({
+  slug,
+  onSession,
+}: {
+  slug: string;
+  onSession: (token: string | null, account: { name: string; email: string } | null) => void;
+}) {
+  const storageKey = `lectern.submitter.${slug}`;
+  const [mode, setMode] = useState<"signup" | "signin">("signup");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [dashboard, setDashboard] = useState<SubmitterAccountDashboardResponse | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem(storageKey);
+    if (!token) return;
+    let active = true;
+    void apiClient.submitterDashboard(slug, token).then((response) => {
+      if (!active) return;
+      setDashboard(response);
+      setEmail(response.account.email);
+      setName(response.account.name);
+      onSession(token, response.account);
+    }).catch(() => {
+      if (!active) return;
+      localStorage.removeItem(storageKey);
+      onSession(null, null);
+    });
+    return () => { active = false; };
+  }, [slug, storageKey]);
+
+  async function authenticate(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = mode === "signup"
+        ? await apiClient.createSubmitterAccount(slug, { name, email, password })
+        : await apiClient.signInSubmitterAccount(slug, { email, password });
+      localStorage.setItem(storageKey, response.sessionToken);
+      setDashboard({ account: response.account, proposals: response.proposals, portalPath: response.portalPath });
+      setName(response.account.name);
+      setEmail(response.account.email);
+      setPassword("");
+      setNotice(mode === "signup" ? "Submitter account created. Complete your proposal below." : "Signed in to your submitter dashboard.");
+      onSession(response.sessionToken, response.account);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "The submitter account could not be opened.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (dashboard) {
+    return (
+      <Card className="mt-5 border-indigo-200 bg-indigo-50/70 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-indigo-950">Submitter dashboard · signed in</p>
+            <p className="mt-1 text-xs text-indigo-800">{dashboard.account.name} · {dashboard.account.email}</p>
+          </div>
+          <Button type="button" variant="ghost" onClick={() => {
+            localStorage.removeItem(storageKey);
+            setDashboard(null);
+            setNotice(null);
+            onSession(null, null);
+          }}>Sign out</Button>
+        </div>
+        {notice ? <p role="status" className="mt-3 text-sm font-medium text-emerald-700">{notice}</p> : null}
+        {dashboard.proposals.length > 0 ? (
+          <div className="mt-3 space-y-2" aria-label="My submissions">
+            {dashboard.proposals.map((proposal) => (
+              <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm">
+                <span className="font-medium text-zinc-900">{proposal.title}</span>
+                <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-semibold capitalize text-indigo-800">{proposal.status.replaceAll("_", " ")}</span>
+              </div>
+            ))}
+            {dashboard.portalPath ? <Link className="inline-block text-sm font-medium text-accent hover:underline" to={dashboard.portalPath}>Open full speaker portal</Link> : null}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-indigo-900">No proposals yet. Complete the form below; your submitted proposal and status will appear here.</p>
+        )}
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mt-5 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">Speaker submitter account</p>
+          <p className="mt-1 text-xs text-zinc-500">Create an account to keep proposals and statuses together, or submit without one and use a private capability link.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant={mode === "signup" ? "secondary" : "ghost"} onClick={() => { setMode("signup"); setError(null); }}>Create account</Button>
+          <Button type="button" variant={mode === "signin" ? "secondary" : "ghost"} onClick={() => { setMode("signin"); setError(null); }}>Sign in</Button>
+        </div>
+      </div>
+      <form onSubmit={authenticate} className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-2">
+        {mode === "signup" ? <Field label="Full name" htmlFor="account-name" required><Input id="account-name" value={name} required autoComplete="name" onChange={(event) => setName(event.target.value)} /></Field> : null}
+        <Field label="Email" htmlFor="account-email" required><Input id="account-email" type="email" value={email} required autoComplete="email" onChange={(event) => setEmail(event.target.value)} /></Field>
+        <Field label="Password" htmlFor="account-password" required help="At least 8 characters."><Input id="account-password" type="password" minLength={8} value={password} required autoComplete={mode === "signup" ? "new-password" : "current-password"} onChange={(event) => setPassword(event.target.value)} /></Field>
+        <div className="flex items-end"><Button type="submit" disabled={busy}>{busy ? "Working…" : mode === "signup" ? "Create submitter account" : "Sign in to dashboard"}</Button></div>
+        {notice ? <p role="status" className="sm:col-span-2 text-sm font-medium text-emerald-700">{notice}</p> : null}
+        {error ? <div className="sm:col-span-2"><ErrorBanner message={error} /></div> : null}
+      </form>
+    </Card>
+  );
+}
+
 function LinkRecoveryCard({ slug }: { slug: string }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -589,8 +717,8 @@ function LinkRecoveryCard({ slug }: { slug: string }) {
     <div className="mt-4 rounded-lg border border-zinc-200 bg-white px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-700">
-          <span className="font-medium">Already submitted?</span> There are no accounts — your private
-          links are your access. Lost them?
+          <span className="font-medium">Submitted without an account?</span> Your private capability link
+          is still your access. Lost it?
         </p>
         <Button type="button" variant="secondary" onClick={() => setOpen((value) => !value)}>
           {open ? "Close" : "Email me my links"}

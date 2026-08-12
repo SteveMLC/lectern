@@ -28,7 +28,7 @@ Break the demo on purpose. **Reset** on `/demo` restores the loaded conference t
 
 The complete judging path is deployed and production-proven:
 
-- Public event page and CFP form with **live conditional field logic** (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side).
+- Public event page and CFP form with **optional submitter accounts**, a signed-in proposal/status dashboard, and live conditional field logic (the workshop-length field appears only for workshop proposals, and the API enforces the same rule server-side). Capability links remain available for account-free submissions.
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, formula-safe CSV export, Approve/Maybe/Deny decisions with editable feedback drafts, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
@@ -186,6 +186,9 @@ The JSON API the app uses is the public API.
 | GET | `/api/embeds/events/:slug/schedule` | — | Iframe schedule HTML |
 | GET | `/api/embeds/events/:slug/sessions` | — | Iframe sessions HTML |
 | GET | `/api/embeds/events/:slug/speakers` | — | Iframe speaker gallery HTML |
+| POST | `/api/events/:slug/submitter-accounts` | — | Create an optional submitter account and session |
+| POST | `/api/events/:slug/submitter-sessions` | — | Sign in to a submitter account |
+| GET | `/api/events/:slug/submitter-dashboard` | Submitter session | Own proposals and statuses |
 | POST | `/api/events/:slug/submissions` | — | Submit a CFP proposal (validated, conditional-rule aware) |
 | GET | `/api/speaker-portal/:token` | Speaker link | Portal sessions, tasks, files, and resources |
 | PATCH | `/api/speaker-portal/:token/profile` | Speaker link | Edit the speaker's public profile |

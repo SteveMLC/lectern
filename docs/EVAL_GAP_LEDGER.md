@@ -4,7 +4,7 @@
 
 Baseline: official sbek run `2026-08-12T00-14-16`. The run emitted 84 rubric rows: 46 received product verdicts and 38 could not be judged because the evaluator's capped Anthropic credit was exhausted. The source specifications contain **86 required items**; CFP-08 and SPK-16 were absent from the run output and are now explicitly tracked below. No sbek scenario was re-run during this work.
 
-Status meanings: **FIXED** means implemented or an existing passing behavior was preserved and locally rechecked; **PARTIAL** states the remaining gap; **PARKED** records a deliberate scope/architecture decision. Production must apply migrations `0003` through `0010` before deploying this branch. “FIXED” is a product audit result, not a claim that the paid judge has re-scored it.
+Status meanings: **FIXED** means implemented or an existing passing behavior was preserved and locally rechecked; **PARTIAL** states the remaining gap; **PARKED** records a deliberate scope/architecture decision. Production must apply migrations `0003` through `0011` before deploying this branch. “FIXED” is a product audit result, not a claim that the paid judge has re-scored it.
 
 ## One-minute verification routes
 
@@ -64,7 +64,7 @@ The baseline reason for every AIA item was “judge call failed because the eval
 | CFP-02 | PASS | Seeded Workshop conditional field showed/hid and validated bidirectionally. | **FIXED (preserved)** — shared rules engine remains; V4. |
 | CFP-03 | PASS | Logged-out public CFP showed event, deadline, tracks, formats, and form. | **FIXED (preserved)** — public route unchanged except new configured fields. |
 | CFP-04 | NOT FOUND | CFP close date was read-only and no PATCH/settings route existed. | **FIXED** — `/admin/settings` and organizer PATCH update open/close state; V4. |
-| CFP-05 | PARTIAL | Submission and status dashboard work, but the rubric requires account creation. | **PARTIAL** — private capability links provide the complete submit/confirm/dashboard journey without passwords; conventional submitter accounts remain a deliberate parked product-model mismatch. |
+| CFP-05 | PARTIAL | Submission and status dashboard work, but the rubric requires account creation. | **FIXED** — the public CFP now exposes optional create-account/sign-in controls, binds a seven-day session to the submitted email, and lists that account's proposals with status labels; capability links remain as an account-free alternative. |
 | CFP-06 | PASS | Submitted proposal data round-tripped intact to organizers. | **FIXED** — shared contracts/validation are retained and custom-field answers are now explicitly labeled on organizer submission rows and mobile cards. |
 | CFP-07 | NOT FOUND | No save-draft or resume-later path existed. | **FIXED** — server-backed anonymous drafts issue a private resume URL and restore title, abstract, format, track, speakers, and answers after reload. |
 | CFP-08 | OMITTED BY RUN | Source rubric requires automatic submission confirmation in email or the in-app outbox. | **FIXED** — each successful proposal now records a simulated confirmation with recipient, event, and proposal title in the durable outbox. |
