@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import type { CreateOrganizerSpeakerRequest, OrganizerSpeakersResponse, UpdateOrganizerSpeakerRequest } from "../../../shared/contracts";
+import type { CreateOrganizerSpeakerRequest, OrganizerSession, OrganizerSpeakersResponse, Room, UpdateOrganizerSpeakerRequest } from "../../../shared/contracts";
 import { SpeakerAvatar } from "../../components/SpeakerAvatar";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, PageHeader, Select, Spinner, Textarea } from "../../components/ui";
 import { ApiRequestError, apiClient } from "../../lib/api";
@@ -35,6 +35,28 @@ export function filterSpeakerRoster(
   });
 }
 
+/** A speaker's program sessions: scheduled first in start order, then unscheduled by title. */
+export function sessionsForSpeaker(sessions: OrganizerSession[], speakerId: string): OrganizerSession[] {
+  return sessions
+    .filter((session) => session.speakers.some((speaker) => speaker.id === speakerId))
+    .sort((a, b) => {
+      if (a.slot && b.slot) return a.slot.startsAt.localeCompare(b.slot.startsAt) || a.title.localeCompare(b.title);
+      if (a.slot) return -1;
+      if (b.slot) return 1;
+      return a.title.localeCompare(b.title);
+    });
+}
+
+/** "Oct 14 · 9:00 AM–9:45 AM · Main Hall" once placed; "Unscheduled" until then. */
+export function describeSessionSlot(session: OrganizerSession, rooms: Room[], timezone: string): string {
+  const slot = session.slot;
+  if (!slot) return "Unscheduled";
+  const day = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: timezone }).format(new Date(slot.startsAt));
+  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  const room = rooms.find((candidate) => candidate.id === slot.roomId)?.name;
+  return `${day} · ${time.format(new Date(slot.startsAt))}–${time.format(new Date(slot.endsAt))}${room ? ` · ${room}` : ""}`;
+}
+
 export function Speakers() {
   const { eventSlug } = useAdminContext();
   const [query, setQuery] = useState("");
@@ -52,6 +74,12 @@ export function Speakers() {
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, error, loading, reload } = useAsync(() => apiClient.organizerSpeakers(eventSlug), [eventSlug]);
+  // Program data for the per-card sessions list: agenda for sessions and slots,
+  // event bundle for room names. Joined client-side by speaker id.
+  const program = useAsync(async () => {
+    const [agenda, bundle] = await Promise.all([apiClient.agenda(eventSlug), apiClient.eventBundle(eventSlug)]);
+    return { agenda, bundle };
+  }, [eventSlug]);
   const filtered = useMemo(
     () => filterSpeakerRoster(data?.speakers ?? [], query, taskFilter, workflowFilter),
     [data?.speakers, query, taskFilter, workflowFilter],
@@ -156,7 +184,10 @@ export function Speakers() {
           {filtered.length === 0 ? (
             <EmptyState title="No speakers match" body="Clear the search or choose another task-progress filter." />
           ) : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((speaker) => (
+          {filtered.map((speaker) => {
+            const speakerSessions = program.data ? sessionsForSpeaker(program.data.agenda.sessions, speaker.id) : null;
+            const rooms = program.data?.bundle.rooms ?? [];
+            return (
             <Card key={speaker.id} className="flex min-h-52 flex-col p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
@@ -181,6 +212,23 @@ export function Speakers() {
               ) : (
                 <p className="mt-4 flex-1 text-sm italic text-zinc-400">Bio still needed.</p>
               )}
+              <div className="mt-3 border-t border-zinc-100 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sessions</p>
+                {speakerSessions === null ? (
+                  <p className="mt-1 text-xs text-zinc-400">{program.error ? "Program could not be loaded." : "Loading sessions…"}</p>
+                ) : speakerSessions.length === 0 ? (
+                  <p className="mt-1 text-xs italic text-zinc-400">No sessions on the program yet.</p>
+                ) : (
+                  <ul className="mt-1 space-y-1">
+                    {speakerSessions.map((session) => (
+                      <li key={session.id} className="text-xs leading-5">
+                        <span className="font-medium text-zinc-800">{session.title}</span>
+                        <span className="block text-zinc-500">{describeSessionSlot(session, rooms, data.event.timezone)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs text-zinc-500">
                   <span>Speaker tasks</span>
@@ -220,7 +268,8 @@ export function Speakers() {
                 </form>
               ) : null}
             </Card>
-          ))}
+            );
+          })}
         </div>}
         </>
       )}
