@@ -31,6 +31,9 @@ export function App() {
       <Route path="/e/:slug/cfp" element={<CfpPage />} />
       <Route path="/speaker/:token" element={<SpeakerPortal />} />
       <Route path="/review/:token" element={<ReviewerPortal />} />
+      {/* Alias: the API namespace says /api/reviewer/:token, and people
+          predictably type the page the same way. Both spellings work. */}
+      <Route path="/reviewer/:token" element={<ReviewerPortal />} />
 
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Dashboard />} />

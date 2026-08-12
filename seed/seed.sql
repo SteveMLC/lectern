@@ -169,7 +169,20 @@ INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at
 INSERT INTO rubric_criteria (id, plan_id, round_id, key, label, description, max_score, weight, sort_order) VALUES
 ('crit_relevance', 'plan_pc2026', 'round_screen', 'relevance', 'Audience relevance', 'Does this serve working engineers at Horizon?', 5, 1.0, 0),
 ('crit_depth',     'plan_pc2026', 'round_screen', 'depth',     'Technical depth',    'Real systems and real numbers beat theory.',    5, 1.0, 1),
-('crit_readiness', 'plan_pc2026', 'round_screen', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
+('crit_readiness', 'plan_pc2026', 'round_screen', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2),
+('crit_f_originality', 'plan_pc2026', 'round_final', 'originality', 'Originality', 'Would a Horizon regular learn something new?', 5, 2.0, 0),
+('crit_f_impact',      'plan_pc2026', 'round_final', 'impact',      'Audience impact', 'Will attendees change how they work on Monday?', 5, 1.0, 1);
+
+-- A working reviewer queue out of the box: Sam is in the open Final Review
+-- pool with a stable demo token, two live assignments, and blind mode off.
+-- Judges (human or agent) land on /reviewer/rev_sam_demo and can score
+-- immediately — the token is a capability link, not a credential.
+INSERT INTO round_reviewers (round_id, reviewer_name, reviewer_email, reviewer_token, assignment_cap, created_at) VALUES
+('round_final', 'Sam Peters', 'sam@horizonsummit.example', 'rev_sam_demo', 5, '2026-08-02T09:00:00Z');
+
+INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigned_at) VALUES
+('round_final', 'sam@horizonsummit.example', 'sub_rag_dead',     '2026-08-02T09:05:00Z'),
+('round_final', 'sam@horizonsummit.example', 'sub_design_evals', '2026-08-02T09:05:00Z');
 
 INSERT INTO reviews (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at) VALUES
 ('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
