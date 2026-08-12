@@ -126,6 +126,8 @@ export const Event = z.object({
   timezone: z.string(),
   venue: z.string().nullable(),
   websiteUrl: z.string().nullable(),
+  /** Organizer-controlled publication receipt for the public agenda. */
+  agendaPublishedAt: isoDateTime.nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });

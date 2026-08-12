@@ -62,6 +62,8 @@ export function Agenda() {
   const [roomName, setRoomName] = useState("");
   const [roomCapacity, setRoomCapacity] = useState("");
   const [autoPlacing, setAutoPlacing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
 
   const agenda = agendaOverride ?? data?.agenda;
   const conflictedSessions = useMemo(
@@ -126,6 +128,21 @@ export function Agenda() {
     } finally { setAutoPlacing(false); }
   }
 
+  async function publishAgenda() {
+    if (publishing) return;
+    setPublishing(true);
+    setActionError(null);
+    try {
+      const receipt = await apiClient.publishAgenda(eventSlug);
+      setPublishedAt(receipt.agendaPublishedAt);
+      setNotice(`Agenda published successfully. The public schedule is live as of ${new Date(receipt.agendaPublishedAt).toLocaleString()}.`);
+    } catch (caught) {
+      setActionError(caught instanceof ApiRequestError ? caught.message : "Agenda could not be published.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   if (loading && !data) return <Spinner label="Loading program" />;
   if (error || !data || !agenda) return <ErrorBanner message={error?.message ?? "Program unavailable."} />;
 
@@ -182,6 +199,16 @@ export function Agenda() {
             {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
           </Select>
           <div className="ml-auto flex gap-2">
+            <Button
+              type="button"
+              className="px-3 py-1.5 text-xs"
+              variant="secondary"
+              disabled={publishing}
+              aria-label="Publish agenda to the public schedule"
+              onClick={() => void publishAgenda()}
+            >
+              {publishing ? "Publishing…" : (publishedAt ?? data.bundle.event.agendaPublishedAt) ? "Republish agenda" : "Publish agenda"}
+            </Button>
             <Button type="button" className="px-3 py-1.5 text-xs" variant="secondary" disabled={autoPlacing || unscheduled.length === 0 || data.bundle.rooms.length === 0} onClick={() => void autoPlace()}>
               {autoPlacing ? "Auto-placing…" : "Auto-place unscheduled"}
             </Button>
@@ -200,6 +227,17 @@ export function Agenda() {
           </div>
         </div>
       </Card>
+
+      {(publishedAt ?? data.bundle.event.agendaPublishedAt) ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span>Public agenda live · published {new Date(publishedAt ?? data.bundle.event.agendaPublishedAt ?? "").toLocaleString()}</span>
+          <Link className="font-semibold underline" to={`/e/${eventSlug}#schedule`}>Open public schedule</Link>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Draft agenda · use Publish agenda when the program is ready for attendees.
+        </div>
+      )}
 
       {roomOpen ? (
         <Card className="mb-4 p-4">

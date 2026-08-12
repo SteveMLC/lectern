@@ -60,7 +60,7 @@ import type {
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
-import { aggregateWeightedScores } from "../../../shared/domain/reviews";
+import { summarizeReviewScores } from "../../../shared/domain/reviews";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -77,6 +77,7 @@ interface EventRow {
   timezone: string;
   venue: string | null;
   website_url: string | null;
+  agenda_published_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -314,6 +315,7 @@ function mapEvent(r: EventRow): Event {
     timezone: r.timezone,
     venue: r.venue,
     websiteUrl: r.website_url,
+    agendaPublishedAt: r.agenda_published_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -1423,6 +1425,15 @@ export class D1Repo implements SpeakerOpsRepo {
     return this.getOrganizerAgenda(input.eventId);
   }
 
+  async publishAgenda(eventId: string, now: string): Promise<string> {
+    const result = await this.db
+      .prepare("UPDATE events SET agenda_published_at = ?, updated_at = ? WHERE id = ?")
+      .bind(now, now, eventId)
+      .run();
+    if (!result.meta.changes) throw new Error("event_not_found");
+    return now;
+  }
+
   async countsForEvent(eventId: string): Promise<EventCounts> {
     const [statusRes, sessionsRes, speakersRes] = await this.db.batch([
       this.db
@@ -1715,25 +1726,21 @@ export class D1Repo implements SpeakerOpsRepo {
     }));
 
     const results = submissions.map((submission) => {
-      const weightedReviews = reviewRows
+      const summary = summarizeReviewScores(reviewRows
         .filter((review) => review.submission_id === submission.id)
         .map((review) => {
           const criteria = rounds.find((round) => round.id === review.round_id)?.criteria ?? [];
-          const value = aggregateWeightedScores(
-            [{ scores: parseJson<Record<string, unknown>>(review.scores_json, {}) }],
+          return {
+            scores: parseJson<Record<string, unknown>>(review.scores_json, {}),
             criteria,
-          );
-          return value;
-        })
-        .filter((value): value is number => value !== null);
+          };
+        }));
       return {
         submissionId: submission.id,
         title: submission.title,
         trackName: submission.trackName,
-        aggregate: weightedReviews.length
-          ? weightedReviews.reduce((sum, value) => sum + value, 0) / weightedReviews.length
-          : null,
-        completedReviews: weightedReviews.length,
+        aggregate: summary.aggregate,
+        completedReviews: summary.completedReviews,
       };
     });
     return { plan, rounds, submissions, results };

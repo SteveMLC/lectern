@@ -222,6 +222,7 @@ export class AirtableRepo implements SpeakerOpsRepo {
         timezone: requiredString(fields, "Timezone"),
         venue: nullableString(fields, "Venue"),
         websiteUrl: nullableString(fields, "Website URL"),
+        agendaPublishedAt: nullableString(fields, "Agenda Published At"),
         createdAt: requiredString(fields, "Created At"),
         updatedAt: requiredString(fields, "Updated At"),
       },
@@ -279,6 +280,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async upsertAgendaSlot(_input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {
     throw new AirtableNotWiredError("upsertAgendaSlot");
+  }
+
+  async publishAgenda(_eventId: string, _now: string): Promise<string> {
+    throw new AirtableNotWiredError("publishAgenda");
   }
 
   async countsForEvent(_eventId: string): Promise<EventCounts> {

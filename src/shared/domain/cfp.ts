@@ -21,3 +21,29 @@ export function canEditSpeakerProposal(
 ): boolean {
   return ["draft", "submitted", "under_review"].includes(status) && isCfpOpen(form, nowIso);
 }
+
+/** Exact, user-facing reason a proposal cannot be edited. Keeping this shared
+ * prevents the portal and API from contradicting each other. */
+export function speakerProposalLockReason(
+  form: { isOpen: boolean; opensAt: string | null; closesAt: string | null },
+  status: string,
+  nowIso: string,
+): string | null {
+  if (!["draft", "submitted", "under_review"].includes(status)) {
+    return "Editing is locked because the committee has made a decision.";
+  }
+  if (canEditSpeakerProposal(form, status, nowIso)) return null;
+
+  const now = Date.parse(nowIso);
+  if (form.closesAt !== null && now >= Date.parse(form.closesAt)) {
+    const closeDate = new Date(form.closesAt).toLocaleDateString("en-US", {
+      dateStyle: "long",
+      timeZone: "UTC",
+    });
+    return `Editing is locked because the call for speakers closed on ${closeDate}.`;
+  }
+  if (form.opensAt !== null && now < Date.parse(form.opensAt)) {
+    return "Editing is locked because the call for speakers has not opened yet.";
+  }
+  return "Editing is locked because the organizer closed the call for speakers.";
+}

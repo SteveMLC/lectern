@@ -20,6 +20,7 @@ import {
   CreateFormFieldRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
+  type PublishAgendaResponse,
   type OrganizerSpeakersResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
@@ -45,7 +46,7 @@ import {
   type ReviewerQueueResponse,
   type OutboxResponse,
 } from "../../shared/contracts";
-import { canEditSpeakerProposal, isCfpOpen } from "../../shared/domain/cfp";
+import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
@@ -722,10 +723,11 @@ api.patch("/speaker-portal/:token/proposals/:submissionId", async (c) => {
   if (!proposal) {
     return errorResponse(404, "submission_not_found", "No proposal with that id belongs to this speaker.");
   }
-  if (!portal.cfp || !canEditSpeakerProposal(portal.cfp.form, proposal.status, new Date().toISOString())) {
-    const message = ["draft", "submitted", "under_review"].includes(proposal.status)
-      ? "Editing is locked because this call for speakers is closed."
-      : "Editing is locked because a decision has been made.";
+  const now = new Date().toISOString();
+  if (!portal.cfp || !canEditSpeakerProposal(portal.cfp.form, proposal.status, now)) {
+    const message = portal.cfp
+      ? speakerProposalLockReason(portal.cfp.form, proposal.status, now) ?? "Editing is locked."
+      : "Editing is locked because this call for speakers is unavailable.";
     return errorResponse(409, "submission_locked", message);
   }
 
@@ -1322,6 +1324,19 @@ api.get("/events/:slug/agenda", organizerAuth, async (c) => {
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   const body: OrganizerAgendaResponse = await repo.getOrganizerAgenda(bundle.event.id);
+  return c.json(body);
+});
+
+api.post("/events/:slug/agenda/publish", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const slug = c.req.param("slug");
+  const bundle = await repo.getEventBySlug(slug);
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const agendaPublishedAt = await repo.publishAgenda(bundle.event.id, new Date().toISOString());
+  const body: PublishAgendaResponse = {
+    agendaPublishedAt,
+    publicScheduleUrl: `/e/${encodeURIComponent(slug)}#schedule`,
+  };
   return c.json(body);
 });
 

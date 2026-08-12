@@ -63,6 +63,7 @@ export interface SpeakerOpsRepo {
   createDirectSession(input: CreateDirectSessionInput): Promise<OrganizerSession>;
   updateSession(input: UpdateSessionInput): Promise<OrganizerSession>;
   upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse>;
+  publishAgenda(eventId: string, now: string): Promise<string>;
   countsForEvent(eventId: string): Promise<EventCounts>;
 
   getSpeakerById(id: string): Promise<Speaker | null>;

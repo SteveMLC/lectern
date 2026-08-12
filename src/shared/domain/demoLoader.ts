@@ -173,6 +173,7 @@ export function buildDemoLoadPlan(options: BuildPlanOptions): DemoLoadPlan {
     timezone: dataset.event.timezone,
     venue: dataset.event.venue ?? null,
     websiteUrl: null,
+    agendaPublishedAt: null,
     createdAt: now,
     updatedAt: now,
   };

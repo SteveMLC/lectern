@@ -48,12 +48,12 @@ DELETE FROM events;
 -- ---------------------------------------------------------------------------
 -- Event
 -- ---------------------------------------------------------------------------
-INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, timezone, venue, website_url, created_at, updated_at) VALUES
+INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, timezone, venue, website_url, agenda_published_at, created_at, updated_at) VALUES
 ('evt_horizon2026', 'horizon-2026', 'Horizon Dev Summit 2026',
  'Two days on building software that ships.',
  'Horizon Dev Summit brings 600 engineers together for two days of talks, workshops, and panels on AI engineering, developer experience, infrastructure, and product craft.',
  '2026-10-14', '2026-10-15', 'America/Los_Angeles',
- 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026',
+ 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026', '2026-08-01T09:00:00Z',
  '2026-07-15T09:00:00Z', '2026-08-01T09:00:00Z');
 
 INSERT INTO tracks (id, event_id, name, description, color, sort_order) VALUES

@@ -8,7 +8,7 @@ import type {
   SpeakerPortalProposal,
   SpeakerTask,
 } from "../../shared/contracts";
-import { canEditSpeakerProposal } from "../../shared/domain/cfp";
+import { canEditSpeakerProposal, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { isFieldVisible } from "../../shared/domain/rules";
 import {
   Badge,
@@ -297,13 +297,12 @@ function ProposalCard({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const stage = pipelineStage({ status: proposal.status, reviews: [] });
-  const undecided = ["draft", "submitted", "under_review"].includes(proposal.status);
   const editable = cfp
     ? canEditSpeakerProposal(cfp.form, proposal.status, new Date().toISOString())
     : false;
-  const lockReason = !undecided
-    ? "Editing is locked because the committee has made a decision."
-    : "Editing is locked because the call for speakers is closed.";
+  const lockReason = cfp
+    ? speakerProposalLockReason(cfp.form, proposal.status, new Date().toISOString())
+    : "Editing is locked because this call for speakers is unavailable.";
   const visibleFields = cfp
     ? cfp.fields.filter((field) =>
         isFieldVisible(field, cfp.rules, { format: proposal.format, answers }),

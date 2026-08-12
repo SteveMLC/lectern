@@ -406,6 +406,12 @@ export const OrganizerAgendaResponse = z.object({
 });
 export type OrganizerAgendaResponse = z.infer<typeof OrganizerAgendaResponse>;
 
+export const PublishAgendaResponse = z.object({
+  agendaPublishedAt: z.iso.datetime({ offset: true }),
+  publicScheduleUrl: z.string(),
+});
+export type PublishAgendaResponse = z.infer<typeof PublishAgendaResponse>;
+
 export const UpdateSessionRequest = z.object({
   title: z.string().trim().min(3).max(200),
   abstract: z.string().trim().min(10).max(5000),

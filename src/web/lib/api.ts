@@ -27,6 +27,7 @@ import {
   ScheduleNoticeDraftResponse,
   HealthResponse,
   OrganizerAgendaResponse,
+  PublishAgendaResponse,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
@@ -185,6 +186,14 @@ export const apiClient = {
     request(OrganizerAgendaResponse, `/api/events/${encodeURIComponent(slug)}/agenda`, undefined, {
       auth: true,
     }),
+
+  publishAgenda: (slug: string) =>
+    request(
+      PublishAgendaResponse,
+      `/api/events/${encodeURIComponent(slug)}/agenda/publish`,
+      { method: "POST" },
+      { auth: true },
+    ),
 
   createDirectSession: (slug: string, body: CreateDirectSessionRequest) =>
     request(
