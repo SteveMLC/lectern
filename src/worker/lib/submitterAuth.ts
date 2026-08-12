@@ -1,4 +1,8 @@
-const PBKDF2_ITERATIONS = 120_000;
+// Cloudflare's standard Worker CPU budget is intentionally tight. This remains
+// a salted PBKDF2 record, while keeping one signup inside the edge request
+// budget; future production deployments should move password derivation to an
+// auth service with a higher work factor.
+const PBKDF2_ITERATIONS = 20_000;
 
 function toHex(bytes: ArrayBuffer | Uint8Array): string {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
