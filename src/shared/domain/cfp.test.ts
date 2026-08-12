@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCfpOpen } from "./cfp";
+import { canEditSpeakerProposal, isCfpOpen } from "./cfp";
 
 const NOW = "2026-08-09T20:00:00Z";
 
@@ -23,5 +23,20 @@ describe("isCfpOpen", () => {
 
   it("treats null bounds as unbounded", () => {
     expect(isCfpOpen({ isOpen: true, opensAt: null, closesAt: null }, NOW)).toBe(true);
+  });
+});
+
+describe("canEditSpeakerProposal", () => {
+  const form = { isOpen: true, opensAt: null, closesAt: "2026-08-25T07:00:00.000Z" };
+
+  it("allows undecided proposals before close", () => {
+    expect(canEditSpeakerProposal(form, "submitted", "2026-08-24T12:00:00.000Z")).toBe(true);
+    expect(canEditSpeakerProposal(form, "under_review", "2026-08-24T12:00:00.000Z")).toBe(true);
+  });
+
+  it("locks at close and after a decision", () => {
+    expect(canEditSpeakerProposal(form, "submitted", "2026-08-25T07:00:00.000Z")).toBe(false);
+    expect(canEditSpeakerProposal(form, "accepted", "2026-08-24T12:00:00.000Z")).toBe(false);
+    expect(canEditSpeakerProposal(form, "waitlisted", "2026-08-24T12:00:00.000Z")).toBe(false);
   });
 });

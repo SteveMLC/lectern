@@ -13,3 +13,11 @@ export function isCfpOpen(
   if (form.closesAt !== null && now >= Date.parse(form.closesAt)) return false;
   return true;
 }
+
+export function canEditSpeakerProposal(
+  form: { isOpen: boolean; opensAt: string | null; closesAt: string | null },
+  status: string,
+  nowIso: string,
+): boolean {
+  return ["draft", "submitted", "under_review"].includes(status) && isCfpOpen(form, nowIso);
+}

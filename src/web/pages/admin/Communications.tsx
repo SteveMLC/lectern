@@ -118,7 +118,23 @@ export function Communications() {
           </section>
         </div>
       )}
+      <Outbox eventSlug={eventSlug} />
     </div>
+  );
+}
+
+function Outbox({ eventSlug }: { eventSlug: string }) {
+  const { data, error, loading, reload } = useAsync(() => apiClient.outbox(eventSlug), [eventSlug]);
+  return (
+    <Card className="mt-6 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-zinc-200 p-5">
+        <div><h2 className="text-base font-semibold text-zinc-900">Sent messages</h2><p className="mt-1 text-sm text-zinc-500">Persistent simulated and real-delivery receipts.</p></div>
+        <Button variant="secondary" onClick={reload}>Refresh outbox</Button>
+      </div>
+      {loading ? <div className="p-5"><Spinner label="Loading outbox" /></div> : error ? <div className="p-5"><ErrorBanner message={error.message} /></div> : data?.messages.length === 0 ? <div className="p-5"><EmptyState title="No messages recorded yet" /></div> : (
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-zinc-50 text-xs uppercase text-zinc-500"><tr><th className="px-5 py-3">Subject</th><th className="px-5 py-3">Recipient</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Sent</th><th className="px-5 py-3">Message id</th></tr></thead><tbody className="divide-y divide-zinc-100">{data?.messages.map((message) => <tr key={message.id}><td className="px-5 py-3 font-medium">{message.subject}</td><td className="px-5 py-3 text-zinc-600">{message.toEmail ?? "—"}</td><td className="px-5 py-3"><Badge tone={message.deliveryStatus === "failure" ? "rose" : "emerald"}>{message.status}</Badge></td><td className="px-5 py-3 text-zinc-500">{formatDateTime(message.createdAt)}</td><td className="px-5 py-3 font-mono text-xs text-zinc-500">{message.id}</td></tr>)}</tbody></table></div>
+      )}
+    </Card>
   );
 }
 

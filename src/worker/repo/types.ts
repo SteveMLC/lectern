@@ -3,6 +3,7 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  EvaluationWorkspaceResponse,
   OrganizerAgendaResponse,
   OrganizerSession,
   PublicScheduleResponse,
@@ -14,6 +15,17 @@ import type {
   Speaker,
   SpeakerAsset,
   SpeakerTask,
+  SpeakerPortalProposal,
+  ReviewerQueueResponse,
+  SaveEvaluationRoundRequest,
+  SaveRoundReviewerRequest,
+  SubmitReviewRequest,
+  CreateEventRequest,
+  UpdateEventSettingsRequest,
+  OutboxMessage,
+  CreateTrackRequest,
+  CreateRoomRequest,
+  CreateFormFieldRequest,
   SubmissionListItem,
   TaskDefinition,
 } from "../../shared/contracts";
@@ -57,7 +69,22 @@ export interface SpeakerOpsRepo {
   getSpeakerPortalByToken(token: string): Promise<SpeakerPortalBundle | null>;
   updateSpeakerProfile(input: UpdateSpeakerProfileInput): Promise<SpeakerPortalBundle>;
   updateSpeakerTask(input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle>;
+  updateSpeakerProposal(input: UpdateSpeakerProposalInput): Promise<SpeakerPortalBundle>;
+  getEvaluationWorkspace(eventId: string): Promise<EvaluationWorkspaceResponse>;
+  saveEvaluationRound(input: SaveEvaluationRoundInput): Promise<void>;
+  saveRoundReviewer(input: SaveRoundReviewerInput): Promise<void>;
+  saveAssignments(input: SaveAssignmentsInput): Promise<void>;
+  autoDistributeAssignments(roundId: string, now: string): Promise<void>;
+  getReviewerQueue(token: string): Promise<ReviewerQueueResponse | null>;
+  submitReviewerScorecard(input: SubmitReviewerScorecardInput): Promise<void>;
+  createEvent(input: CreateEventInput): Promise<EventBundle>;
+  updateEventSettings(input: UpdateEventSettingsInput): Promise<EventBundle>;
+  createTrack(input: CreateTrackInput): Promise<EventBundle>;
+  createRoom(input: CreateRoomInput): Promise<EventBundle>;
+  createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
   simulateCommunication(input: SimulateCommunicationInput): Promise<void>;
+  queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
+  listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
 }
@@ -132,20 +159,95 @@ export interface SimulateCommunicationInput {
   messageId: string;
   attemptId: string;
   eventId: string;
-  speakerId: string;
+  speakerId: string | null;
   toEmail: string;
   subject: string;
   bodyMd: string;
   now: string;
 }
 
+export interface QueueDueTaskRemindersResult {
+  queued: number;
+  taskIds: string[];
+}
+
+export interface SaveEvaluationRoundInput {
+  eventId: string;
+  planId: string;
+  roundId: string;
+  data: SaveEvaluationRoundRequest;
+  criterionIds: string[];
+}
+
+export interface SaveRoundReviewerInput extends SaveRoundReviewerRequest {
+  roundId: string;
+  token: string;
+  now: string;
+}
+
+export interface SaveAssignmentsInput {
+  roundId: string;
+  reviewerEmail: string;
+  submissionIds: string[];
+  now: string;
+}
+
+export interface SubmitReviewerScorecardInput extends SubmitReviewRequest {
+  id: string;
+  token: string;
+  roundId: string;
+  submissionId: string;
+  now: string;
+  recuse?: boolean;
+}
+
+export interface CreateEventInput extends CreateEventRequest {
+  eventId: string;
+  formId: string;
+  planId: string;
+  now: string;
+}
+
+export interface UpdateEventSettingsInput extends UpdateEventSettingsRequest {
+  eventId: string;
+  now: string;
+}
+
+export interface CreateTrackInput extends CreateTrackRequest {
+  id: string;
+  eventId: string;
+}
+
+export interface CreateRoomInput extends CreateRoomRequest {
+  id: string;
+  eventId: string;
+}
+
+export interface CreateFormFieldInput extends CreateFormFieldRequest {
+  id: string;
+  ruleId: string | null;
+  eventId: string;
+  formId: string;
+}
+
 export interface SpeakerPortalBundle {
   event: EventSummary;
   speaker: Speaker;
   sessions: SpeakerPortalSession[];
+  proposals: SpeakerPortalProposal[];
+  cfp: EventBundle["cfp"];
   tasks: SpeakerPortalTask[];
   assets: SpeakerAsset[];
   resources: ResourcePage[];
+}
+
+export interface UpdateSpeakerProposalInput {
+  speakerId: string;
+  submissionId: string;
+  title: string;
+  abstract: string;
+  answers: Record<string, unknown>;
+  now: string;
 }
 
 export interface SpeakerPortalSession {
@@ -179,6 +281,14 @@ export interface CreateCfpSubmissionInput {
     title?: string;
     bio?: string;
   };
+  coSpeakers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    company?: string;
+    title?: string;
+    bio?: string;
+  }>;
   /** Id to use IF the speaker is new; ignored when the email already exists. */
   speakerId: string;
   submissionId: string;

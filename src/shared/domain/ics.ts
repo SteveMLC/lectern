@@ -59,3 +59,22 @@ export function buildCalendarInvite(input: CalendarInviteInput): string {
   ];
   return `${lines.map(fold).join("\r\n")}\r\n`;
 }
+
+export function buildCalendarCollection(inputs: CalendarInviteInput[]): string {
+  const events = inputs.map((input) => {
+    const single = buildCalendarInvite(input);
+    const match = single.match(/BEGIN:VEVENT\r\n[\s\S]*?END:VEVENT\r\n/);
+    if (!match) throw new Error("Calendar event could not be rendered.");
+    return match[0];
+  });
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//SpeakerOps//Personal Schedule//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    ...events.map((event) => event.trimEnd()),
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
+}

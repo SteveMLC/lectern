@@ -2,6 +2,7 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  EvaluationWorkspaceResponse,
   OrganizerAgendaResponse,
   OrganizerSession,
   PublicScheduleResponse,
@@ -9,6 +10,8 @@ import type {
   PublicSpeakersResponse,
   Speaker,
   SpeakerAsset,
+  ReviewerQueueResponse,
+  OutboxMessage,
   SubmissionListItem,
 } from "../../../shared/contracts";
 import type {
@@ -24,6 +27,16 @@ import type {
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
+  UpdateSpeakerProposalInput,
+  SaveEvaluationRoundInput,
+  SaveRoundReviewerInput,
+  SaveAssignmentsInput,
+  SubmitReviewerScorecardInput,
+  CreateEventInput,
+  UpdateEventSettingsInput,
+  CreateTrackInput,
+  CreateRoomInput,
+  CreateFormFieldInput,
 } from "../types";
 
 /**
@@ -230,6 +243,12 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("getPublicSpeakers");
   }
 
+  async createEvent(_input: CreateEventInput): Promise<EventBundle> { throw new AirtableNotWiredError("createEvent"); }
+  async updateEventSettings(_input: UpdateEventSettingsInput): Promise<EventBundle> { throw new AirtableNotWiredError("updateEventSettings"); }
+  async createTrack(_input: CreateTrackInput): Promise<EventBundle> { throw new AirtableNotWiredError("createTrack"); }
+  async createRoom(_input: CreateRoomInput): Promise<EventBundle> { throw new AirtableNotWiredError("createRoom"); }
+  async createFormField(_input: CreateFormFieldInput): Promise<EventBundle> { throw new AirtableNotWiredError("createFormField"); }
+
   async createCfpSubmission(_input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     throw new AirtableNotWiredError("createCfpSubmission");
   }
@@ -302,6 +321,38 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("updateSpeakerTask");
   }
 
+  async updateSpeakerProposal(_input: UpdateSpeakerProposalInput): Promise<SpeakerPortalBundle> {
+    throw new AirtableNotWiredError("updateSpeakerProposal");
+  }
+
+  async getEvaluationWorkspace(_eventId: string): Promise<EvaluationWorkspaceResponse> {
+    throw new AirtableNotWiredError("getEvaluationWorkspace");
+  }
+
+  async saveEvaluationRound(_input: SaveEvaluationRoundInput): Promise<void> {
+    throw new AirtableNotWiredError("saveEvaluationRound");
+  }
+
+  async saveRoundReviewer(_input: SaveRoundReviewerInput): Promise<void> {
+    throw new AirtableNotWiredError("saveRoundReviewer");
+  }
+
+  async saveAssignments(_input: SaveAssignmentsInput): Promise<void> {
+    throw new AirtableNotWiredError("saveAssignments");
+  }
+
+  async autoDistributeAssignments(_roundId: string, _now: string): Promise<void> {
+    throw new AirtableNotWiredError("autoDistributeAssignments");
+  }
+
+  async getReviewerQueue(_token: string): Promise<ReviewerQueueResponse | null> {
+    throw new AirtableNotWiredError("getReviewerQueue");
+  }
+
+  async submitReviewerScorecard(_input: SubmitReviewerScorecardInput): Promise<void> {
+    throw new AirtableNotWiredError("submitReviewerScorecard");
+  }
+
   async simulateCommunication(input: SimulateCommunicationInput): Promise<void> {
     const response = await this.airtableFetch(AIRTABLE_TABLES.messages, {
       method: "POST",
@@ -331,6 +382,14 @@ export class AirtableRepo implements SpeakerOpsRepo {
       throw new Error(`Airtable Messages write failed (${response.status}): ${await response.text()}`);
     }
     this.cache.delete(AIRTABLE_TABLES.messages);
+  }
+
+  async queueDueTaskReminders(_now: string, _dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
+    throw new AirtableNotWiredError("queueDueTaskReminders");
+  }
+
+  async listMessages(_eventId: string): Promise<OutboxMessage[]> {
+    throw new AirtableNotWiredError("listMessages");
   }
 
   async createSpeakerAsset(_input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

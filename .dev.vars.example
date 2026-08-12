@@ -13,6 +13,8 @@ ORGANIZER_PASSCODE=speakerops-dev
 # Optional — real email sending (Lane C wires this; simulated outbox without it).
 # RESEND_API_KEY=
 
-# Optional — AI-assisted decision feedback (template fallback without it).
+# Optional — AI-assisted drafting. Both the key and explicit mode are required;
+# leaving mode disabled guarantees deterministic, zero-API-cost templates.
 # ANTHROPIC_API_KEY=
 # ANTHROPIC_MODEL=claude-sonnet-5
+# AI_RUNTIME_MODE=disabled

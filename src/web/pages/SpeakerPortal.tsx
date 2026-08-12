@@ -5,8 +5,11 @@ import type {
   ResourcePage,
   Speaker,
   SpeakerPortalResponse,
+  SpeakerPortalProposal,
   SpeakerTask,
 } from "../../shared/contracts";
+import { canEditSpeakerProposal } from "../../shared/domain/cfp";
+import { isFieldVisible } from "../../shared/domain/rules";
 import {
   Badge,
   Button,
@@ -21,7 +24,7 @@ import {
 } from "../components/ui";
 import { ApiRequestError, apiClient } from "../lib/api";
 import { sanitizeEmbedHtml } from "../lib/sanitizeEmbedHtml";
-import { formatDateRange, formatDateTime } from "../lib/status";
+import { formatDateRange, formatDateTime, pipelineStage } from "../lib/status";
 import { useAsync } from "../lib/useAsync";
 
 const TASK_TONE: Record<SpeakerTask["status"], "amber" | "emerald" | "rose"> = {
@@ -102,6 +105,11 @@ export function SpeakerPortal() {
     .map((item) => item.definition.dueAt)
     .filter((due): due is string => Boolean(due))
     .sort()[0];
+  const latestAssetIds = new Set(
+    [...new Set(data.assets.map((asset) => asset.kind))]
+      .map((kind) => data.assets.find((asset) => asset.kind === kind)?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -140,6 +148,28 @@ export function SpeakerPortal() {
           </div>
 
           <ProfileEditor token={token} speaker={data.speaker} onUpdated={setPortalOverride} />
+
+          <Card className="p-5">
+            <h2 className="text-base font-semibold text-zinc-900">Your proposals</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Track each submission and update it while the call for speakers is open.
+            </p>
+            {data.proposals.length === 0 ? (
+              <EmptyState title="No proposals yet" body="Submissions made with this speaker email appear here." />
+            ) : (
+              <div className="mt-4 space-y-4">
+                {data.proposals.map((proposal) => (
+                  <ProposalCard
+                    key={proposal.id}
+                    token={token}
+                    proposal={proposal}
+                    cfp={data.cfp}
+                    onUpdated={setPortalOverride}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
 
           <Card className="p-5">
             <h2 className="text-base font-semibold text-zinc-900">Sessions</h2>
@@ -231,6 +261,8 @@ export function SpeakerPortal() {
                   >
                     <span className="font-medium text-zinc-900">{asset.filename}</span>
                     <span className="ml-2 text-xs text-zinc-500">{asset.kind}</span>
+                    {latestAssetIds.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}
+                    <span className="mt-1 block text-xs text-zinc-400">Uploaded {formatDateTime(asset.uploadedAt, data.event.timezone)}</span>
                   </a>
                 ))}
               </div>
@@ -243,6 +275,127 @@ export function SpeakerPortal() {
         </aside>
       </main>
     </div>
+  );
+}
+
+function ProposalCard({
+  token,
+  proposal,
+  cfp,
+  onUpdated,
+}: {
+  token: string;
+  proposal: SpeakerPortalProposal;
+  cfp: SpeakerPortalResponse["cfp"];
+  onUpdated: (portal: SpeakerPortalResponse) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(proposal.title);
+  const [abstract, setAbstract] = useState(proposal.abstract);
+  const [answers, setAnswers] = useState<Record<string, unknown>>(proposal.answers);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const stage = pipelineStage({ status: proposal.status, reviews: [] });
+  const undecided = ["draft", "submitted", "under_review"].includes(proposal.status);
+  const editable = cfp
+    ? canEditSpeakerProposal(cfp.form, proposal.status, new Date().toISOString())
+    : false;
+  const lockReason = !undecided
+    ? "Editing is locked because the committee has made a decision."
+    : "Editing is locked because the call for speakers is closed.";
+  const visibleFields = cfp
+    ? cfp.fields.filter((field) =>
+        isFieldVisible(field, cfp.rules, { format: proposal.format, answers }),
+      )
+    : [];
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await apiClient.updateSpeakerProposal(token, proposal.id, {
+        title,
+        abstract,
+        answers,
+      });
+      onUpdated(updated);
+      setSaved(true);
+      setEditing(false);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Proposal could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <article className="rounded-xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={stage.tone}>{stage.label}</Badge>
+            <span className="text-xs text-zinc-500">
+              {[proposal.trackName, FORMAT_LABEL[proposal.format] ?? proposal.format]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+          <h3 className="mt-2 text-sm font-semibold text-zinc-900">{proposal.title}</h3>
+        </div>
+        {editable ? (
+          <Button type="button" variant="secondary" onClick={() => setEditing((value) => !value)}>
+            {editing ? "Cancel" : "Edit proposal"}
+          </Button>
+        ) : null}
+      </div>
+      {!editing ? <p className="mt-2 text-sm leading-relaxed text-zinc-600">{proposal.abstract}</p> : null}
+      {!editable ? <p className="mt-3 text-xs font-medium text-zinc-500">{lockReason}</p> : null}
+      {saved ? <p role="status" className="mt-3 text-sm font-medium text-emerald-700">Proposal saved.</p> : null}
+      {editing ? (
+        <form onSubmit={save} className="mt-4 grid gap-4 border-t border-zinc-100 pt-4">
+          <Field label="Title" required>
+            <Input value={title} onChange={(event) => setTitle(event.target.value)} required />
+          </Field>
+          <Field label="Abstract" required>
+            <Textarea value={abstract} onChange={(event) => setAbstract(event.target.value)} required rows={7} />
+          </Field>
+          {visibleFields.map((field) => (
+            <Field key={field.id} label={field.label} required={field.required} help={field.helpText ?? undefined}>
+              {field.fieldType === "select" ? (
+                <Select
+                  value={String(answers[field.key] ?? "")}
+                  onChange={(event) => setAnswers((current) => ({ ...current, [field.key]: event.target.value }))}
+                  required={field.required}
+                >
+                  <option value="">Select…</option>
+                  {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+                </Select>
+              ) : field.fieldType === "checkbox" ? (
+                <label className="flex items-center gap-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={answers[field.key] === true}
+                    onChange={(event) => setAnswers((current) => ({ ...current, [field.key]: event.target.checked }))}
+                  />
+                  Yes
+                </label>
+              ) : (
+                <Textarea
+                  value={String(answers[field.key] ?? "")}
+                  onChange={(event) => setAnswers((current) => ({ ...current, [field.key]: event.target.value }))}
+                  required={field.required}
+                />
+              )}
+            </Field>
+          ))}
+          {error ? <ErrorBanner message={error} /> : null}
+          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save proposal"}</Button>
+        </form>
+      ) : null}
+    </article>
   );
 }
 

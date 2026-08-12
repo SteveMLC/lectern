@@ -127,6 +127,8 @@ The brief allows a valid submission up to $500 in AI token-cost reimbursement, s
 - `pnpm usage:check` — validates every entry, recomputes every cost, and **fails if REPORT.md does not byte-match a regeneration from the ledger**, so the report can be neither stale nor hand-edited. `pnpm verify` includes this gate.
 - `pnpm usage:report` regenerates the report; `pnpm usage:snapshot` appends new entries from provider session logs and regenerates it automatically.
 - `pnpm usage:runtime` imports unseen provider-reported counters from the organizer-only production audit endpoint. The app persists those counters before responding and never stores prompts, reviewer notes, or generated text in the audit table.
+
+Paid model use is fail-closed. Runtime drafting uses deterministic templates unless `AI_RUNTIME_MODE=enabled` is set in addition to an API key. The official evaluator must be launched through `pnpm eval:paid`, which requires explicit one-command approval, one scenario, at most 20 turns, and an approved ceiling no greater than $2. `pnpm verify` and the requirement-ledger check are the zero-spend default.
 - `pnpm usage:receipt` hashes a private invoice or subscription receipt and appends a sanitized allocation record without rewriting old usage evidence or committing the receipt itself.
 
 Raw session transcripts and receipts stay private (hashes are committed, contents are not) and go to the organizer on request with the claim.

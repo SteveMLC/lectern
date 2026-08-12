@@ -7,7 +7,7 @@
 --   * 10 submissions across the full status spread.
 --   * Two accepted submissions became sessions WITH lineage
 --     (ses_from_sub_agents_prod, ses_from_sub_eval_pipelines).
---   * Two direct sessions with NO submission behind them
+--   * Three direct sessions with NO submission behind them
 --     (ses_keynote, ses_ai_panel) — the invited/sponsor path.
 --   * Agenda contains one room double-booking (Main Hall 17:30-17:45Z)
 --     and one speaker double-booking (Ada Okafor in two overlapping slots).
@@ -28,6 +28,8 @@ DELETE FROM resource_pages;
 DELETE FROM agenda_slots;
 DELETE FROM session_speakers;
 DELETE FROM sessions;
+DELETE FROM review_assignments;
+DELETE FROM round_reviewers;
 DELETE FROM reviews;
 DELETE FROM rubric_criteria;
 DELETE FROM evaluation_rounds;
@@ -160,14 +162,14 @@ INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order) VA
 INSERT INTO evaluation_plans (id, event_id, name, description, created_at) VALUES
 ('plan_pc2026', 'evt_horizon2026', 'Program Committee Review', 'Two-round review: screening pass, then final selection against the rubric.', '2026-07-20T09:00:00Z');
 
-INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at, closes_at) VALUES
-('round_screen', 'plan_pc2026', 'Screening',    1, 'closed', '2026-07-26T07:00:00Z', '2026-08-02T07:00:00Z'),
-('round_final',  'plan_pc2026', 'Final Review', 2, 'open',   '2026-08-02T07:00:00Z', '2026-08-28T07:00:00Z');
+INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at, closes_at, blind_mode) VALUES
+('round_screen', 'plan_pc2026', 'Screening',    1, 'closed', '2026-07-26T07:00:00Z', '2026-08-02T07:00:00Z', 0),
+('round_final',  'plan_pc2026', 'Final Review', 2, 'open',   '2026-08-02T07:00:00Z', '2026-08-28T07:00:00Z', 0);
 
-INSERT INTO rubric_criteria (id, plan_id, key, label, description, max_score, weight, sort_order) VALUES
-('crit_relevance', 'plan_pc2026', 'relevance', 'Audience relevance', 'Does this serve working engineers at Horizon?', 5, 1.0, 0),
-('crit_depth',     'plan_pc2026', 'depth',     'Technical depth',    'Real systems and real numbers beat theory.',    5, 1.0, 1),
-('crit_readiness', 'plan_pc2026', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
+INSERT INTO rubric_criteria (id, plan_id, round_id, key, label, description, max_score, weight, sort_order) VALUES
+('crit_relevance', 'plan_pc2026', 'round_screen', 'relevance', 'Audience relevance', 'Does this serve working engineers at Horizon?', 5, 1.0, 0),
+('crit_depth',     'plan_pc2026', 'round_screen', 'depth',     'Technical depth',    'Real systems and real numbers beat theory.',    5, 1.0, 1),
+('crit_readiness', 'plan_pc2026', 'round_screen', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
 
 INSERT INTO reviews (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at) VALUES
 ('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
@@ -198,7 +200,12 @@ INSERT INTO sessions (id, event_id, source_submission_id, track_id, title, abstr
 ('ses_ai_panel', 'evt_horizon2026', NULL, 'trk_ai',
  'Panel: Agents, Agents Everywhere',
  'Practitioners who run agent systems in production argue about what is real. Moderated by Omar Haddad.',
- 'panel', 'confirmed', 'direct', '2026-08-04T15:10:00Z', '2026-08-04T15:10:00Z');
+ 'panel', 'confirmed', 'direct', '2026-08-04T15:10:00Z', '2026-08-04T15:10:00Z'),
+
+('ses_day_two_clinic', 'evt_horizon2026', NULL, 'trk_infra',
+ 'Day Two Reliability Clinic',
+ 'Lin Zhao turns the previous day’s production failures into a hands-on reliability clinic: incident timelines, fallback drills, and the smallest guardrails that prevent expensive surprises.',
+ 'workshop', 'confirmed', 'direct', '2026-08-04T15:20:00Z', '2026-08-04T15:20:00Z');
 
 INSERT INTO session_speakers (session_id, speaker_id, role, sort_order) VALUES
 ('ses_from_sub_agents_prod',    'spk_ada',   'primary',    0),
@@ -206,10 +213,11 @@ INSERT INTO session_speakers (session_id, speaker_id, role, sort_order) VALUES
 ('ses_from_sub_eval_pipelines', 'spk_priya', 'primary',    0),
 ('ses_keynote',                 'spk_dana',  'primary',    0),
 ('ses_ai_panel',                'spk_omar',  'primary',    0),
-('ses_ai_panel',                'spk_ada',   'co_speaker', 1);
+('ses_ai_panel',                'spk_ada',   'co_speaker', 1),
+('ses_day_two_clinic',          'spk_lin',   'primary',    0);
 
 -- ---------------------------------------------------------------------------
--- Agenda (2026-10-14, times UTC; 16:00Z = 09:00 PT).
+-- Agenda (2026-10-14..15, times UTC; 16:00Z = 09:00 PT).
 -- slot_agents vs slot_evals: SAME ROOM overlap 17:30-17:45Z  -> room conflict.
 -- slot_agents vs slot_panel: Ada is in both, overlap 17:15-17:45Z -> speaker conflict.
 -- ---------------------------------------------------------------------------
@@ -217,7 +225,8 @@ INSERT INTO agenda_slots (id, event_id, session_id, room_id, starts_at, ends_at,
 ('slot_keynote', 'evt_horizon2026', 'ses_keynote',                 'room_main', '2026-10-14T16:00:00Z', '2026-10-14T16:45:00Z', '2026-08-04T16:00:00Z', '2026-08-04T16:00:00Z'),
 ('slot_agents',  'evt_horizon2026', 'ses_from_sub_agents_prod',    'room_main', '2026-10-14T17:00:00Z', '2026-10-14T17:45:00Z', '2026-08-04T16:05:00Z', '2026-08-04T16:05:00Z'),
 ('slot_evals',   'evt_horizon2026', 'ses_from_sub_eval_pipelines', 'room_main', '2026-10-14T17:30:00Z', '2026-10-14T18:15:00Z', '2026-08-04T16:10:00Z', '2026-08-04T16:10:00Z'),
-('slot_panel',   'evt_horizon2026', 'ses_ai_panel',                'room_loft', '2026-10-14T17:15:00Z', '2026-10-14T18:00:00Z', '2026-08-04T16:15:00Z', '2026-08-04T16:15:00Z');
+('slot_panel',   'evt_horizon2026', 'ses_ai_panel',                'room_loft', '2026-10-14T17:15:00Z', '2026-10-14T18:00:00Z', '2026-08-04T16:15:00Z', '2026-08-04T16:15:00Z'),
+('slot_day_two', 'evt_horizon2026', 'ses_day_two_clinic',          'room_studio','2026-10-15T17:00:00Z', '2026-10-15T18:30:00Z', '2026-08-04T16:20:00Z', '2026-08-04T16:20:00Z');
 
 -- ---------------------------------------------------------------------------
 -- Speaker onboarding tasks

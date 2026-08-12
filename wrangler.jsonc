@@ -33,9 +33,14 @@
   "vars": {
     // Non-secret configuration only. Secrets (ORGANIZER_PASSCODE, AIRTABLE_TOKEN,
     // RESEND_API_KEY) go in .dev.vars locally and `wrangler secret put` in prod.
-    "DATA_BACKEND": "d1"
+    "DATA_BACKEND": "d1",
+    // Cost safety: an API key alone can never enable paid model calls.
+    "AI_RUNTIME_MODE": "disabled"
   },
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": ["0 */6 * * *"]
   }
 }

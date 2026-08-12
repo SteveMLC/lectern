@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCalendarInvite } from "./ics";
+import { buildCalendarCollection, buildCalendarInvite } from "./ics";
 
 const base = {
   uid: "session-1@speakerops",
@@ -30,5 +30,15 @@ describe("buildCalendarInvite", () => {
 
   it("rejects inverted events", () => {
     expect(() => buildCalendarInvite({ ...base, endsAt: base.startsAt })).toThrow(RangeError);
+  });
+
+  it("exports multiple sessions in one calendar", () => {
+    const ics = buildCalendarCollection([
+      base,
+      { ...base, uid: "session-2@speakerops", sessionTitle: "Second session" },
+    ]);
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(ics).toContain("SUMMARY:Second session — Horizon Dev Summit");
+    expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
   });
 });

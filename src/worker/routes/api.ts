@@ -11,9 +11,16 @@ import {
   type CreateDirectSessionResponse,
   type CreateSubmissionResponse,
   type EventCounts,
+  type EvaluationWorkspaceResponse,
   type EventsListResponse,
+  CreateEventRequest,
+  UpdateEventSettingsRequest,
+  CreateTrackRequest,
+  CreateRoomRequest,
+  CreateFormFieldRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
+  type OrganizerSpeakersResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
@@ -30,10 +37,17 @@ import {
   type UploadAssetResponse,
   UpdateSpeakerProfileRequest,
   UpdateSpeakerTaskRequest,
+  UpdateSpeakerProposalRequest,
+  SaveEvaluationRoundRequest,
+  SaveRoundReviewerRequest,
+  SaveAssignmentsRequest,
+  SubmitReviewRequest,
+  type ReviewerQueueResponse,
+  type OutboxResponse,
 } from "../../shared/contracts";
-import { isCfpOpen } from "../../shared/domain/cfp";
-import { submissionsToCsv } from "../../shared/domain/csv";
-import { buildCalendarInvite } from "../../shared/domain/ics";
+import { canEditSpeakerProposal, isCfpOpen } from "../../shared/domain/cfp";
+import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
+import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
@@ -59,6 +73,11 @@ function walkthroughHeaders(object: R2Object): Headers {
 }
 
 export const api = new Hono<{ Bindings: Env }>();
+
+function runtimeAiConfig(env: Env): { apiKey?: string; model?: string } {
+  if (env.AI_RUNTIME_MODE !== "enabled") return {};
+  return { apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL };
+}
 
 async function uploadSpeakerAsset(
   c: Context<{ Bindings: Env }>,
@@ -122,7 +141,7 @@ function safeCssColor(value: string | null): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#eef2ff";
 }
 
-function embedDocument(title: string, body: string): Response {
+function embedDocument(title: string, body: string, interactive = false): Response {
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -160,20 +179,58 @@ function embedDocument(title: string, body: string): Response {
     .group { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 16px 0 2px;
              text-transform: uppercase; }
     .group:first-of-type { margin-top: 4px; }
+    .controls { display: grid; gap: 8px; grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(110px, auto)); margin: 0 0 14px; }
+    .control { border: 1px solid #d4d4d8; border-radius: 8px; color: #18181b; font: inherit; min-width: 0; padding: 8px 10px; }
+    .count { color: #71717a; font-size: 12px; margin: -5px 0 12px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .tab { background: #fff; border: 1px solid #d4d4d8; border-radius: 999px; color: #3f3f46; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; }
+    .tab[aria-selected="true"] { background: #4338ca; border-color: #4338ca; color: #fff; }
+    .gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+    .gallery .speaker { min-height: 150px; }
+    .gallery .avatar { height: 64px; width: 64px; }
+    .action { background: #fff; border: 1px solid #d4d4d8; border-radius: 999px; color: #3f3f46; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 5px 10px; }
+    .action[aria-pressed="true"] { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+    .detail { border-top: 1px solid #e4e4e7; margin-top: 10px; padding-top: 10px; }
+    .session-link { border-left: 2px solid #c7d2fe; margin-top: 8px; padding-left: 9px; }
+    details summary { color: #4338ca; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 8px; }
     @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
   </style>
 </head>
-<body><main class="wrap">${body}</main></body>
+<body><main class="wrap">${body}</main>${interactive ? `<script>
+const items=[...document.querySelectorAll('[data-search]')];
+const count=document.querySelector('[data-count]');
+function filter(){
+ const q=(document.querySelector('[data-query]')?.value||'').toLowerCase();
+ const track=document.querySelector('[data-track]')?.value||'';
+ const format=document.querySelector('[data-format]')?.value||'';
+ const room=document.querySelector('[data-room]')?.value||'';
+ let visible=0;
+ for(const item of items){const show=(!q||item.dataset.search.includes(q))&&(!track||item.dataset.track===track)&&(!format||item.dataset.format===format)&&(!room||item.dataset.room===room);item.hidden=!show;if(show)visible++;}
+ if(count) count.textContent=visible+' result'+(visible===1?'':'s');
+}
+document.querySelectorAll('[data-filter]').forEach((node)=>node.addEventListener('input',filter));filter();
+const dayButtons=[...document.querySelectorAll('[data-day-button]')];
+const dayPanels=[...document.querySelectorAll('[data-day-panel]')];
+for(const button of dayButtons)button.addEventListener('click',()=>{for(const candidate of dayButtons)candidate.setAttribute('aria-selected',String(candidate===button));for(const panel of dayPanels)panel.hidden=panel.dataset.dayPanel!==button.dataset.dayButton;});
+const itinerary=document.querySelector('[data-itinerary]');
+if(itinerary){
+ const key='speakerops.itinerary.'+itinerary.dataset.itinerary;
+ let saved=[];try{saved=JSON.parse(localStorage.getItem(key)||'[]')}catch{}
+ const buttons=[...document.querySelectorAll('[data-save-id]')];const personal=document.querySelector('[data-personal]');const exportLink=document.querySelector('[data-export]');
+ function draw(){for(const button of buttons){const on=saved.includes(button.dataset.saveId);button.setAttribute('aria-pressed',String(on));button.textContent=on?'★ Saved':'☆ Save';button.closest('[data-session-card]').hidden=Boolean(personal?.checked&&!on)}if(count)count.textContent=saved.length+' saved';if(exportLink){exportLink.hidden=saved.length===0;exportLink.href='/api/public/events/'+encodeURIComponent(itinerary.dataset.itinerary)+'/itinerary.ics?sessions='+encodeURIComponent(saved.join(','));}}
+ for(const button of buttons)button.addEventListener('click',()=>{const id=button.dataset.saveId;saved=saved.includes(id)?saved.filter((value)=>value!==id):[...saved,id];localStorage.setItem(key,JSON.stringify(saved));draw()});personal?.addEventListener('change',draw);document.querySelector('[data-clear]')?.addEventListener('click',()=>{saved=[];localStorage.setItem(key,'[]');draw()});draw();
+}
+</script>` : ""}</body>
 </html>`,
     {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "public, max-age=60",
         // img-src 'self' is required or headshots silently vanish: with
-        // default-src 'none' the browser blocks them and the gallery renders
-        // as broken alt text. Scripts stay forbidden.
+        // default-src 'none' the browser blocks headshots. Interactive embeds
+        // opt into only their generated inline filter script; no external code.
         "content-security-policy":
-          "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
+          `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; ${interactive ? "script-src 'unsafe-inline';" : ""} base-uri 'none'; frame-ancestors *`,
       },
     },
   );
@@ -215,7 +272,7 @@ function sessionSpeakers(speakers: PublicSessionsResponse["sessions"][number]["s
  * time, showing only what is actually placed. Distinct on purpose from the
  * sessions embed, which is the catalogue.
  */
-function renderScheduleEmbed(data: PublicScheduleResponse): Response {
+export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
   let body: string;
   if (data.slots.length === 0) {
     body = `<div class="empty">Schedule coming soon.</div>`;
@@ -225,24 +282,29 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
       const day = formatEmbedDay(slot.startsAt, data.timezone);
       byDay.set(day, [...(byDay.get(day) ?? []), slot]);
     }
-    body = [...byDay.entries()]
-      .map(([day, slots]) => {
+    const days = [...byDay.entries()];
+    const tabs = `<div class="tabs">${days.map(([day], index) => `<button type="button" class="tab" data-day-button="${escapeHtml(day)}" aria-selected="${index === 0}">${escapeHtml(day)}</button>`).join("")}</div>`;
+    body = tabs + days
+      .map(([day, slots], index) => {
         const items = slots
           .map((slot) => {
             const track = slot.session.track;
             const starts = formatEmbedTime(slot.startsAt, data.timezone);
             const ends = formatEmbedTime(slot.endsAt, data.timezone);
-            return `<article class="item">
+            return `<details class="item">
+  <summary><span class="time">${escapeHtml(starts)}</span> · ${escapeHtml(slot.session.title)}</summary>
+  <div class="detail">
   <div class="row">
     <p class="title">${escapeHtml(slot.session.title)}</p>
     ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
   </div>
-  <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${sessionSpeakers(slot.session.speakers)}</div>
+  <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${escapeHtml(slot.session.format)} · ${sessionSpeakers(slot.session.speakers)}</div>
   <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
-</article>`;
+  </div>
+</details>`;
           })
           .join("");
-        return `<h2 class="day">${escapeHtml(day)}</h2><section class="stack">${items}</section>`;
+        return `<section data-day-panel="${escapeHtml(day)}" ${index === 0 ? "" : "hidden"}><h2 class="day">${escapeHtml(day)}</h2><div class="stack">${items}</div></section>`;
       })
       .join("");
   }
@@ -250,6 +312,7 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
   return embedDocument(
     `${data.event.name} schedule`,
     `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">By day and time · ${escapeHtml(data.timezone)}</div></header>${body}`,
+    true,
   );
 }
 
@@ -258,45 +321,51 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
  * no slot yet. An attendee browsing topics wants this; an attendee planning
  * their day wants the schedule.
  */
-function renderSessionsEmbed(data: PublicSessionsResponse): Response {
+export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: PublicScheduleResponse): Response {
   let body: string;
   if (data.sessions.length === 0) {
     body = `<div class="empty">Sessions coming soon.</div>`;
   } else {
-    const byTrack = new Map<string, typeof data.sessions>();
-    for (const session of data.sessions) {
-      const track = session.track?.name ?? "Unassigned track";
-      byTrack.set(track, [...(byTrack.get(track) ?? []), session]);
-    }
-    body = [...byTrack.entries()]
-      .map(([track, sessions]) => {
-        const items = sessions
-          .map(
-            (session) => `<article class="item">
+    const tracks = [...new Set(data.sessions.map((session) => session.track?.name ?? "Unassigned track"))].sort();
+    const formats = [...new Set(data.sessions.map((session) => session.format))].sort();
+    const slotBySession = new Map(schedule.slots.map((slot) => [slot.session.id, slot]));
+    const rooms = [...new Set(schedule.slots.map((slot) => slot.room?.name).filter((room): room is string => Boolean(room)))].sort();
+    const items = data.sessions
+      .map((session) => {
+        const track = session.track?.name ?? "Unassigned track";
+        const slot = slotBySession.get(session.id);
+        const room = slot?.room?.name ?? "Room pending";
+        const when = slot ? `${formatEmbedDay(slot.startsAt, schedule.timezone)} · ${formatEmbedTime(slot.startsAt, schedule.timezone)}-${formatEmbedTime(slot.endsAt, schedule.timezone)}` : "Time pending";
+        const speakerSearch = session.speakers.map((speaker) => `${speaker.name} ${speaker.title ?? ""} ${speaker.company ?? ""}`).join(" ");
+        return `<article class="item" data-search="${escapeHtml(`${session.title} ${speakerSearch}`.toLowerCase())}" data-track="${escapeHtml(track)}" data-format="${escapeHtml(session.format)}" data-room="${escapeHtml(room)}">
   <p class="title">${escapeHtml(session.title)}</p>
-  <div class="meta">${escapeHtml(session.format)} · ${sessionSpeakers(session.speakers)}</div>
-  <p class="abstract">${escapeHtml(session.abstract)}</p>
-</article>`,
-          )
-          .join("");
-        return `<h2 class="group">${escapeHtml(track)} · ${sessions.length}</h2><section class="stack">${items}</section>`;
-      })
-      .join("");
+  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${escapeHtml(when)} · ${escapeHtml(room)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
+  <p class="abstract">${escapeHtml(session.abstract.slice(0, 180))}${session.abstract.length > 180 ? "…" : ""}</p>
+  ${session.abstract.length > 180 ? `<details><summary>Show more</summary><p class="abstract">${escapeHtml(session.abstract)}</p></details>` : ""}
+</article>`;
+      }).join("");
+    body = `<div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search titles or speakers" aria-label="Search sessions" /><select class="control" data-filter data-track aria-label="Filter by track"><option value="">All tracks</option>${tracks.map((track) => `<option>${escapeHtml(track)}</option>`).join("")}</select><select class="control" data-filter data-format aria-label="Filter by format"><option value="">All formats</option>${formats.map((format) => `<option>${escapeHtml(format)}</option>`).join("")}</select><select class="control" data-filter data-room aria-label="Filter by room"><option value="">All rooms</option>${rooms.map((room) => `<option>${escapeHtml(room)}</option>`).join("")}</select></div><div class="count" data-count></div><section class="stack">${items}</section>`;
   }
 
   return embedDocument(
     `${data.event.name} sessions`,
-    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">The full catalogue, grouped by track</div></header>${body}`,
+    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">Search and filter the full catalogue</div></header>${body}`,
+    true,
   );
 }
 
-function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
+export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: PublicScheduleResponse, gallery = false): Response {
+  const surname = (name: string) => name.trim().split(/\s+/).at(-1) ?? name;
+  const speakers = [...data.speakers].sort((a, b) => surname(a.name).localeCompare(surname(b.name)) || a.name.localeCompare(b.name));
   const items =
-    data.speakers.length === 0
+    speakers.length === 0
       ? `<div class="empty">Speakers coming soon.</div>`
-      : data.speakers
+      : speakers
           .map(
-            (speaker) => `<article class="item speaker">
+            (speaker) => {
+              const sessions = schedule.slots.filter((slot) => slot.session.speakers.some((candidate) => candidate.id === speaker.id));
+              return `<details class="item speaker" data-search="${escapeHtml(speaker.name.toLowerCase())}" data-track="" data-format="" data-room="">
+  <summary class="speaker">
   ${
     speaker.headshotUrl
       ? `<img class="avatar" src="${escapeHtml(speaker.headshotUrl)}" alt="${escapeHtml(speaker.name)} headshot" loading="lazy" />`
@@ -305,16 +374,30 @@ function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
   <div class="speaker-body">
     <div class="speaker-name">${escapeHtml(speaker.name)}</div>
     <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
-    ${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : ""}
   </div>
-</article>`,
+  </summary>
+  <div class="detail">${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : `<p class="abstract">Bio coming soon.</p>`}<div class="group">Sessions (${sessions.length})</div>${sessions.length ? sessions.map((slot) => `<div class="session-link"><div class="title">${escapeHtml(slot.session.title)}</div><div class="meta">${escapeHtml(formatEmbedDay(slot.startsAt, schedule.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, schedule.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, schedule.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")}</div></div>`).join("") : `<div class="subtle">No scheduled sessions.</div>`}</div>
+</details>`;
+            },
           )
           .join("");
 
   return embedDocument(
-    `${data.event.name} speakers`,
-    `<header class="header"><div class="eyebrow">Speakers</div><h1>${escapeHtml(data.event.name)}</h1></header><section class="stack">${items}</section>`,
+    `${data.event.name} ${gallery ? "speaker gallery" : "speakers"}`,
+    `<header class="header"><div class="eyebrow">${gallery ? "Speaker gallery" : "Speakers"}</div><h1>${escapeHtml(data.event.name)}</h1></header><div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search speakers" aria-label="Search speakers" /></div><div class="count" data-count></div><section class="${gallery ? "gallery" : "stack"}">${items}</section>`,
+    true,
   );
+}
+
+export function renderItineraryEmbed(data: PublicScheduleResponse): Response {
+  const days = [...new Set(data.slots.map((slot) => formatEmbedDay(slot.startsAt, data.timezone)))];
+  const cards = data.slots.map((slot) => `<article class="item" data-session-card>
+    <div class="row"><p class="title">${escapeHtml(slot.session.title)}</p><button class="action" type="button" data-save-id="${escapeHtml(slot.session.id)}" aria-pressed="false">☆ Save</button></div>
+    <div class="meta">${slot.session.track ? `<span class="pill" style="background:${safeCssColor(slot.session.track.color)}">${escapeHtml(slot.session.track.name)}</span> · ` : ""}${escapeHtml(formatEmbedDay(slot.startsAt, data.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, data.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, data.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")} · ${slot.session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ")}</div>
+    <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
+  </article>`).join("");
+  const body = `<section data-itinerary="${escapeHtml(data.event.slug)}"><div class="controls"><label class="control"><input type="checkbox" data-personal /> My saved schedule only</label><a class="control" data-export hidden>Export saved .ics</a><button class="control" type="button" data-clear>Clear saved</button></div><div class="count" data-count></div><div class="subtle">${days.length} event day${days.length === 1 ? "" : "s"} · stored only in this browser</div><section class="stack" style="margin-top:12px">${cards}</section></section>`;
+  return embedDocument(`${data.event.name} itinerary`, `<header class="header"><div class="eyebrow">Schedule itinerary</div><h1>${escapeHtml(data.event.name)}</h1></header>${body}`, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +459,27 @@ api.get("/public/events/:slug/speakers", async (c) => {
   return c.json(body);
 });
 
+api.get("/events/:slug/speakers", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const roster = await repo.getPublicSpeakers(c.req.param("slug"));
+  if (!roster) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const portals = await Promise.all(roster.speakers.map((speaker) => repo.getSpeakerPortalByToken(speaker.id)));
+  const body: OrganizerSpeakersResponse = {
+    event: roster.event,
+    speakers: roster.speakers.map((speaker, index) => {
+      const tasks = portals[index]?.tasks ?? [];
+      return {
+        ...speaker,
+        email: portals[index]?.speaker.email ?? "unknown@example.invalid",
+        totalTasks: tasks.length,
+        completedTasks: tasks.filter(({ task }) => task.status === "complete").length,
+        assets: portals[index]?.assets ?? [],
+      };
+    }),
+  };
+  return c.json(body);
+});
+
 api.get("/embeds/events/:slug/schedule", async (c) => {
   const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
@@ -383,15 +487,30 @@ api.get("/embeds/events/:slug/schedule", async (c) => {
 });
 
 api.get("/embeds/events/:slug/sessions", async (c) => {
-  const body = await createRepo(c.env).getPublicSessions(c.req.param("slug"));
-  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSessionsEmbed(body);
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSessions(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSessionsEmbed(body, schedule);
 });
 
 api.get("/embeds/events/:slug/speakers", async (c) => {
-  const body = await createRepo(c.env).getPublicSpeakers(c.req.param("slug"));
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSpeakersEmbed(body, schedule);
+});
+
+api.get("/embeds/events/:slug/gallery", async (c) => {
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSpeakersEmbed(body, schedule, true);
+});
+
+api.get("/embeds/events/:slug/itinerary", async (c) => {
+  const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSpeakersEmbed(body);
+  return renderItineraryEmbed(body);
 });
 
 api.get("/docs", (c) =>
@@ -406,6 +525,11 @@ api.get("/docs", (c) =>
     endpoints: [
       { method: "GET", path: "/health", auth: "public", purpose: "Worker, version, backend, D1/R2 checks." },
       { method: "GET", path: "/events", auth: "public", purpose: "List public events." },
+      { method: "POST", path: "/events", auth: "organizer", purpose: "Create an event with a CFP and evaluation plan." },
+      { method: "PATCH", path: "/events/:slug", auth: "organizer", purpose: "Update CFP open/close settings." },
+      { method: "POST", path: "/events/:slug/tracks", auth: "organizer", purpose: "Create an event-scoped track." },
+      { method: "POST", path: "/events/:slug/rooms", auth: "organizer", purpose: "Create an event-scoped agenda room." },
+      { method: "POST", path: "/events/:slug/cfp/fields", auth: "organizer", purpose: "Add a validated CFP field and optional conditional rule." },
       { method: "GET", path: "/events/:slug", auth: "public", purpose: "Event bundle for event and CFP pages." },
       { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
       { method: "GET", path: "/public/events/:slug/sessions", auth: "public", purpose: "Iframe-safe sessions JSON." },
@@ -413,12 +537,27 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/embeds/events/:slug/schedule", auth: "public", purpose: "Drop-in schedule iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/sessions", auth: "public", purpose: "Drop-in sessions iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
+      { method: "GET", path: "/embeds/events/:slug/gallery", auth: "public", purpose: "Searchable photo-grid speaker gallery with session drill-down." },
+      { method: "GET", path: "/embeds/events/:slug/itinerary", auth: "public", purpose: "Anonymous personal itinerary iframe with persistence and calendar export." },
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
+      { method: "PATCH", path: "/speaker-portal/:token/proposals/:submissionId", auth: "speaker link", purpose: "Edit the linked speaker's undecided proposal while its CFP is open." },
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "GET", path: "/events/:slug/evaluations", auth: "organizer", purpose: "Round setup, reviewer progress, assignments, and weighted results." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds", auth: "organizer", purpose: "Create an evaluation round and its weighted scorecard." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId", auth: "organizer", purpose: "Update an evaluation round and its weighted scorecard." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/reviewers", auth: "organizer", purpose: "Add or update a round reviewer and assignment cap." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/assignments", auth: "organizer", purpose: "Replace one reviewer's exact assignments for a round." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/auto-distribute", auth: "organizer", purpose: "Round-robin unassigned proposals without exceeding reviewer caps." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", auth: "organizer", purpose: "Record a simulated reviewer reminder receipt." },
+      { method: "GET", path: "/events/:slug/evaluations.csv", auth: "organizer", purpose: "Export weighted review results with spreadsheet formula guarding." },
+      { method: "GET", path: "/reviewer/:token", auth: "reviewer link", purpose: "Return only that reviewer's assigned proposals in open rounds; blind rounds omit speaker identity." },
+      { method: "PUT", path: "/reviewer/:token/rounds/:roundId/submissions/:submissionId", auth: "reviewer link", purpose: "Submit or update the assigned proposal's scorecard, recommendation, and comments." },
+      { method: "POST", path: "/reviewer/:token/rounds/:roundId/submissions/:submissionId/recuse", auth: "reviewer link", purpose: "Recuse from an assigned proposal and remove it from the actionable queue." },
+      { method: "GET", path: "/reviewer/:token", auth: "reviewer link", purpose: "Reviewer-scoped queue containing only assigned submissions in open rounds." },
       { method: "GET", path: "/events/:slug/submissions.csv", auth: "organizer", purpose: "Submissions export as CSV (Excel-friendly)." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft the decision email (acceptance, waitlist, or rejection) from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Acceptances carry the speaker's portal link and onboarding checklist. Never auto-sends." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session. An optional reasoning note is persisted as a committee review, filed under an optional reviewerName — one decider by default, named voices stack when a team weighs in." },
@@ -433,8 +572,10 @@ api.get("/docs", (c) =>
       { method: "PATCH", path: "/events/:slug/sessions/:sessionId", auth: "organizer", purpose: "Retitle or reword a session in the published program; the source submission keeps what the speaker pitched." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
+      { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated-message delivery receipts for the event outbox." },
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
+      { method: "GET", path: "/public/events/:slug/itinerary.ics?sessions=id,id", auth: "public", purpose: "Export an attendee's selected scheduled sessions as one RFC 5545 calendar." },
       { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "asset link", purpose: "Stream a stored asset." },
@@ -446,6 +587,10 @@ api.get("/docs", (c) =>
         '<iframe src="/api/embeds/events/horizon-2026/sessions" title="Horizon Dev Summit sessions" width="100%" height="640" loading="lazy"></iframe>',
       speakers:
         '<iframe src="/api/embeds/events/horizon-2026/speakers" title="Horizon Dev Summit speakers" width="100%" height="640" loading="lazy"></iframe>',
+      gallery:
+        '<iframe src="/api/embeds/events/horizon-2026/gallery" title="Horizon Dev Summit speaker gallery" width="100%" height="640" loading="lazy"></iframe>',
+      itinerary:
+        '<iframe src="/api/embeds/events/horizon-2026/itinerary" title="Horizon Dev Summit itinerary" width="100%" height="640" loading="lazy"></iframe>',
     },
   }),
 );
@@ -456,7 +601,7 @@ api.get("/docs", (c) =>
 
 api.post("/events/:slug/submissions", async (c) => {
   const repo = createRepo(c.env);
-  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "");
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp) {
     return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
@@ -504,10 +649,25 @@ api.post("/events/:slug/submissions", async (c) => {
     format: data.format,
     answers: pruneAnswers(bundle.cfp.fields, bundle.cfp.rules, ctx),
     speaker: data.speaker,
+    coSpeakers: data.coSpeakers.map((speaker) => ({ ...speaker, id: randomId("spk") })),
     speakerId: randomId("spk"),
     submissionId: randomId("sub"),
     now,
   });
+
+  const primary = submission.speakers[0];
+  if (primary) {
+    await repo.simulateCommunication({
+      messageId: randomId("msg"),
+      attemptId: randomId("del"),
+      eventId: bundle.event.id,
+      speakerId: primary.speakerId,
+      toEmail: primary.email,
+      subject: `Proposal received: ${submission.title}`,
+      bodyMd: `Hi ${primary.name},\n\nWe received “${submission.title}” for ${bundle.event.name}.\n\nTrack its status and make edits from your speaker portal.`,
+      now,
+    });
+  }
 
   const body: CreateSubmissionResponse = { submission };
   return c.json(body, 201);
@@ -547,6 +707,55 @@ api.patch("/speaker-portal/:token/profile", async (c) => {
   const body: SpeakerPortalResponse = await repo.updateSpeakerProfile({
     speakerId: portal.speaker.id,
     ...parsed.data,
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
+api.patch("/speaker-portal/:token/proposals/:submissionId", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+
+  const proposal = portal.proposals.find((item) => item.id === c.req.param("submissionId"));
+  if (!proposal) {
+    return errorResponse(404, "submission_not_found", "No proposal with that id belongs to this speaker.");
+  }
+  if (!portal.cfp || !canEditSpeakerProposal(portal.cfp.form, proposal.status, new Date().toISOString())) {
+    const message = ["draft", "submitted", "under_review"].includes(proposal.status)
+      ? "Editing is locked because this call for speakers is closed."
+      : "Editing is locked because a decision has been made.";
+    return errorResponse(409, "submission_locked", message);
+  }
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = UpdateSpeakerProposalRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Proposal is invalid.", parsed.error.issues);
+  }
+  const ctx = { format: proposal.format, answers: parsed.data.answers };
+  const missing = missingRequiredFields(portal.cfp.fields, portal.cfp.rules, ctx);
+  if (missing.length > 0) {
+    return errorResponse(
+      422,
+      "validation_error",
+      `Missing required field(s): ${missing.map((field) => field.label).join(", ")}.`,
+      missing.map((field) => ({ path: ["answers", field.key], message: "Required" })),
+    );
+  }
+
+  const body: SpeakerPortalResponse = await repo.updateSpeakerProposal({
+    speakerId: portal.speaker.id,
+    submissionId: proposal.id,
+    title: parsed.data.title,
+    abstract: parsed.data.abstract,
+    answers: pruneAnswers(portal.cfp.fields, portal.cfp.rules, ctx),
     now: new Date().toISOString(),
   });
   return c.json(body);
@@ -592,6 +801,58 @@ api.post("/speaker-portal/:token/assets", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Reviewer capability queue
+// ---------------------------------------------------------------------------
+
+api.get("/reviewer/:token", async (c) => {
+  const queue = await createRepo(c.env).getReviewerQueue(c.req.param("token").trim());
+  if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
+  return c.json(queue);
+});
+
+api.put("/reviewer/:token/rounds/:roundId/submissions/:submissionId", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const queue = await repo.getReviewerQueue(token);
+  if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
+  const assignment = queue.assignments.find((item) =>
+    item.roundId === c.req.param("roundId") && item.id === c.req.param("submissionId"));
+  if (!assignment) return errorResponse(404, "assignment_not_found", "That submission is not assigned to this reviewer.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SubmitReviewRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Scorecard is invalid.", parsed.error.issues);
+  const invalid = assignment.criteria.find((criterion) => {
+    const score = parsed.data.scores[criterion.key];
+    return typeof score !== "number" || score < 1 || score > criterion.maxScore;
+  });
+  if (invalid) {
+    return errorResponse(422, "validation_error", `${invalid.label} must be scored from 1 to ${invalid.maxScore}.`);
+  }
+  await repo.submitReviewerScorecard({
+    id: randomId("rev"), token, roundId: assignment.roundId, submissionId: assignment.id,
+    ...parsed.data, now: new Date().toISOString(),
+  });
+  const body: ReviewerQueueResponse | null = await repo.getReviewerQueue(token);
+  return c.json(body);
+});
+
+api.post("/reviewer/:token/rounds/:roundId/submissions/:submissionId/recuse", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  await repo.submitReviewerScorecard({
+    id: randomId("rev"), token, roundId: c.req.param("roundId"),
+    submissionId: c.req.param("submissionId"), scores: {}, recommendation: "accept",
+    comment: "Reviewer recused due to a conflict of interest.", recuse: true,
+    now: new Date().toISOString(),
+  });
+  const body = await repo.getReviewerQueue(token);
+  return c.json(body);
+});
+
+// ---------------------------------------------------------------------------
 // Organizer (passcode-gated)
 // ---------------------------------------------------------------------------
 
@@ -604,6 +865,174 @@ api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   const submissions = await repo.listSubmissions(bundle.event.id);
   const body: SubmissionsListResponse = { submissions };
   return c.json(body);
+});
+
+api.get("/events/:slug/evaluations", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  try {
+    const body: EvaluationWorkspaceResponse = await repo.getEvaluationWorkspace(bundle.event.id);
+    return c.json(body);
+  } catch (error) {
+    if (error instanceof Error && error.message === "evaluation_plan_not_found") {
+      return errorResponse(409, "evaluation_plan_not_found", "This event has no evaluation plan yet.");
+    }
+    throw error;
+  }
+});
+
+api.post("/events", organizerAuth, async (c) => {
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateEventRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Event is invalid.", parsed.error.issues);
+  if (parsed.data.endsOn < parsed.data.startsOn) return errorResponse(422, "validation_error", "Event end date must not be before its start date.");
+  try {
+    const event = await createRepo(c.env).createEvent({ ...parsed.data, eventId: randomId("evt"), formId: randomId("form"), planId: randomId("plan"), now: new Date().toISOString() });
+    return c.json(event, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) return errorResponse(409, "slug_taken", "That event slug is already in use.");
+    throw error;
+  }
+});
+
+api.patch("/events/:slug", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = UpdateEventSettingsRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Event settings are invalid.", parsed.error.issues);
+  return c.json(await repo.updateEventSettings({ eventId: bundle.event.id, ...parsed.data, now: new Date().toISOString() }));
+});
+
+api.post("/events/:slug/tracks", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateTrackRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Track is invalid.", parsed.error.issues);
+  return c.json(await repo.createTrack({ id: randomId("track"), eventId: bundle.event.id, ...parsed.data }), 201);
+});
+
+api.post("/events/:slug/rooms", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateRoomRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Room is invalid.", parsed.error.issues);
+  return c.json(await repo.createRoom({ id: randomId("room"), eventId: bundle.event.id, ...parsed.data }), 201);
+});
+
+api.post("/events/:slug/cfp/fields", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateFormFieldRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Form field is invalid.", parsed.error.issues);
+  if (bundle.cfp.fields.some((field) => field.key === parsed.data.key)) return errorResponse(409, "field_key_taken", "That field key already exists.");
+  if (parsed.data.fieldType === "select" && (!parsed.data.options || parsed.data.options.length < 2)) return errorResponse(422, "validation_error", "Select fields need at least two options.");
+  const source = parsed.data.condition?.sourceFieldKey;
+  if (source && source !== "format" && !bundle.cfp.fields.some((field) => field.key === source)) return errorResponse(422, "validation_error", "Conditional source field is unknown.");
+  return c.json(await repo.createFormField({ id: randomId("field"), ruleId: parsed.data.condition ? randomId("rule") : null, eventId: bundle.event.id, formId: bundle.cfp.form.id, ...parsed.data }), 201);
+});
+
+api.get("/events/:slug/evaluations.csv", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  return new Response(reviewResultsToCsv(workspace), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="review-results-${bundle.event.slug}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
+});
+
+async function saveRound(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "");
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SaveEvaluationRoundRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Round is invalid.", parsed.error.issues);
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  const roundId = c.req.param("roundId") || randomId("round");
+  await repo.saveEvaluationRound({
+    eventId: bundle.event.id, planId: workspace.plan.id, roundId, data: parsed.data,
+    criterionIds: parsed.data.criteria.map(() => randomId("crit")),
+  });
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id), c.req.param("roundId") ? 200 : 201);
+}
+
+api.post("/events/:slug/evaluations/rounds", organizerAuth, saveRound);
+api.put("/events/:slug/evaluations/rounds/:roundId", organizerAuth, saveRound);
+
+api.put("/events/:slug/evaluations/rounds/:roundId/reviewers", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveRoundReviewerRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Reviewer is invalid.", parsed.error.issues);
+  await repo.saveRoundReviewer({
+    roundId: c.req.param("roundId"), ...parsed.data, token: randomId("reviewer"),
+    now: new Date().toISOString(),
+  });
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.put("/events/:slug/evaluations/rounds/:roundId/assignments", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveAssignmentsRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Assignments are invalid.", parsed.error.issues);
+  try {
+    await repo.saveAssignments({ roundId: c.req.param("roundId"), ...parsed.data, now: new Date().toISOString() });
+  } catch (error) {
+    if (error instanceof Error && error.message === "assignment_cap_exceeded") {
+      return errorResponse(422, "assignment_cap_exceeded", "Selection exceeds this reviewer's assignment cap.");
+    }
+    throw error;
+  }
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.post("/events/:slug/evaluations/rounds/:roundId/auto-distribute", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  await repo.autoDistributeAssignments(c.req.param("roundId"), new Date().toISOString());
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.post("/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  const round = workspace.rounds.find((item) => item.id === c.req.param("roundId"));
+  const reviewer = round?.reviewers.find((item) => item.email === decodeURIComponent(c.req.param("email")));
+  if (!reviewer) return errorResponse(404, "reviewer_not_found", "No reviewer with that email in this round.");
+  const now = new Date().toISOString();
+  const messageId = randomId("msg");
+  await repo.simulateCommunication({
+    messageId, attemptId: randomId("del"), eventId: bundle.event.id, speakerId: null,
+    toEmail: reviewer.email, subject: `${round!.name}: ${reviewer.assigned - reviewer.complete} review(s) outstanding`,
+    bodyMd: `Hi ${reviewer.name},\n\nPlease complete your assigned reviews for ${bundle.event.name}.\n\nReviewer queue: ${new URL(c.req.url).origin}/review/${reviewer.token}`,
+    now,
+  });
+  return c.json({ messageId, status: "sent_simulated", deliveredAt: now });
 });
 
 api.get("/events/:slug/submissions.csv", organizerAuth, async (c) => {
@@ -716,7 +1145,7 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
       portalUrl,
       onboardingTasks,
     },
-    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+    runtimeAiConfig(c.env),
   );
 
   await recordAiUsageEvent(c.env, "decision_feedback_draft", draft.providerEvidence);
@@ -847,7 +1276,7 @@ api.post("/events/:slug/sessions/:sessionId/schedule-notice-draft", organizerAut
       icsUrl,
       note: parsed.data.note,
     },
-    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+    runtimeAiConfig(c.env),
   );
 
   await recordAiUsageEvent(c.env, "schedule_notice_draft", draft.providerEvidence);
@@ -1066,6 +1495,14 @@ api.get("/events/:slug/communications/preview", organizerAuth, async (c) => {
   return c.json(body);
 });
 
+api.get("/events/:slug/communications", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const body: OutboxResponse = { messages: await repo.listMessages(bundle.event.id) };
+  return c.json(body);
+});
+
 api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -1130,6 +1567,37 @@ api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {
       "content-type": "text/calendar; charset=utf-8",
       "content-disposition": `attachment; filename="${filename}"`,
       "cache-control": "public, max-age=60",
+    },
+  });
+});
+
+api.get("/public/events/:slug/itinerary.ics", async (c) => {
+  const schedule = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
+  if (!schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const requested = (c.req.query("sessions") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+  if (requested.length === 0 || requested.length > 50) {
+    return errorResponse(422, "validation_error", "Choose between 1 and 50 session ids.");
+  }
+  const selected = schedule.slots.filter((slot) => requested.includes(slot.session.id));
+  if (selected.length !== new Set(requested).size) {
+    return errorResponse(404, "session_not_found", "One or more selected sessions are not scheduled for this event.");
+  }
+  const generatedAt = new Date().toISOString();
+  const calendar = buildCalendarCollection(selected.map((slot) => ({
+    uid: `${slot.session.id}@speakerops`,
+    eventName: schedule.event.name,
+    sessionTitle: slot.session.title,
+    description: slot.session.abstract,
+    location: slot.room?.name ?? "Room pending",
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    generatedAt,
+  })));
+  return new Response(calendar, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8",
+      "content-disposition": `attachment; filename="${schedule.event.slug}-my-itinerary.ics"`,
+      "cache-control": "private, no-store",
     },
   });
 });

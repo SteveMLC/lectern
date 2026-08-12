@@ -14,7 +14,13 @@ import {
   CreateSubmissionResponse,
   EventBundle,
   EventCounts,
+  EvaluationWorkspaceResponse,
   EventsListResponse,
+  CreateEventRequest,
+  UpdateEventSettingsRequest,
+  CreateTrackRequest,
+  CreateRoomRequest,
+  CreateFormFieldRequest,
   FeedbackDraftRequest,
   FeedbackDraftResponse,
   ScheduleNoticeDraftRequest,
@@ -24,6 +30,7 @@ import {
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
+  OrganizerSpeakersResponse,
   SpeakerPortalResponse,
   SimulateCommunicationRequest,
   SimulateCommunicationResponse,
@@ -32,6 +39,13 @@ import {
   SubmissionsListResponse,
   UpdateSpeakerProfileRequest,
   UpdateSpeakerTaskRequest,
+  UpdateSpeakerProposalRequest,
+  SaveEvaluationRoundRequest,
+  SaveRoundReviewerRequest,
+  SaveAssignmentsRequest,
+  SubmitReviewRequest,
+  ReviewerQueueResponse,
+  OutboxResponse,
   UploadAssetResponse,
 } from "../../shared/contracts";
 
@@ -111,7 +125,17 @@ export const apiClient = {
 
   events: () => request(EventsListResponse, "/api/events"),
 
+  createEvent: (body: CreateEventRequest) => request(EventBundle, "/api/events", { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
   eventBundle: (slug: string) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}`),
+
+  updateEventSettings: (slug: string, body: UpdateEventSettingsRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(body) }, { auth: true }),
+
+  createTrack: (slug: string, body: CreateTrackRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/tracks`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
+  createRoom: (slug: string, body: CreateRoomRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/rooms`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
+  createFormField: (slug: string, body: CreateFormFieldRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
 
   publicSchedule: (slug: string) =>
     request(PublicScheduleResponse, `/api/public/events/${encodeURIComponent(slug)}/schedule`),
@@ -121,6 +145,9 @@ export const apiClient = {
 
   publicSpeakers: (slug: string) =>
     request(PublicSpeakersResponse, `/api/public/events/${encodeURIComponent(slug)}/speakers`),
+
+  organizerSpeakers: (slug: string) =>
+    request(OrganizerSpeakersResponse, `/api/events/${encodeURIComponent(slug)}/speakers`, undefined, { auth: true }),
 
   submitCfp: (slug: string, body: CfpSubmissionRequest) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
@@ -193,6 +220,8 @@ export const apiClient = {
     );
   },
 
+  outbox: (slug: string) => request(OutboxResponse, `/api/events/${encodeURIComponent(slug)}/communications`, undefined, { auth: true }),
+
   feedbackDraft: (slug: string, submissionId: string, body: FeedbackDraftRequest) =>
     request(
       FeedbackDraftResponse,
@@ -233,6 +262,59 @@ export const apiClient = {
       `/api/speaker-portal/${encodeURIComponent(token)}/tasks/${encodeURIComponent(taskId)}`,
       { method: "PUT", body: JSON.stringify(body) },
     ),
+
+  updateSpeakerProposal: (token: string, submissionId: string, body: UpdateSpeakerProposalRequest) =>
+    request(
+      SpeakerPortalResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/proposals/${encodeURIComponent(submissionId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  evaluationWorkspace: (slug: string) =>
+    request(EvaluationWorkspaceResponse, `/api/events/${encodeURIComponent(slug)}/evaluations`, undefined, { auth: true }),
+
+  saveEvaluationRound: (slug: string, roundId: string | null, body: SaveEvaluationRoundRequest) =>
+    request(
+      EvaluationWorkspaceResponse,
+      roundId
+        ? `/api/events/${encodeURIComponent(slug)}/evaluations/rounds/${encodeURIComponent(roundId)}`
+        : `/api/events/${encodeURIComponent(slug)}/evaluations/rounds`,
+      { method: roundId ? "PUT" : "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  saveRoundReviewer: (slug: string, roundId: string, body: SaveRoundReviewerRequest) =>
+    request(EvaluationWorkspaceResponse,
+      `/api/events/${encodeURIComponent(slug)}/evaluations/rounds/${encodeURIComponent(roundId)}/reviewers`,
+      { method: "PUT", body: JSON.stringify(body) }, { auth: true }),
+
+  saveAssignments: (slug: string, roundId: string, body: SaveAssignmentsRequest) =>
+    request(EvaluationWorkspaceResponse,
+      `/api/events/${encodeURIComponent(slug)}/evaluations/rounds/${encodeURIComponent(roundId)}/assignments`,
+      { method: "PUT", body: JSON.stringify(body) }, { auth: true }),
+
+  autoDistributeAssignments: (slug: string, roundId: string) =>
+    request(EvaluationWorkspaceResponse,
+      `/api/events/${encodeURIComponent(slug)}/evaluations/rounds/${encodeURIComponent(roundId)}/auto-distribute`,
+      { method: "POST" }, { auth: true }),
+
+  nudgeReviewer: (slug: string, roundId: string, email: string) =>
+    request(SimulateCommunicationResponse,
+      `/api/events/${encodeURIComponent(slug)}/evaluations/rounds/${encodeURIComponent(roundId)}/reviewers/${encodeURIComponent(email)}/nudge`,
+      { method: "POST" }, { auth: true }),
+
+  reviewerQueue: (token: string) =>
+    request(ReviewerQueueResponse, `/api/reviewer/${encodeURIComponent(token)}`),
+
+  submitReview: (token: string, roundId: string, submissionId: string, body: SubmitReviewRequest) =>
+    request(ReviewerQueueResponse,
+      `/api/reviewer/${encodeURIComponent(token)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}`,
+      { method: "PUT", body: JSON.stringify(body) }),
+
+  recuseReview: (token: string, roundId: string, submissionId: string) =>
+    request(ReviewerQueueResponse,
+      `/api/reviewer/${encodeURIComponent(token)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}/recuse`,
+      { method: "POST" }),
 
   uploadSpeakerAsset: (token: string, file: File, kind: AssetKind) => {
     const form = new FormData();
