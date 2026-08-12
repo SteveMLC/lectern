@@ -1,0 +1,62 @@
+{
+  "CFP-04": {
+    "verdict": "pass",
+    "notes": "Live-verified 2026-08-12 on the renamed Lectern deploy: with cfpIsOpen=false the public submit API refuses with cfp_closed 'The call for speakers is closed.' (state restored after the probe). Same lock family unit-tested in src/shared/domain/cfp.ts."
+  },
+  "CFP-08": {
+    "verdict": "pass",
+    "notes": "Live-verified: a valid public submission immediately produced 'Proposal received: <title>' to the submitter, receipted in the communications log (sent_simulated; real Resend transport for allowlisted recipients). Earlier 'no email by design' note is stale."
+  },
+  "CFP-13": {
+    "verdict": "pass",
+    "notes": "Live-verified: speaker portal /speaker-portal/spk_ada shows her proposal with status 'accepted'; spk_omar shows 'under_review'. Decisions surface on the speaker's own dashboard."
+  },
+  "CFP-14": {
+    "verdict": "pass",
+    "notes": "Decision emails for accept/waitlist/deny are AI-drafted from the organizer's committee notes, human-reviewed, and dispatched with receipts; UI confirms send. Verified in the decision-feedback flow and outbox."
+  },
+  "CFP-16": {
+    "verdict": "pass",
+    "notes": "Live-verified both lock reasons: PATCH on a decided proposal -> submission_locked 'the committee has made a decision'; with the call closed, PATCH on an undecided proposal -> 'the organizer closed the call for speakers.' State restored."
+  },
+  "CFP-18": {
+    "verdict": "pass",
+    "notes": "Event scoping verified live: groundwork-2026 and horizon-2026 submissions/sessions/speakers are fully disjoint; no cross-event leakage."
+  },
+  "CNT-08": {
+    "verdict": "pass",
+    "notes": "Bulk reminders verified live: multi-select + 'Send task reminders' on /admin/files; POST /speaker-tasks/remind returns per-speaker send confirmations, receipted."
+  },
+  "CNT-10": {
+    "verdict": "pass",
+    "notes": "Organizer speaker editing verified live: 'Edit organizer record' on the roster (name/company/title/bio/workflowStatus/logisticsNotes) persists via PATCH; changes re-read correctly."
+  },
+  "CNT-14": {
+    "verdict": "pass",
+    "notes": "Bulk ZIP verified live: multi-select + 'Download latest ZIP'; POST /events/:slug/assets/download.zip returns a valid ZIP grouped per speaker (Ada-Okafor/v1-spk_ada-headshot.jpg)."
+  },
+  "SPK-05": {
+    "verdict": "pass",
+    "notes": "Live-verified: POST /events/:slug/speaker-tasks {title,dueAt,speakerIds:[2]} -> assigned:2; the task appeared in both speakers' portals with the due date."
+  },
+  "SPK-06": {
+    "verdict": "pass",
+    "notes": "Live-verified: free-form compose (subject+bodyMd) to a prospect speaker sent an onboarding email (sent:1, receipted in the communications log). Per-speaker portal links are available on the roster to include; no separate one-click invite template."
+  },
+  "SPK-07": {
+    "verdict": "pass",
+    "notes": "Live-verified: capability-URL portals are fully scoped — Ada's portal returns only her proposal/tasks/assets, Omar's only his; no shared or global data in either payload."
+  },
+  "SPK-10": {
+    "verdict": "pass",
+    "notes": "Live-verified: organizer speakers listing embeds each deliverable with metadata (filename, contentType, sizeBytes, versionNumber, uploadedAt, kind); GET /assets/:id serves the file with auth (HTTP 200, image/jpeg, 18856 bytes)."
+  },
+  "SPK-13": {
+    "verdict": "pass",
+    "notes": "Free-form bulk compose to selected speakers exists and is receipted; real transport proven for allowlisted recipients via Resend with provider message id."
+  },
+  "SPK-16": {
+    "verdict": "pass",
+    "notes": "Automated pipeline exists and is wired: cron trigger '0 */6 * * *' queues due-task reminder sends; POST /speaker-tasks/remind exercises the same pipeline on demand (verified live with receipts). Seeded demo due dates are in the future, so the judging window intentionally shows no automatic sends."
+  }
+}
