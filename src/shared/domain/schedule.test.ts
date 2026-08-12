@@ -69,10 +69,12 @@ describe("planAutoPlacements", () => {
     return {
       id, eventId: "evt", sourceSubmissionId: null, trackId: null, title,
       abstract: "A sufficiently long abstract for testing.", format: "talk",
-      status: "confirmed", origin: "direct", createdAt: T("00:00"), updatedAt: T("00:00"),
+      status: "confirmed", origin: "direct", contentApprovalStatus: "approved",
+      createdAt: T("00:00"), updatedAt: T("00:00"),
       trackName: null,
       speakers: [{ id: speakerId, name: speakerId, company: null, title: null, role: "primary", sortOrder: 0 }],
       slot: null,
+      versionCount: 0,
     };
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateWeightedScores, weightedScore } from "./reviews";
+import { aggregateWeightedScores, summarizeReviewScores, weightedScore } from "./reviews";
 
 describe("weighted review scoring", () => {
   const criteria = [{ key: "originality", weight: 2 }, { key: "relevance", weight: 1 }];
@@ -17,5 +17,12 @@ describe("weighted review scoring", () => {
 
   it("returns null without numeric evidence", () => {
     expect(weightedScore({}, criteria)).toBeNull();
+  });
+
+  it("counts submitted reviews even when a round has no numeric criteria", () => {
+    expect(summarizeReviewScores([
+      { scores: {}, criteria: [] },
+      { scores: { originality: 4, relevance: 2 }, criteria },
+    ])).toEqual({ aggregate: 10 / 3, completedReviews: 2 });
   });
 });

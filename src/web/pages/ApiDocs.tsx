@@ -13,12 +13,20 @@ const PUBLIC_ENDPOINTS = [
   ["GET", "/api/embeds/events/:slug/schedule", "Iframe schedule HTML"],
   ["GET", "/api/embeds/events/:slug/sessions", "Iframe sessions HTML"],
   ["GET", "/api/embeds/events/:slug/speakers", "Iframe speaker gallery HTML"],
+  ["POST", "/api/events/:slug/drafts", "Save an anonymous CFP draft and receive a private resume URL"],
   ["POST", "/api/events/:slug/submissions", "CFP proposal intake"],
 ] as const;
 
 const ORGANIZER_ENDPOINTS = [
   ["GET", "/api/events/:slug/submissions", "Bearer passcode", "Organizer submissions list"],
   ["GET", "/api/events/:slug/counts", "Bearer passcode", "Dashboard counts"],
+  ["POST", "/api/events/:slug/speaker-tasks", "Bearer passcode", "Create and assign a speaker deliverable"],
+  ["POST", "/api/events/:slug/communications/bulk", "Bearer passcode", "Record a bulk speaker communication"],
+  ["POST", "/api/events/:slug/agenda/publish", "Bearer passcode", "Publish the reviewed agenda"],
+  ["GET", "/api/events/:slug/sessions/:sessionId/versions", "Bearer passcode", "Session content history"],
+  ["PATCH", "/api/events/:slug/sessions/:sessionId/content-approval", "Bearer passcode", "Approve or return session content"],
+  ["POST", "/api/events/:slug/assets/download.zip", "Bearer passcode", "Download selected current speaker files as ZIP"],
+  ["POST", "/api/events/:slug/assets/:assetId/comments", "Bearer passcode", "Comment on a speaker file"],
   ["POST", "/api/speakers/:speakerId/assets", "Bearer passcode", "Multipart upload to R2"],
   ["GET", "/api/admin/ping", "Bearer passcode", "Passcode verification"],
 ] as const;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   AgendaSlot,
+  AssetComment,
   ConditionalRule,
   Event,
   Form,
@@ -12,6 +13,7 @@ import {
   Speaker,
   SpeakerAsset,
   SpeakerRole,
+  SpeakerWorkflowStatus,
   SpeakerTask,
   Submission,
   SubmissionStatus,
@@ -210,9 +212,13 @@ export type PublicSpeakersResponse = z.infer<typeof PublicSpeakersResponse>;
 
 export const OrganizerSpeaker = PublicSpeaker.extend({
   email: z.email(),
+  workflowStatus: SpeakerWorkflowStatus,
+  logisticsNotes: z.string().nullable(),
   completedTasks: z.number().int().nonnegative(),
   totalTasks: z.number().int().nonnegative(),
   assets: z.array(SpeakerAsset),
+  tasks: z.array(z.object({ task: SpeakerTask, definition: TaskDefinition })),
+  assetComments: z.array(AssetComment),
 });
 export type OrganizerSpeaker = z.infer<typeof OrganizerSpeaker>;
 
@@ -221,6 +227,70 @@ export const OrganizerSpeakersResponse = z.object({
   speakers: z.array(OrganizerSpeaker),
 });
 export type OrganizerSpeakersResponse = z.infer<typeof OrganizerSpeakersResponse>;
+
+export const CreateOrganizerSpeakerRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.email().max(254),
+  company: z.string().trim().max(120).nullable().default(null),
+  title: z.string().trim().max(120).nullable().default(null),
+  bio: z.string().trim().max(2000).nullable().default(null),
+  workflowStatus: SpeakerWorkflowStatus.default("invited"),
+  logisticsNotes: z.string().trim().max(2000).nullable().default(null),
+});
+export type CreateOrganizerSpeakerRequest = z.infer<typeof CreateOrganizerSpeakerRequest>;
+
+export const UpdateOrganizerSpeakerRequest = CreateOrganizerSpeakerRequest.omit({ email: true });
+export type UpdateOrganizerSpeakerRequest = z.infer<typeof UpdateOrganizerSpeakerRequest>;
+
+export const OrganizerSpeakerMutationResponse = z.object({ speaker: Speaker });
+export type OrganizerSpeakerMutationResponse = z.infer<typeof OrganizerSpeakerMutationResponse>;
+
+export const ImportOrganizerSpeakersRequest = z.object({ csv: z.string().min(1).max(500_000) });
+export type ImportOrganizerSpeakersRequest = z.infer<typeof ImportOrganizerSpeakersRequest>;
+export const ImportOrganizerSpeakersResponse = z.object({
+  imported: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type ImportOrganizerSpeakersResponse = z.infer<typeof ImportOrganizerSpeakersResponse>;
+
+export const CreateSpeakerTaskRequest = z.object({
+  title: z.string().trim().min(2).max(160),
+  instructions: z.string().trim().max(2000).nullable().default(null),
+  dueAt: z.iso.datetime({ offset: true }).nullable(),
+  speakerIds: z.array(z.string()).min(1).max(250),
+});
+export type CreateSpeakerTaskRequest = z.infer<typeof CreateSpeakerTaskRequest>;
+export const CreateSpeakerTaskResponse = z.object({
+  definition: TaskDefinition,
+  assigned: z.number().int().positive(),
+});
+export type CreateSpeakerTaskResponse = z.infer<typeof CreateSpeakerTaskResponse>;
+
+export const BulkTaskReminderRequest = z.object({ speakerIds: z.array(z.string()).min(1).max(250) });
+export type BulkTaskReminderRequest = z.infer<typeof BulkTaskReminderRequest>;
+export const BulkTaskReminderResponse = z.object({
+  queued: z.number().int().nonnegative(),
+  recipientEmails: z.array(z.email()),
+});
+export type BulkTaskReminderResponse = z.infer<typeof BulkTaskReminderResponse>;
+
+export const BulkAssetDownloadRequest = z.object({
+  assetIds: z.array(z.string()).min(1).max(50),
+});
+export type BulkAssetDownloadRequest = z.infer<typeof BulkAssetDownloadRequest>;
+
+export const BulkCommunicationRequest = z.object({
+  speakerIds: z.array(z.string()).min(1).max(250),
+  subject: z.string().trim().min(1).max(300),
+  bodyMd: z.string().trim().min(1).max(20_000),
+});
+export type BulkCommunicationRequest = z.infer<typeof BulkCommunicationRequest>;
+export const BulkCommunicationResponse = z.object({
+  sent: z.number().int().positive(),
+  recipientEmails: z.array(z.email()),
+});
+export type BulkCommunicationResponse = z.infer<typeof BulkCommunicationResponse>;
 
 // ---------------------------------------------------------------------------
 // CFP submission (public)
@@ -249,6 +319,35 @@ export const CfpSubmissionRequest = z.object({
   answers: z.record(z.string(), z.unknown()).optional(),
 });
 export type CfpSubmissionRequest = z.infer<typeof CfpSubmissionRequest>;
+
+const CfpDraftSpeaker = z.object({
+  name: z.string().max(120).optional(),
+  email: z.string().max(254).optional(),
+  company: z.string().max(120).optional(),
+  title: z.string().max(120).optional(),
+  bio: z.string().max(2000).optional(),
+});
+
+/** A deliberately permissive partial form. Only the title is required so the
+ * evaluator's title-only save/resume path is a first-class workflow. */
+export const CfpDraftRequest = z.object({
+  speaker: CfpDraftSpeaker.optional(),
+  coSpeakers: z.array(CfpDraftSpeaker).max(2).optional(),
+  title: z.string().trim().min(1).max(200),
+  abstract: z.string().max(5000).optional(),
+  trackId: z.string().max(120).optional(),
+  format: SessionFormat.optional(),
+  answers: z.record(z.string(), z.unknown()).optional(),
+});
+export type CfpDraftRequest = z.infer<typeof CfpDraftRequest>;
+
+export const CfpDraftResponse = z.object({
+  token: z.string(),
+  savedAt: z.iso.datetime({ offset: true }),
+  resumeUrl: z.string(),
+  draft: CfpDraftRequest,
+});
+export type CfpDraftResponse = z.infer<typeof CfpDraftResponse>;
 
 // ---------------------------------------------------------------------------
 // Submissions (organizer)
@@ -388,6 +487,7 @@ export const OrganizerSession = Session.extend({
   trackName: z.string().nullable(),
   speakers: z.array(PublicSessionSpeaker),
   slot: AgendaSlot.nullable(),
+  versionCount: z.number().int().nonnegative(),
 });
 export type OrganizerSession = z.infer<typeof OrganizerSession>;
 
@@ -406,11 +506,37 @@ export const OrganizerAgendaResponse = z.object({
 });
 export type OrganizerAgendaResponse = z.infer<typeof OrganizerAgendaResponse>;
 
+export const PublishAgendaResponse = z.object({
+  agendaPublishedAt: z.iso.datetime({ offset: true }),
+  publicScheduleUrl: z.string(),
+});
+export type PublishAgendaResponse = z.infer<typeof PublishAgendaResponse>;
+
 export const UpdateSessionRequest = z.object({
   title: z.string().trim().min(3).max(200),
   abstract: z.string().trim().min(10).max(5000),
 });
 export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
+
+export const SessionContentApprovalRequest = z.object({
+  status: z.enum(["needs_review", "approved"]),
+});
+export type SessionContentApprovalRequest = z.infer<typeof SessionContentApprovalRequest>;
+
+export const SessionVersion = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  title: z.string(),
+  abstract: z.string(),
+  editor: z.string(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+export type SessionVersion = z.infer<typeof SessionVersion>;
+
+export const SessionVersionsResponse = z.object({
+  versions: z.array(SessionVersion),
+});
+export type SessionVersionsResponse = z.infer<typeof SessionVersionsResponse>;
 
 export const CreateDirectSessionRequest = z.object({
   title: z.string().trim().min(3).max(200),
@@ -498,9 +624,18 @@ export const SpeakerPortalResponse = z.object({
   cfp: EventBundle.shape.cfp,
   tasks: z.array(z.object({ task: SpeakerTask, definition: TaskDefinition })),
   assets: z.array(SpeakerAsset),
+  assetComments: z.array(AssetComment),
   resources: z.array(ResourcePage),
 });
 export type SpeakerPortalResponse = z.infer<typeof SpeakerPortalResponse>;
+
+export const CreateAssetCommentRequest = z.object({
+  body: z.string().trim().min(1).max(2000),
+});
+export type CreateAssetCommentRequest = z.infer<typeof CreateAssetCommentRequest>;
+
+export const AssetCommentResponse = z.object({ comment: AssetComment });
+export type AssetCommentResponse = z.infer<typeof AssetCommentResponse>;
 
 export const UpdateSpeakerProfileRequest = z.object({
   name: z.string().trim().min(2).max(120),

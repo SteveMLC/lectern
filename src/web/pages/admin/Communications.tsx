@@ -12,6 +12,7 @@ import {
   EmptyState,
   ErrorBanner,
   Field,
+  Input,
   PageHeader,
   Select,
   Spinner,
@@ -69,6 +70,8 @@ export function Communications() {
         subtitle="Preview the exact speaker email, download its calendar handoff, and record a safe simulated send."
       />
 
+      <BulkComposer eventSlug={eventSlug} />
+
       <ScheduleNoticeCard eventSlug={eventSlug} preselect={searchParams.get("session") ?? ""} />
 
       {speakers.loading ? (
@@ -121,6 +124,28 @@ export function Communications() {
       <Outbox eventSlug={eventSlug} />
     </div>
   );
+}
+
+function BulkComposer({ eventSlug }: { eventSlug: string }) {
+  const roster = useAsync(() => apiClient.organizerSpeakers(eventSlug), [eventSlug]);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [subject, setSubject] = useState("");
+  const [bodyMd, setBodyMd] = useState("");
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const speakers = roster.data?.speakers ?? [];
+  return <Card className="mb-5 p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">Bulk email</h2><p className="mt-1 text-xs text-zinc-500">Compose freely, select the exact roster segment, and keep one receipt per recipient.</p></div><Button type="button" variant="secondary" onClick={() => setOpen((value) => !value)}>{open ? "Close composer" : "Compose bulk email"}</Button></div>
+    {open ? <div className="mt-4 space-y-4 border-t border-zinc-200 pt-4">
+      {roster.loading ? <Spinner label="Loading roster" /> : roster.error ? <ErrorBanner message={roster.error.message} /> : <div><div className="mb-2 flex gap-2"><Button type="button" variant="ghost" onClick={() => setSelected(new Set(speakers.map((speaker) => speaker.id)))}>Select all</Button><Button type="button" variant="ghost" onClick={() => setSelected(new Set(speakers.filter((speaker) => speaker.workflowStatus === "confirmed").map((speaker) => speaker.id)))}>Select confirmed</Button></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{speakers.map((speaker) => <label key={speaker.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm"><input type="checkbox" checked={selected.has(speaker.id)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(speaker.id); else next.delete(speaker.id); return next; })} />{speaker.name} <span className="text-xs text-zinc-400">{speaker.workflowStatus}</span></label>)}</div></div>}
+      <Field label="Subject" required><Input value={subject} onChange={(event) => setSubject(event.target.value)} /></Field>
+      <Field label="Message" required><Textarea className="min-h-32" value={bodyMd} onChange={(event) => setBodyMd(event.target.value)} /></Field>
+      {notice ? <p role="status" className="text-sm font-medium text-emerald-700">{notice}</p> : null}{error ? <ErrorBanner message={error} /> : null}
+      <Button type="button" disabled={selected.size === 0 || !subject.trim() || !bodyMd.trim() || sending} onClick={async () => { setSending(true); setError(null); setNotice(null); try { const result = await apiClient.sendBulkCommunication(eventSlug, { speakerIds: [...selected], subject, bodyMd }); setNotice(`${result.sent} messages recorded in the outbox: ${result.recipientEmails.join(", ")}.`); setSubject(""); setBodyMd(""); } catch (caught) { setError(caught instanceof ApiRequestError ? caught.message : "Bulk message failed."); } finally { setSending(false); } }}>{sending ? "Sending…" : `Send to ${selected.size} selected`}</Button>
+    </div> : null}
+  </Card>;
 }
 
 function Outbox({ eventSlug }: { eventSlug: string }) {

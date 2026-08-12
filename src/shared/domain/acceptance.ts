@@ -65,6 +65,7 @@ export function buildSessionFromSubmission(input: AcceptanceInput): AcceptanceRe
     format: submission.format,
     status: "confirmed",
     origin: "accepted_submission",
+    contentApprovalStatus: "approved",
     createdAt: now,
     updatedAt: now,
   };
@@ -112,6 +113,7 @@ export function buildDirectSession(input: DirectSessionInput): AcceptanceResult 
     format: input.format,
     status: "confirmed",
     origin: "direct",
+    contentApprovalStatus: "approved",
     createdAt: input.now,
     updatedAt: input.now,
   };

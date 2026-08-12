@@ -30,3 +30,20 @@ export function aggregateWeightedScores(
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
+
+/** A submitted review remains completed even when its round has no numeric
+ * criteria. The aggregate and completion count deliberately answer different
+ * questions. */
+export function summarizeReviewScores(
+  reviews: readonly { scores: Record<string, unknown>; criteria: readonly WeightedCriterion[] }[],
+): { aggregate: number | null; completedReviews: number } {
+  const values = reviews
+    .map((review) => weightedScore(review.scores, review.criteria))
+    .filter((value): value is number => value !== null);
+  return {
+    aggregate: values.length > 0
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : null,
+    completedReviews: reviews.length,
+  };
+}

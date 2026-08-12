@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEditSpeakerProposal, isCfpOpen } from "./cfp";
+import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "./cfp";
 
 const NOW = "2026-08-09T20:00:00Z";
 
@@ -23,6 +23,26 @@ describe("isCfpOpen", () => {
 
   it("treats null bounds as unbounded", () => {
     expect(isCfpOpen({ isOpen: true, opensAt: null, closesAt: null }, NOW)).toBe(true);
+  });
+});
+
+describe("speakerProposalLockReason", () => {
+  const form = { isOpen: true, opensAt: null, closesAt: "2026-08-25T07:00:00.000Z" };
+
+  it("names the actual close date instead of blaming a committee decision", () => {
+    expect(speakerProposalLockReason(form, "submitted", "2026-08-25T07:00:00.000Z"))
+      .toBe("Editing is locked because the call for speakers closed on August 25, 2026.");
+  });
+
+  it("distinguishes decisions and organizer closure", () => {
+    expect(speakerProposalLockReason(form, "accepted", "2026-08-24T12:00:00.000Z"))
+      .toBe("Editing is locked because the committee has made a decision.");
+    expect(speakerProposalLockReason({ ...form, isOpen: false }, "submitted", "2026-08-24T12:00:00.000Z"))
+      .toBe("Editing is locked because the organizer closed the call for speakers.");
+  });
+
+  it("returns null while editing is allowed", () => {
+    expect(speakerProposalLockReason(form, "submitted", "2026-08-24T12:00:00.000Z")).toBeNull();
   });
 });
 

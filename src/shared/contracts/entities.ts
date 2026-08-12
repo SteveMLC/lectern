@@ -49,6 +49,9 @@ export type SessionFormat = z.infer<typeof SessionFormat>;
 export const SpeakerRole = z.enum(["primary", "co_speaker"]);
 export type SpeakerRole = z.infer<typeof SpeakerRole>;
 
+export const SpeakerWorkflowStatus = z.enum(["prospect", "invited", "confirmed", "declined"]);
+export type SpeakerWorkflowStatus = z.infer<typeof SpeakerWorkflowStatus>;
+
 export const FieldType = z.enum([
   "text",
   "textarea",
@@ -126,6 +129,8 @@ export const Event = z.object({
   timezone: z.string(),
   venue: z.string().nullable(),
   websiteUrl: z.string().nullable(),
+  /** Organizer-controlled publication receipt for the public agenda. */
+  agendaPublishedAt: isoDateTime.nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
@@ -218,6 +223,8 @@ export const Speaker = z.object({
   title: z.string().nullable(),
   bio: z.string().nullable(),
   location: z.string().nullable(),
+  workflowStatus: SpeakerWorkflowStatus,
+  logisticsNotes: z.string().nullable(),
   socials: SpeakerSocials.nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
@@ -233,9 +240,22 @@ export const SpeakerAsset = z.object({
   contentType: z.string(),
   sizeBytes: z.number().int().min(0),
   r2Key: z.string(),
+  taskId: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  versionNumber: z.number().int().positive(),
   uploadedAt: isoDateTime,
 });
 export type SpeakerAsset = z.infer<typeof SpeakerAsset>;
+
+export const AssetComment = z.object({
+  id: z.string(),
+  assetId: z.string(),
+  authorRole: z.enum(["speaker", "organizer"]),
+  authorName: z.string(),
+  body: z.string(),
+  createdAt: isoDateTime,
+});
+export type AssetComment = z.infer<typeof AssetComment>;
 
 // ---------------------------------------------------------------------------
 // Submissions (applications to speak) — NOT sessions
@@ -336,6 +356,8 @@ export const Session = z.object({
   format: SessionFormat,
   status: SessionStatus,
   origin: SessionOrigin,
+  /** Only approved content is exposed by public program and embed routes. */
+  contentApprovalStatus: z.enum(["needs_review", "approved"]),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });

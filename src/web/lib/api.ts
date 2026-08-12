@@ -5,8 +5,12 @@ import {
   AssetKind,
   OrganizerSession,
   UpdateSessionRequest,
+  SessionContentApprovalRequest,
+  SessionVersionsResponse,
   AirtableMirrorStatusResponse,
   CfpSubmissionRequest,
+  CfpDraftRequest,
+  CfpDraftResponse,
   CommunicationKind,
   CommunicationPreviewResponse,
   CreateDirectSessionRequest,
@@ -27,10 +31,25 @@ import {
   ScheduleNoticeDraftResponse,
   HealthResponse,
   OrganizerAgendaResponse,
+  PublishAgendaResponse,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
   OrganizerSpeakersResponse,
+  CreateOrganizerSpeakerRequest,
+  UpdateOrganizerSpeakerRequest,
+  OrganizerSpeakerMutationResponse,
+  ImportOrganizerSpeakersRequest,
+  ImportOrganizerSpeakersResponse,
+  CreateSpeakerTaskRequest,
+  CreateSpeakerTaskResponse,
+  BulkTaskReminderRequest,
+  BulkTaskReminderResponse,
+  BulkAssetDownloadRequest,
+  CreateAssetCommentRequest,
+  AssetCommentResponse,
+  BulkCommunicationRequest,
+  BulkCommunicationResponse,
   SpeakerPortalResponse,
   SimulateCommunicationRequest,
   SimulateCommunicationResponse,
@@ -149,11 +168,93 @@ export const apiClient = {
   organizerSpeakers: (slug: string) =>
     request(OrganizerSpeakersResponse, `/api/events/${encodeURIComponent(slug)}/speakers`, undefined, { auth: true }),
 
+  createOrganizerSpeaker: (slug: string, body: CreateOrganizerSpeakerRequest) =>
+    request(
+      OrganizerSpeakerMutationResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  updateOrganizerSpeaker: (slug: string, speakerId: string, body: UpdateOrganizerSpeakerRequest) =>
+    request(
+      OrganizerSpeakerMutationResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers/${encodeURIComponent(speakerId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  importOrganizerSpeakers: (slug: string, body: ImportOrganizerSpeakersRequest) =>
+    request(
+      ImportOrganizerSpeakersResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers/import`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  createSpeakerTask: (slug: string, body: CreateSpeakerTaskRequest) =>
+    request(
+      CreateSpeakerTaskResponse,
+      `/api/events/${encodeURIComponent(slug)}/speaker-tasks`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  remindSpeakerTasks: (slug: string, body: BulkTaskReminderRequest) =>
+    request(
+      BulkTaskReminderResponse,
+      `/api/events/${encodeURIComponent(slug)}/speaker-tasks/remind`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  downloadAssetZip: async (slug: string, body: BulkAssetDownloadRequest): Promise<Blob> => {
+    const passcode = getPasscode();
+    const res = await fetch(`/api/events/${encodeURIComponent(slug)}/assets/download.zip`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(passcode ? { authorization: `Bearer ${passcode}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let code = "http_error";
+      let message = `Archive request failed (${res.status}).`;
+      try {
+        const parsed = ApiError.safeParse(await res.json());
+        if (parsed.success) { code = parsed.data.error.code; message = parsed.data.error.message; }
+      } catch { /* binary/non-JSON error; keep fallback */ }
+      throw new ApiRequestError(res.status, code, message);
+    }
+    return res.blob();
+  },
+
+  sendBulkCommunication: (slug: string, body: BulkCommunicationRequest) =>
+    request(
+      BulkCommunicationResponse,
+      `/api/events/${encodeURIComponent(slug)}/communications/bulk`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
   submitCfp: (slug: string, body: CfpSubmissionRequest) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  saveCfpDraft: (slug: string, token: string | null, body: CfpDraftRequest) =>
+    request(
+      CfpDraftResponse,
+      token
+        ? `/api/events/${encodeURIComponent(slug)}/drafts/${encodeURIComponent(token)}`
+        : `/api/events/${encodeURIComponent(slug)}/drafts`,
+      { method: token ? "PUT" : "POST", body: JSON.stringify(body) },
+    ),
+
+  cfpDraft: (slug: string, token: string) =>
+    request(
+      CfpDraftResponse,
+      `/api/events/${encodeURIComponent(slug)}/drafts/${encodeURIComponent(token)}`,
+    ),
 
   submissions: (slug: string) =>
     request(
@@ -186,6 +287,14 @@ export const apiClient = {
       auth: true,
     }),
 
+  publishAgenda: (slug: string) =>
+    request(
+      PublishAgendaResponse,
+      `/api/events/${encodeURIComponent(slug)}/agenda/publish`,
+      { method: "POST" },
+      { auth: true },
+    ),
+
   createDirectSession: (slug: string, body: CreateDirectSessionRequest) =>
     request(
       CreateDirectSessionResponse,
@@ -198,6 +307,30 @@ export const apiClient = {
     request(
       z.object({ session: OrganizerSession }),
       `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  sessionVersions: (slug: string, sessionId: string) =>
+    request(
+      SessionVersionsResponse,
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/versions`,
+      undefined,
+      { auth: true },
+    ),
+
+  restoreSessionVersion: (slug: string, sessionId: string, versionId: string) =>
+    request(
+      z.object({ session: OrganizerSession }),
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/versions/${encodeURIComponent(versionId)}/restore`,
+      { method: "POST" },
+      { auth: true },
+    ),
+
+  updateSessionContentApproval: (slug: string, sessionId: string, body: SessionContentApprovalRequest) =>
+    request(
+      z.object({ session: OrganizerSession }),
+      `/api/events/${encodeURIComponent(slug)}/sessions/${encodeURIComponent(sessionId)}/content-approval`,
       { method: "PATCH", body: JSON.stringify(body) },
       { auth: true },
     ),
@@ -316,16 +449,33 @@ export const apiClient = {
       `/api/reviewer/${encodeURIComponent(token)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}/recuse`,
       { method: "POST" }),
 
-  uploadSpeakerAsset: (token: string, file: File, kind: AssetKind) => {
+  uploadSpeakerAsset: (token: string, file: File, kind: AssetKind, context?: { taskId?: string; sessionId?: string }) => {
     const form = new FormData();
     form.set("file", file);
     form.set("kind", kind);
+    if (context?.taskId) form.set("taskId", context.taskId);
+    if (context?.sessionId) form.set("sessionId", context.sessionId);
     return request(
       UploadAssetResponse,
       `/api/speaker-portal/${encodeURIComponent(token)}/assets`,
       { method: "POST", body: form },
     );
   },
+
+  addSpeakerAssetComment: (token: string, assetId: string, body: CreateAssetCommentRequest) =>
+    request(
+      SpeakerPortalResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/assets/${encodeURIComponent(assetId)}/comments`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  addOrganizerAssetComment: (slug: string, assetId: string, body: CreateAssetCommentRequest) =>
+    request(
+      AssetCommentResponse,
+      `/api/events/${encodeURIComponent(slug)}/assets/${encodeURIComponent(assetId)}/comments`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
 
   /** Verifies a candidate passcode against the API without storing it first. */
   verifyPasscode: async (candidate: string): Promise<boolean> => {

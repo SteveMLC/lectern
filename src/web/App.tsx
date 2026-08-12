@@ -5,6 +5,7 @@ import { Communications } from "./pages/admin/Communications";
 import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Integrations } from "./pages/admin/Integrations";
+import { Embeds } from "./pages/admin/Embeds";
 import { Reviews } from "./pages/admin/Reviews";
 import { Evaluations } from "./pages/admin/Evaluations";
 import { Speakers } from "./pages/admin/Speakers";
@@ -45,6 +46,7 @@ export function App() {
         <Route path="speakers" element={<Speakers />} />
         <Route path="files" element={<Files />} />
         <Route path="communications" element={<Communications />} />
+        <Route path="embeds" element={<Embeds />} />
         <Route
           path="resources"
           element={

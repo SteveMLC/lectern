@@ -36,6 +36,7 @@ DELETE FROM evaluation_rounds;
 DELETE FROM evaluation_plans;
 DELETE FROM submission_speakers;
 DELETE FROM submissions;
+DELETE FROM cfp_drafts;
 DELETE FROM speaker_assets;
 DELETE FROM speakers;
 DELETE FROM conditional_rules;
@@ -48,12 +49,12 @@ DELETE FROM events;
 -- ---------------------------------------------------------------------------
 -- Event
 -- ---------------------------------------------------------------------------
-INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, timezone, venue, website_url, created_at, updated_at) VALUES
+INSERT INTO events (id, slug, name, tagline, description, starts_on, ends_on, timezone, venue, website_url, agenda_published_at, created_at, updated_at) VALUES
 ('evt_horizon2026', 'horizon-2026', 'Horizon Dev Summit 2026',
  'Two days on building software that ships.',
  'Horizon Dev Summit brings 600 engineers together for two days of talks, workshops, and panels on AI engineering, developer experience, infrastructure, and product craft.',
  '2026-10-14', '2026-10-15', 'America/Los_Angeles',
- 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026',
+ 'Fort Mason Center, San Francisco', 'https://speakerops.speakerops-go7.workers.dev/e/horizon-2026', '2026-08-01T09:00:00Z',
  '2026-07-15T09:00:00Z', '2026-08-01T09:00:00Z');
 
 INSERT INTO tracks (id, event_id, name, description, color, sort_order) VALUES
@@ -74,7 +75,7 @@ INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_o
 ('form_cfp', 'evt_horizon2026', 'cfp', 'Call for Speakers — Horizon Dev Summit 2026',
  'We want real lessons from real systems. First-time speakers welcome — tell us what you learned and what broke.',
  'Thanks — your proposal is in. The program committee reviews on a rolling basis and every submitter hears back by September 5.',
- 1, '2026-07-20T07:00:00Z', '2026-08-25T07:00:00Z', 3, 0,
+ 1, '2026-07-20T07:00:00Z', '2026-08-25T07:00:00Z', 3, 1,
  '2026-07-15T09:00:00Z', '2026-07-20T09:00:00Z');
 
 INSERT INTO form_fields (id, form_id, key, label, field_type, required, sort_order, help_text, options_json) VALUES
@@ -98,6 +99,12 @@ INSERT INTO speakers (id, event_id, email, name, company, title, bio, location, 
 ('spk_yuki',  'evt_horizon2026', 'yuki@typecraft.example',      'Yuki Tanaka',   'Typecraft',        'Developer Advocate',  'Yuki teaches type-level TypeScript to working teams without melting anyone. Author of the Typecraft workbook.', 'Tokyo', '{"github":"yukitype"}', '2026-07-26T08:00:00Z', '2026-07-26T08:00:00Z'),
 ('spk_dana',  'evt_horizon2026', 'dana@auroracompute.example',  'Dana Whitfield','Aurora Compute',   'CTO',                 'Dana is CTO of Aurora Compute, the headline partner of Horizon Dev Summit 2026.', 'Denver', NULL, '2026-07-28T16:00:00Z', '2026-07-28T16:00:00Z'),
 ('spk_omar',  'evt_horizon2026', 'omar@stackparliament.example','Omar Haddad',   'Stack Parliament', 'Moderator',           'Omar moderates hard panels well. Formerly infra lead at two unicorns.', 'Amsterdam', NULL, '2026-07-29T12:00:00Z', '2026-07-29T12:00:00Z');
+
+UPDATE speakers SET workflow_status = 'confirmed'
+ WHERE id IN ('spk_ada','spk_lin','spk_priya','spk_dana','spk_omar');
+UPDATE speakers SET workflow_status = 'prospect'
+ WHERE id IN ('spk_marco','spk_tom','spk_yuki');
+UPDATE speakers SET logistics_notes = 'Vegetarian meals; step-free stage access requested.' WHERE id = 'spk_priya';
 
 -- ---------------------------------------------------------------------------
 -- Submissions (applications to speak) — the full status spread

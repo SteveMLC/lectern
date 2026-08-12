@@ -7,6 +7,7 @@ import type {
   PublicSpeaker,
   Room,
   SessionFormat,
+  SessionVersion,
   Track,
 } from "../../../shared/contracts";
 import {
@@ -62,6 +63,8 @@ export function Agenda() {
   const [roomName, setRoomName] = useState("");
   const [roomCapacity, setRoomCapacity] = useState("");
   const [autoPlacing, setAutoPlacing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
 
   const agenda = agendaOverride ?? data?.agenda;
   const conflictedSessions = useMemo(
@@ -126,6 +129,21 @@ export function Agenda() {
     } finally { setAutoPlacing(false); }
   }
 
+  async function publishAgenda() {
+    if (publishing) return;
+    setPublishing(true);
+    setActionError(null);
+    try {
+      const receipt = await apiClient.publishAgenda(eventSlug);
+      setPublishedAt(receipt.agendaPublishedAt);
+      setNotice(`Agenda published successfully. The public schedule is live as of ${new Date(receipt.agendaPublishedAt).toLocaleString()}.`);
+    } catch (caught) {
+      setActionError(caught instanceof ApiRequestError ? caught.message : "Agenda could not be published.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   if (loading && !data) return <Spinner label="Loading program" />;
   if (error || !data || !agenda) return <ErrorBanner message={error?.message ?? "Program unavailable."} />;
 
@@ -182,6 +200,16 @@ export function Agenda() {
             {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
           </Select>
           <div className="ml-auto flex gap-2">
+            <Button
+              type="button"
+              className="px-3 py-1.5 text-xs"
+              variant="secondary"
+              disabled={publishing}
+              aria-label="Publish agenda to the public schedule"
+              onClick={() => void publishAgenda()}
+            >
+              {publishing ? "Publishing…" : (publishedAt ?? data.bundle.event.agendaPublishedAt) ? "Republish agenda" : "Publish agenda"}
+            </Button>
             <Button type="button" className="px-3 py-1.5 text-xs" variant="secondary" disabled={autoPlacing || unscheduled.length === 0 || data.bundle.rooms.length === 0} onClick={() => void autoPlace()}>
               {autoPlacing ? "Auto-placing…" : "Auto-place unscheduled"}
             </Button>
@@ -200,6 +228,17 @@ export function Agenda() {
           </div>
         </div>
       </Card>
+
+      {(publishedAt ?? data.bundle.event.agendaPublishedAt) ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span>Public agenda live · published {new Date(publishedAt ?? data.bundle.event.agendaPublishedAt ?? "").toLocaleString()}</span>
+          <Link className="font-semibold underline" to={`/e/${eventSlug}#schedule`}>Open public schedule</Link>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Draft agenda · use Publish agenda when the program is ready for attendees.
+        </div>
+      )}
 
       {roomOpen ? (
         <Card className="mb-4 p-4">
@@ -501,6 +540,10 @@ function SessionCard({
   const [savingDetails, setSavingDetails] = useState(false);
   const [title, setTitle] = useState(session.title);
   const [abstract, setAbstract] = useState(session.abstract);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versions, setVersions] = useState<SessionVersion[] | null>(null);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const speakers = session.speakers.map((speaker) => speaker.name).join(", ");
 
   async function save() {
@@ -535,6 +578,58 @@ function SessionCard({
       setError(caught instanceof ApiRequestError ? caught.message : "Session could not be updated.");
     } finally {
       setSavingDetails(false);
+    }
+  }
+
+  async function toggleHistory() {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    if (!next || versions !== null) return;
+    setWorkflowBusy(true);
+    setError(null);
+    try {
+      setVersions((await apiClient.sessionVersions(eventSlug, session.id)).versions);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Session history could not be loaded.");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  }
+
+  async function restoreVersion(version: SessionVersion) {
+    setWorkflowBusy(true);
+    setError(null);
+    setWorkflowNotice(null);
+    try {
+      const result = await apiClient.restoreSessionVersion(eventSlug, session.id, version.id);
+      setTitle(result.session.title);
+      setAbstract(result.session.abstract);
+      setVersions((await apiClient.sessionVersions(eventSlug, session.id)).versions);
+      onPlaced(await apiClient.agenda(eventSlug));
+      setWorkflowNotice(`Restored “${result.session.title}”. The replaced copy is still in history.`);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "That version could not be restored.");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  }
+
+  async function setContentApproval(status: "needs_review" | "approved") {
+    setWorkflowBusy(true);
+    setError(null);
+    setWorkflowNotice(null);
+    try {
+      await apiClient.updateSessionContentApproval(eventSlug, session.id, { status });
+      onPlaced(await apiClient.agenda(eventSlug));
+      setWorkflowNotice(
+        status === "approved"
+          ? "Content approved and visible on public program surfaces."
+          : "Marked for review and hidden from public program surfaces.",
+      );
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "Content approval could not be updated.");
+    } finally {
+      setWorkflowBusy(false);
     }
   }
 
@@ -578,13 +673,71 @@ function SessionCard({
             <p className="mt-1 truncate text-xs text-zinc-500">{speakers || "Speaker TBA"}</p>
           </div>
         </div>
-        <Badge tone={session.origin === "direct" ? "violet" : "sky"}>{session.origin === "direct" ? "Direct" : "CFP"}</Badge>
+        <div className="flex flex-wrap justify-end gap-1">
+          <Badge tone={session.contentApprovalStatus === "approved" ? "emerald" : "amber"}>
+            {session.contentApprovalStatus === "approved" ? "Content approved" : "Needs review"}
+          </Badge>
+          <Badge tone={session.origin === "direct" ? "violet" : "sky"}>{session.origin === "direct" ? "Direct" : "CFP"}</Badge>
+        </div>
       </div>
       {session.slot ? (
         <p className={cn("mt-2 text-xs font-medium", conflicted ? "text-rose-700" : "text-zinc-600")}>
           {formatSlot(session.slot.startsAt, session.slot.endsAt, timezone)}
         </p>
       ) : null}
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="px-2 py-1 text-xs"
+          aria-expanded={historyOpen}
+          onClick={() => void toggleHistory()}
+        >
+          History ({session.versionCount})
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="px-2 py-1 text-xs"
+          disabled={workflowBusy}
+          onClick={() => void setContentApproval(session.contentApprovalStatus === "approved" ? "needs_review" : "approved")}
+        >
+          {session.contentApprovalStatus === "approved" ? "Send back for review" : "Approve content"}
+        </Button>
+      </div>
+      {historyOpen ? (
+        <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-3" aria-label={`Version history for ${session.title}`}>
+          <p className="text-xs font-semibold text-zinc-800">Earlier program copy</p>
+          {workflowBusy && versions === null ? <p className="mt-2 text-xs text-zinc-500">Loading history…</p> : null}
+          {versions?.length === 0 ? (
+            <p className="mt-2 text-xs text-zinc-500">No earlier versions yet. Editing details creates the first snapshot.</p>
+          ) : null}
+          <div className="mt-2 space-y-2">
+            {versions?.map((version) => (
+              <div key={version.id} className="rounded border border-zinc-200 bg-white p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-zinc-800">{version.title}</p>
+                    <p className="text-[11px] text-zinc-500">
+                      {version.editor} · {new Date(version.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="shrink-0 px-2 py-1 text-xs"
+                    disabled={workflowBusy}
+                    onClick={() => void restoreVersion(version)}
+                  >
+                    Restore
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {workflowNotice ? <p className="mt-2 text-xs font-medium text-emerald-700" role="status">{workflowNotice}</p> : null}
       {editing ? (
         <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
           <Select aria-label={`Room for ${session.title}`} value={roomId} onChange={(event) => setRoomId(event.target.value)}>

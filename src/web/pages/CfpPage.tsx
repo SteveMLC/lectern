@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router";
 import {
   CfpSubmissionRequest,
   SessionFormat,
@@ -61,6 +61,8 @@ const INITIAL: FormState = {
 
 export function CfpPage() {
   const { slug = "" } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const draftToken = searchParams.get("draft");
   const { data, error, loading } = useAsync(() => apiClient.eventBundle(slug), [slug]);
 
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -69,6 +71,45 @@ export function CfpPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [portalToken, setPortalToken] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [resumeUrl, setResumeUrl] = useState<string | null>(null);
+  const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draftToken) return;
+    let active = true;
+    setDraftLoadError(null);
+    void apiClient.cfpDraft(slug, draftToken).then((response) => {
+      if (!active) return;
+      const draft = response.draft;
+      setForm({
+        name: draft.speaker?.name ?? "",
+        email: draft.speaker?.email ?? "",
+        company: draft.speaker?.company ?? "",
+        role: draft.speaker?.title ?? "",
+        bio: draft.speaker?.bio ?? "",
+        title: draft.title,
+        abstract: draft.abstract ?? "",
+        trackId: draft.trackId ?? "",
+        format: draft.format ?? "talk",
+        answers: draft.answers ?? {},
+        coSpeakers: (draft.coSpeakers ?? []).map((speaker) => ({
+          name: speaker.name ?? "",
+          email: speaker.email ?? "",
+          company: speaker.company ?? "",
+          role: speaker.title ?? "",
+          bio: speaker.bio ?? "",
+        })),
+      });
+      setDraftSavedAt(response.savedAt);
+      setResumeUrl(new URL(response.resumeUrl, window.location.origin).toString());
+    }).catch((caught) => {
+      if (!active) return;
+      setDraftLoadError(caught instanceof ApiRequestError ? caught.message : "Draft could not be restored.");
+    });
+    return () => { active = false; };
+  }, [draftToken, slug]);
 
   const ruleCtx = useMemo(
     () => ({ format: form.format, answers: form.answers }),
@@ -141,6 +182,45 @@ export function CfpPage() {
   const setAnswer = (key: string, value: unknown) =>
     setForm((prev) => ({ ...prev, answers: { ...prev.answers, [key]: value } }));
 
+  async function saveDraft() {
+    setServerError(null);
+    if (!form.title.trim()) {
+      setFieldErrors((current) => ({ ...current, title: "Add a title before saving your draft." }));
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      const response = await apiClient.saveCfpDraft(slug, draftToken, {
+        speaker: {
+          name: form.name,
+          email: form.email,
+          company: form.company,
+          title: form.role,
+          bio: form.bio,
+        },
+        coSpeakers: form.coSpeakers.map((speaker) => ({
+          name: speaker.name,
+          email: speaker.email,
+          company: speaker.company,
+          title: speaker.role,
+          bio: speaker.bio,
+        })),
+        title: form.title.trim(),
+        abstract: form.abstract,
+        trackId: form.trackId,
+        format: form.format,
+        answers: form.answers,
+      });
+      setDraftSavedAt(response.savedAt);
+      setResumeUrl(new URL(response.resumeUrl, window.location.origin).toString());
+      if (!draftToken) setSearchParams({ draft: response.token }, { replace: true });
+    } catch (caught) {
+      setServerError(caught instanceof ApiRequestError ? caught.message : "Draft could not be saved.");
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setServerError(null);
@@ -209,6 +289,15 @@ export function CfpPage() {
         </h1>
         {cfp.form.welcomeText ? (
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">{cfp.form.welcomeText}</p>
+        ) : null}
+
+        {draftLoadError ? <div className="mt-4"><ErrorBanner message={draftLoadError} /></div> : null}
+        {draftSavedAt ? (
+          <div role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <p className="font-semibold">Draft saved · {new Date(draftSavedAt).toLocaleString()}</p>
+            <p className="mt-1 text-xs">Keep this private return link to finish later from any browser.</p>
+            {resumeUrl ? <Input className="mt-2" aria-label="Private draft return link" value={resumeUrl} readOnly onFocus={(event) => event.currentTarget.select()} /> : null}
+          </div>
         ) : null}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-8" noValidate>
@@ -345,13 +434,20 @@ export function CfpPage() {
 
           {serverError ? <ErrorBanner message={serverError} /> : null}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-zinc-400">
               Up to {cfp.form.maxSpeakersPerSubmission} speakers per session.
             </p>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Submitting…" : "Submit proposal"}
-            </Button>
+            <div className="flex gap-2">
+              {cfp.form.allowDrafts ? (
+                <Button type="button" variant="secondary" disabled={savingDraft || submitting} onClick={() => void saveDraft()}>
+                  {savingDraft ? "Saving draft…" : draftToken ? "Update draft" : "Save and finish later"}
+                </Button>
+              ) : null}
+              <Button type="submit" disabled={submitting || savingDraft}>
+                {submitting ? "Submitting…" : "Submit proposal"}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

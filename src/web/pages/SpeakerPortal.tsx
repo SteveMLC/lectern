@@ -8,7 +8,7 @@ import type {
   SpeakerPortalProposal,
   SpeakerTask,
 } from "../../shared/contracts";
-import { canEditSpeakerProposal } from "../../shared/domain/cfp";
+import { canEditSpeakerProposal, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { isFieldVisible } from "../../shared/domain/rules";
 import {
   Badge,
@@ -26,6 +26,7 @@ import { ApiRequestError, apiClient } from "../lib/api";
 import { sanitizeEmbedHtml } from "../lib/sanitizeEmbedHtml";
 import { formatDateRange, formatDateTime, pipelineStage } from "../lib/status";
 import { useAsync } from "../lib/useAsync";
+import { AssetComments } from "../components/AssetComments";
 
 const TASK_TONE: Record<SpeakerTask["status"], "amber" | "emerald" | "rose"> = {
   pending: "amber",
@@ -253,22 +254,22 @@ export function SpeakerPortal() {
             ) : (
               <div className="mt-4 space-y-2">
                 {data.assets.map((asset) => (
-                  <a
-                    key={asset.id}
-                    href={`/api/assets/${asset.id}`}
-                    aria-label={`Download ${asset.filename} (${asset.kind})`}
-                    className="block rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-                  >
-                    <span className="font-medium text-zinc-900">{asset.filename}</span>
-                    <span className="ml-2 text-xs text-zinc-500">{asset.kind}</span>
-                    {latestAssetIds.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}
-                    <span className="mt-1 block text-xs text-zinc-400">Uploaded {formatDateTime(asset.uploadedAt, data.event.timezone)}</span>
-                  </a>
+                  <div key={asset.id} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
+                    <a href={`/api/assets/${asset.id}`} aria-label={`Download ${asset.filename} (${asset.kind})`} className="block hover:text-accent">
+                      <span className="font-medium text-zinc-900">{asset.filename}</span>
+                      <span className="ml-2 text-xs text-zinc-500">{asset.kind}</span>
+                      {latestAssetIds.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}
+                      <span className="mt-1 block text-xs text-zinc-400">Uploaded {formatDateTime(asset.uploadedAt, data.event.timezone)}</span>
+                    </a>
+                    <AssetComments filename={asset.filename} comments={data.assetComments.filter((comment) => comment.assetId === asset.id)} timezone={data.event.timezone} onSubmit={async (body) => setPortalOverride(await apiClient.addSpeakerAssetComment(token, asset.id, { body }))} />
+                  </div>
                 ))}
               </div>
             )}
             <AssetUploader
               token={token}
+              tasks={data.tasks}
+              sessions={data.sessions}
               onUploaded={async () => setPortalOverride(await apiClient.speakerPortal(token))}
             />
           </Card>
@@ -297,13 +298,12 @@ function ProposalCard({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const stage = pipelineStage({ status: proposal.status, reviews: [] });
-  const undecided = ["draft", "submitted", "under_review"].includes(proposal.status);
   const editable = cfp
     ? canEditSpeakerProposal(cfp.form, proposal.status, new Date().toISOString())
     : false;
-  const lockReason = !undecided
-    ? "Editing is locked because the committee has made a decision."
-    : "Editing is locked because the call for speakers is closed.";
+  const lockReason = cfp
+    ? speakerProposalLockReason(cfp.form, proposal.status, new Date().toISOString())
+    : "Editing is locked because this call for speakers is unavailable.";
   const visibleFields = cfp
     ? cfp.fields.filter((field) =>
         isFieldVisible(field, cfp.rules, { format: proposal.format, answers }),
@@ -475,13 +475,19 @@ function ProfileEditor({
   );
 }
 
-function AssetUploader({ token, onUploaded }: { token: string; onUploaded: () => Promise<void> }) {
+function AssetUploader({ token, tasks, sessions, onUploaded }: {
+  token: string;
+  tasks: SpeakerPortalResponse["tasks"];
+  sessions: SpeakerPortalResponse["sessions"];
+  onUploaded: () => Promise<void>;
+}) {
   const [kind, setKind] = useState<AssetKind>("headshot");
   const [file, setFile] = useState<File | null>(null);
   const [inputKey, setInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [association, setAssociation] = useState("");
 
   async function upload(event: React.FormEvent) {
     event.preventDefault();
@@ -490,7 +496,11 @@ function AssetUploader({ token, onUploaded }: { token: string; onUploaded: () =>
     setError(null);
     setNotice(null);
     try {
-      await apiClient.uploadSpeakerAsset(token, file, kind);
+      const [contextType, contextId] = association.split(":", 2);
+      await apiClient.uploadSpeakerAsset(token, file, kind, {
+        taskId: contextType === "task" ? contextId : undefined,
+        sessionId: contextType === "session" ? contextId : undefined,
+      });
       await onUploaded();
       setNotice(`${file.name} uploaded.`);
       setFile(null);
@@ -511,6 +521,11 @@ function AssetUploader({ token, onUploaded }: { token: string; onUploaded: () =>
         <option value="headshot">Headshot</option>
         <option value="slides">Slides</option>
         <option value="document">Document</option>
+      </Select>
+      <Select aria-label="Attach upload to a task or session" value={association} onChange={(event) => setAssociation(event.target.value)}>
+        <option value="">General speaker file</option>
+        {tasks.filter(({ task }) => task.status !== "complete").map(({ task, definition }) => <option key={task.id} value={`task:${task.id}`}>Complete task: {definition.label}</option>)}
+        {sessions.map((session) => <option key={session.id} value={`session:${session.id}`}>Session: {session.title}</option>)}
       </Select>
       {notice ? <p role="status" className="text-xs font-medium text-emerald-700">{notice}</p> : null}
       {error ? <ErrorBanner message={error} /> : null}
