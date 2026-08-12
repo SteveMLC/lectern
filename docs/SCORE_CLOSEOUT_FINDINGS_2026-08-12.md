@@ -17,6 +17,7 @@ Source: the live full-fidelity run at `2026-08-12T18-34-25`, read while it was s
 | CNT-10 | A saved bio was line-clamped, so the persistence check was not legible. | Full saved bio shown on the roster card. |
 | CNT-11 | Restore receipt named only the title, making restored abstract content hard to verify. | Receipt includes the restored abstract excerpt. |
 | CNT-14 | ZIP generation had one implicit grouping mode and weak completion evidence. | By-speaker, by-session, and flat grouping with an explicit result receipt. |
+| SPK-16 | Automatic reminders were queued and receipted, but production inbox delivery had not yet been proven. | The scheduled path now uses the same fail-closed Resend transport as organizer messages. Production was verified with a scoped sending-only key, one allowlisted work inbox, a successful provider receipt, and a clean reset after the proof. |
 
 ## Working capabilities made easier to judge
 
@@ -29,6 +30,7 @@ Source: the live full-fidelity run at `2026-08-12T18-34-25`, read while it was s
 
 - `pnpm verify`: passed, including 228 tests, production build, usage-ledger integrity, evaluation-ledger integrity, and Cloudflare dry-run.
 - The submitter account flow was exercised locally from signup through submit, reload, status row, sign-out/sign-in, and portal recovery without any model call.
+- The deployed submitter flow was then exercised in production from account creation through submission, dashboard status, capability portal, and a receipted Resend confirmation. The temporary account, proposal, speaker, and message were removed by the standard production reset; the post-reset smoke suite passed 7/7.
 - No sbek/evaluator command was run in this branch.
 - Reviewer score drafting uses `claude-haiku-4-5-20251001`, caps output at 350 tokens, requires an explicit click, never auto-saves, and writes provider-reported counters to `ai_usage_events`.
-- The local historical usage ledger validates, but automatic session sync is not configured in this isolated worktree; it safely no-ops rather than guessing attribution.
+- Automatic usage sync is installed and reads only configured local AI session sources. The public ledger stores provider counters, source digests, and repository attribution; raw transcripts and billing documents remain private and ignored by Git.
