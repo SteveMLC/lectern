@@ -1063,7 +1063,7 @@ export class D1Repo implements LecternRepo {
       this.db.prepare(
         `INSERT INTO task_definitions (id, event_id, key, label, description, applies_to, due_at, sort_order)
          VALUES (?1, ?2, ?3, ?4, ?5, 'all_speakers', ?6, 100)`,
-      ).bind(input.definitionId, input.eventId, `custom_${input.definitionId}`, input.title,
+      ).bind(input.definitionId, input.eventId, `custom_${input.taskType}_${input.definitionId}`, input.title,
         input.instructions, input.dueAt),
       ...speakerIds.map((speakerId, index) => this.db.prepare(
         `INSERT INTO speaker_tasks (id, event_id, speaker_id, task_definition_id, status, completed_at, updated_at)
@@ -1072,12 +1072,24 @@ export class D1Repo implements LecternRepo {
     ]);
     return {
       definition: {
-        id: input.definitionId, eventId: input.eventId, key: `custom_${input.definitionId}`,
+        id: input.definitionId, eventId: input.eventId, key: `custom_${input.taskType}_${input.definitionId}`,
         label: input.title, description: input.instructions, appliesTo: "all_speakers",
         dueAt: input.dueAt, sortOrder: 100,
       },
       assigned: speakerIds.length,
     };
+  }
+
+  async updateSpeakerTaskDueDate(eventId: string, definitionId: string, dueAt: string | null): Promise<TaskDefinition> {
+    const result = await this.db.prepare(
+      "UPDATE task_definitions SET due_at = ?1 WHERE id = ?2 AND event_id = ?3",
+    ).bind(dueAt, definitionId, eventId).run();
+    if ((result.meta.changes ?? 0) === 0) throw new Error("task_definition_not_found");
+    const row = await this.db.prepare(
+      "SELECT * FROM task_definitions WHERE id = ?1 AND event_id = ?2",
+    ).bind(definitionId, eventId).first<TaskDefinitionRow>();
+    if (!row) throw new Error("task_definition_not_found");
+    return mapTaskDefinition(row);
   }
 
   async sendBulkTaskReminders(input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }> {
@@ -1651,6 +1663,20 @@ export class D1Repo implements LecternRepo {
              WHERE id = ?4 AND event_id = ?5`,
           )
           .bind(input.title, input.abstract, input.now, input.sessionId, input.eventId),
+      ]);
+    }
+
+    if (input.speakerIds !== undefined) {
+      const uniqueSpeakerIds = [...new Set(input.speakerIds)];
+      await this.db.batch([
+        this.db.prepare("DELETE FROM session_speakers WHERE session_id = ?1").bind(input.sessionId),
+        ...uniqueSpeakerIds.map((speakerId, index) => this.db
+          .prepare(
+            `INSERT INTO session_speakers (session_id, speaker_id, role, sort_order)
+             VALUES (?1, ?2, ?3, ?4)`,
+          )
+          .bind(input.sessionId, speakerId, index === 0 ? "primary" : "co_speaker", index)),
+        ...this.deriveAcceptedSpeakerTasks(input.eventId, uniqueSpeakerIds, input.now),
       ]);
     }
 

@@ -37,6 +37,38 @@ interface DecisionState {
   ) => Promise<void>;
 }
 
+export function submissionAnswerFacts(answers: Record<string, unknown>): Array<{ label: string; value: string }> {
+  return Object.entries(answers).flatMap(([key, raw]) => {
+    if (raw === null || raw === undefined || raw === "") return [];
+    const value = Array.isArray(raw)
+      ? raw.map(String).join(", ")
+      : typeof raw === "boolean"
+        ? raw ? "Yes" : "No"
+        : String(raw);
+    return [{
+      label: key.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()),
+      value,
+    }];
+  });
+}
+
+function SubmissionAnswers({ submission }: { submission: SubmissionListItem }) {
+  const facts = submissionAnswerFacts(submission.answers);
+  if (facts.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-2" aria-label={`Submission answers for ${submission.title}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Submission answers</p>
+      <dl className="mt-1 space-y-1">
+        {facts.map((fact) => (
+          <div key={fact.label} className="text-xs leading-4 text-zinc-600">
+            <dt className="inline font-medium text-zinc-700">{fact.label}: </dt><dd className="inline">{fact.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 export function Submissions() {
   const { eventSlug } = useAdminContext();
   const { data, error, loading, reload } = useAsync(
@@ -283,6 +315,7 @@ function SubmissionRow({
       <td className="min-w-64 px-4 py-4">
         <p className="font-medium leading-snug text-zinc-900">{submission.title}</p>
         <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">{submission.abstract}</p>
+        <SubmissionAnswers submission={submission} />
       </td>
       <td className="min-w-44 px-4 py-4">
         <p className="text-sm leading-snug text-zinc-700">
@@ -345,6 +378,7 @@ function SubmissionMobileCard({
       <p className="mt-3 max-h-[4.5rem] overflow-hidden text-sm leading-6 text-zinc-600">
         {submission.abstract}
       </p>
+      <SubmissionAnswers submission={submission} />
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <MobileFact label="Track" value={submission.trackName ?? "Unassigned"} />
         <MobileFact label="Format" value={submission.format} capitalize />

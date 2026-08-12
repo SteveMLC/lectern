@@ -33,6 +33,8 @@ import {
   type ImportOrganizerSpeakersResponse,
   CreateSpeakerTaskRequest,
   type CreateSpeakerTaskResponse,
+  UpdateSpeakerTaskDueDateRequest,
+  type UpdateSpeakerTaskDueDateResponse,
   BulkTaskReminderRequest,
   type BulkTaskReminderResponse,
   BulkAssetDownloadRequest,
@@ -64,10 +66,13 @@ import {
   SaveAssignmentsRequest,
   SubmitReviewRequest,
   type ReviewerQueueResponse,
+  type ReviewScoreDraftResponse,
   type OutboxResponse,
   type Speaker,
   type SpeakerAsset,
 } from "../../shared/contracts";
+import { personalizeSpeakerMessage } from "../../shared/domain/communications";
+import { draftReviewScores } from "../integrations/reviewScoring";
 import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
@@ -697,6 +702,7 @@ api.post("/events/:slug/speaker-tasks", organizerAuth, async (c) => {
   try {
     const body: CreateSpeakerTaskResponse = await repo.createSpeakerTask({
       definitionId: randomId("taskdef"), eventId: bundle.event.id,
+      taskType: parsed.data.taskType,
       title: parsed.data.title, instructions: parsed.data.instructions, dueAt: parsed.data.dueAt,
       speakerIds, speakerTaskIds: speakerIds.map(() => randomId("task")), now: new Date().toISOString(),
     });
@@ -704,6 +710,27 @@ api.post("/events/:slug/speaker-tasks", organizerAuth, async (c) => {
   } catch (caught) {
     if (caught instanceof Error && caught.message === "speaker_not_found") {
       return errorResponse(422, "speaker_not_found", "One or more selected speakers do not belong to this event.");
+    }
+    throw caught;
+  }
+});
+
+api.patch("/events/:slug/speaker-tasks/:definitionId", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = UpdateSpeakerTaskDueDateRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Task due date is invalid.", parsed.error.issues);
+  try {
+    const body: UpdateSpeakerTaskDueDateResponse = {
+      definition: await repo.updateSpeakerTaskDueDate(bundle.event.id, c.req.param("definitionId"), parsed.data.dueAt),
+    };
+    return c.json(body);
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "task_definition_not_found") {
+      return errorResponse(404, "task_definition_not_found", "No task definition with that id for this event.");
     }
     throw caught;
   }
@@ -738,11 +765,18 @@ api.post("/events/:slug/communications/bulk", organizerAuth, async (c) => {
   const recipients = (await repo.getOrganizerSpeakers(bundle.event.id)).filter((speaker) => selected.has(speaker.id));
   if (recipients.length !== selected.size) return errorResponse(422, "speaker_not_found", "One or more selected speakers do not belong to this event.");
   const now = new Date().toISOString();
+  const origin = new URL(c.req.url).origin;
   for (const speaker of recipients) {
+    const tokens = {
+      speakerName: speaker.name,
+      eventName: bundle.event.name,
+      portalUrl: `${origin}/speaker/${encodeURIComponent(speaker.id)}`,
+    };
     await repo.simulateCommunication({
       messageId: randomId("msg"), attemptId: randomId("del"), eventId: bundle.event.id,
-      speakerId: speaker.id, toEmail: speaker.email, subject: parsed.data.subject,
-      bodyMd: parsed.data.bodyMd, now,
+      speakerId: speaker.id, toEmail: speaker.email,
+      subject: personalizeSpeakerMessage(parsed.data.subject, tokens),
+      bodyMd: personalizeSpeakerMessage(parsed.data.bodyMd, tokens), now,
     });
   }
   const body: BulkCommunicationResponse = { sent: recipients.length, recipientEmails: recipients.map((speaker) => speaker.email) };
@@ -1208,6 +1242,32 @@ api.get("/reviewer/:token", async (c) => {
   const queue = await createRepo(c.env).getReviewerQueue(c.req.param("token").trim());
   if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
   return c.json(queue);
+});
+
+api.post("/reviewer/:token/rounds/:roundId/submissions/:submissionId/score-draft", async (c) => {
+  const token = c.req.param("token").trim();
+  const queue = await createRepo(c.env).getReviewerQueue(token);
+  if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
+  const assignment = queue.assignments.find((item) =>
+    item.roundId === c.req.param("roundId") && item.id === c.req.param("submissionId"));
+  if (!assignment) return errorResponse(404, "assignment_not_found", "That submission is not assigned to this reviewer.");
+  const usagePurpose = `review_score_draft:${assignment.roundId}:${assignment.id}`;
+  const recent = c.env.AI_REVIEW_SCORING_MODE === "enabled"
+    ? await c.env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM ai_usage_events WHERE purpose = ?1 AND occurred_at >= ?2",
+    ).bind(usagePurpose, new Date(Date.now() - 15 * 60_000).toISOString()).first<{ count: number }>()
+    : null;
+  const paidCallAllowed = c.env.AI_REVIEW_SCORING_MODE === "enabled" && Number(recent?.count ?? 0) === 0;
+  const draft = await draftReviewScores({
+    title: assignment.title,
+    abstract: assignment.abstract,
+    criteria: assignment.criteria.map(({ key, label, maxScore, weight }) => ({ key, label, maxScore, weight })),
+  }, paidCallAllowed
+    ? { apiKey: c.env.ANTHROPIC_API_KEY, model: "claude-haiku-4-5-20251001" }
+    : {});
+  await recordAiUsageEvent(c.env, usagePurpose, draft.providerEvidence);
+  const { providerEvidence: _privateProviderEvidence, ...body } = draft;
+  return c.json(body satisfies ReviewScoreDraftResponse);
 });
 
 api.put("/reviewer/:token/rounds/:roundId/submissions/:submissionId", async (c) => {
@@ -1807,12 +1867,23 @@ api.patch("/events/:slug/sessions/:sessionId", organizerAuth, async (c) => {
     return errorResponse(422, "validation_error", "Session details are invalid.", parsed.error.issues);
   }
 
+  const speakerIds = parsed.data.speakerIds === undefined
+    ? undefined
+    : [...new Set(parsed.data.speakerIds)];
+  if (speakerIds) {
+    const speakers = await Promise.all(speakerIds.map((id) => repo.getSpeakerById(id)));
+    if (speakers.some((speaker) => !speaker || speaker.eventId !== bundle.event.id)) {
+      return errorResponse(422, "validation_error", "One or more speakers do not belong to this event.");
+    }
+  }
+
   try {
     const session = await repo.updateSession({
       sessionId: c.req.param("sessionId"),
       eventId: bundle.event.id,
       title: parsed.data.title,
       abstract: parsed.data.abstract,
+      speakerIds,
       now: new Date().toISOString(),
     });
     return c.json({ session });
@@ -2153,8 +2224,14 @@ api.post("/events/:slug/assets/download.zip", organizerAuth, async (c) => {
     if (!object) return errorResponse(404, "object_missing", "One or more selected file objects are unavailable.");
     const safeSpeaker = speaker.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || speaker.id;
     const safeFile = asset.filename.replace(/[^A-Za-z0-9._-]+/g, "_") || `file-${index + 1}`;
+    const baseName = `${safeSpeaker}-v${asset.versionNumber}-${safeFile}`;
+    const archiveName = parsed.data.groupBy === "speaker"
+      ? `${safeSpeaker}/v${asset.versionNumber}-${safeFile}`
+      : parsed.data.groupBy === "session"
+        ? `${asset.sessionId ?? "unassigned-session"}/${baseName}`
+        : baseName;
     files.push({
-      name: `${safeSpeaker}/v${asset.versionNumber}-${safeFile}`,
+      name: archiveName,
       data: new Uint8Array(await object.arrayBuffer()),
       modifiedAt: new Date(asset.uploadedAt),
     });

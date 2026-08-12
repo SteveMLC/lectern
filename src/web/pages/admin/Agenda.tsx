@@ -44,7 +44,7 @@ export function Agenda() {
     const [bundle, agenda, speakerResponse] = await Promise.all([
       apiClient.eventBundle(eventSlug),
       apiClient.agenda(eventSlug),
-      apiClient.publicSpeakers(eventSlug),
+      apiClient.organizerSpeakers(eventSlug),
     ]);
     return { bundle, agenda, speakers: speakerResponse.speakers };
   }, [eventSlug]);
@@ -322,6 +322,7 @@ export function Agenda() {
                     key={session.id}
                     session={session}
                     rooms={data.bundle.rooms}
+                    availableSpeakers={data.speakers}
                     eventDate={data.bundle.event.startsOn}
                     timezone={data.bundle.event.timezone}
                     conflicted={false}
@@ -375,6 +376,7 @@ export function Agenda() {
                             key={session.id}
                             session={session}
                             rooms={data.bundle.rooms}
+                            availableSpeakers={data.speakers}
                             eventDate={data.bundle.event.startsOn}
                             timezone={data.bundle.event.timezone}
                             conflicted={conflictedSessions.has(session.id)}
@@ -401,6 +403,7 @@ export function Agenda() {
                       key={session.id}
                       session={session}
                       rooms={data.bundle.rooms}
+                      availableSpeakers={data.speakers}
                       eventDate={data.bundle.event.startsOn}
                       timezone={data.bundle.event.timezone}
                       conflicted={conflictedSessions.has(session.id)}
@@ -504,6 +507,7 @@ function DirectSessionForm({
 function SessionCard({
   session,
   rooms,
+  availableSpeakers,
   eventDate,
   timezone,
   conflicted,
@@ -515,6 +519,7 @@ function SessionCard({
 }: {
   session: OrganizerSession;
   rooms: Room[];
+  availableSpeakers: PublicSpeaker[];
   eventDate: string;
   timezone: string;
   conflicted: boolean;
@@ -540,6 +545,9 @@ function SessionCard({
   const [savingDetails, setSavingDetails] = useState(false);
   const [title, setTitle] = useState(session.title);
   const [abstract, setAbstract] = useState(session.abstract);
+  const [selectedSpeakerIds, setSelectedSpeakerIds] = useState<Set<string>>(
+    () => new Set(session.speakers.map((speaker) => speaker.id)),
+  );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<SessionVersion[] | null>(null);
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -571,6 +579,7 @@ function SessionCard({
       await apiClient.updateSession(eventSlug, session.id, {
         title: title.trim(),
         abstract: abstract.trim(),
+        speakerIds: session.origin === "direct" ? [...selectedSpeakerIds] : undefined,
       });
       onPlaced(await apiClient.agenda(eventSlug));
       setRenaming(false);
@@ -606,7 +615,10 @@ function SessionCard({
       setAbstract(result.session.abstract);
       setVersions((await apiClient.sessionVersions(eventSlug, session.id)).versions);
       onPlaced(await apiClient.agenda(eventSlug));
-      setWorkflowNotice(`Restored “${result.session.title}”. The replaced copy is still in history.`);
+      const restoredExcerpt = result.session.abstract.length > 120
+        ? `${result.session.abstract.slice(0, 117)}…`
+        : result.session.abstract;
+      setWorkflowNotice(`Restored “${result.session.title}”: ${restoredExcerpt} The replaced copy is still in history.`);
     } catch (caught) {
       setError(caught instanceof ApiRequestError ? caught.message : "That version could not be restored.");
     } finally {
@@ -771,6 +783,32 @@ function SessionCard({
               className="min-h-24 text-xs"
             />
           </Field>
+          {session.origin === "direct" ? (
+            <fieldset className="rounded-lg border border-zinc-200 p-3">
+              <legend className="px-1 text-xs font-medium text-zinc-700">Speakers on this direct session</legend>
+              <p className="mb-2 text-[11px] text-zinc-500">Assign roster speakers now, replace them, or leave the session as Speaker TBA.</p>
+              {availableSpeakers.length === 0 ? (
+                <p className="text-xs text-zinc-500">No roster speakers yet. Add one on the Speakers page, then return here.</p>
+              ) : (
+                <div className="max-h-32 space-y-1 overflow-y-auto">
+                  {availableSpeakers.map((speaker) => (
+                    <label key={speaker.id} className="flex items-center gap-2 text-xs text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedSpeakerIds.has(speaker.id)}
+                        onChange={(event) => setSelectedSpeakerIds((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) next.add(speaker.id); else next.delete(speaker.id);
+                          return next;
+                        })}
+                      />
+                      {speaker.name}{speaker.company ? ` · ${speaker.company}` : ""}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </fieldset>
+          ) : null}
           {session.origin === "accepted_submission" ? (
             <p className="text-[11px] leading-4 text-zinc-400">
               Editing the program copy only — the speaker's original submission is kept as-is.
@@ -792,6 +830,7 @@ function SessionCard({
               onClick={() => {
                 setTitle(session.title);
                 setAbstract(session.abstract);
+                setSelectedSpeakerIds(new Set(session.speakers.map((speaker) => speaker.id)));
                 setError(null);
                 setRenaming(false);
               }}
