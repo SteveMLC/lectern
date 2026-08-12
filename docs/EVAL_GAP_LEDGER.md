@@ -142,7 +142,7 @@ The baseline reason for every EMB item was “judge call failed because the eval
 | SPK-13 | PARTIAL | Send succeeded, but recipient selection and communications history were incomplete. | **FIXED** — free-form subject/body plus multi-select and workflow-group recipients record one durable outbox row per exact speaker; real inbox delivery remains the manual half; V5. |
 | SPK-14 | PASS | Templates resolved recipient-specific names, tasks, portal URLs, and slot facts. | **FIXED (preserved)** — drafting/template logic unchanged. |
 | SPK-15 | PARTIAL | Speaker profiles lacked logistics/custom fields; only submission travel support existed. | **FIXED** — organizer speaker records persist and reload dedicated travel/dietary/accessibility/logistics notes; V10. |
-| SPK-16 | OMITTED BY RUN | Source rubric requires automatic due-date reminders without an organizer manually sending. | **PARTIAL** — a six-hour scheduled trigger records idempotent reminders for incomplete tasks due within 48 hours or overdue, including task and due date in the outbox; actual inbox delivery still requires the Resend transport to be wired and proven. |
+| SPK-16 | OMITTED BY RUN | Source rubric requires automatic due-date reminders without an organizer manually sending. | **FIXED** — a six-hour scheduled trigger sends idempotent reminders for incomplete tasks due within 48 hours or overdue, including task and due date, and records the message plus provider attempt in the outbox. Production Resend delivery was proven on 2026-08-12 with a scoped sending-only key, an explicit recipient allowlist, a successful provider receipt, and a clean demo reset afterward. |
 
 ## Zero-spend verification policy
 

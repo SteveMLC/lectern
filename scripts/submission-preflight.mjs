@@ -73,10 +73,18 @@ await check("Strict production and Airtable smoke test", async () => {
 
 await check("Public GitHub repository and MIT license", async () => {
   const repositoryPath = new URL(submission.repositoryUrl).pathname.replace(/^\/+|\/+$/g, "");
+  const githubToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
   const response = await fetch(`https://api.github.com/repos/${repositoryPath}`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "lectern-submission-preflight" },
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "lectern-submission-preflight",
+      ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
+    },
   });
-  assert(response.ok, `GitHub repository lookup returned HTTP ${response.status}`);
+  assert(
+    response.ok,
+    `GitHub repository lookup returned HTTP ${response.status}. Set GITHUB_TOKEN or GH_TOKEN if the unauthenticated API rate limit is exhausted.`,
+  );
   const repository = await response.json();
   assert(repository.private === false, "GitHub repository is not public");
   assert(repository.default_branch === "main", "GitHub default branch is not main");
