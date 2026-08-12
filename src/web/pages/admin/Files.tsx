@@ -56,6 +56,12 @@ export function Files() {
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, error, loading, reload } = useAsync(() => apiClient.organizerSpeakers(eventSlug), [eventSlug]);
+  // Session titles for the per-file session badge; assets only carry sessionId.
+  const agenda = useAsync(() => apiClient.agenda(eventSlug), [eventSlug]);
+  const sessionTitleById = useMemo(
+    () => new Map((agenda.data?.sessions ?? []).map((session) => [session.id, session.title])),
+    [agenda.data?.sessions],
+  );
   const visible = useMemo(
     () => filterDeliverables(data?.speakers ?? [], query, filter),
     [data?.speakers, query, filter],
@@ -149,7 +155,7 @@ export function Files() {
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {speaker.assets.map((asset) => (
                       <div key={asset.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
-                        <a href={`/api/assets/${asset.id}`} className="block hover:text-accent"><div><span className="font-medium">{asset.filename}</span>{latest.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}</div><p className="mt-1 text-xs text-zinc-500">{asset.kind} · version {asset.versionNumber} · {asset.taskId ? "task-linked" : asset.sessionId ? "session-linked" : "speaker file"} · {formatDateTime(asset.uploadedAt, data!.event.timezone)}</p></a>
+                        <a href={`/api/assets/${asset.id}`} className="block hover:text-accent"><div><span className="font-medium">{asset.filename}</span>{latest.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}{asset.sessionId ? <Badge className="ml-2" tone="sky">{sessionTitleById.get(asset.sessionId) ? `Session: ${sessionTitleById.get(asset.sessionId)}` : "Session file"}</Badge> : null}</div><p className="mt-1 text-xs text-zinc-500">{asset.kind} · version {asset.versionNumber} · {asset.taskId ? "task-linked" : asset.sessionId ? "session-linked" : "speaker file"} · {formatDateTime(asset.uploadedAt, data!.event.timezone)}</p></a>
                         <AssetComments filename={asset.filename} comments={speaker.assetComments.filter((comment) => comment.assetId === asset.id)} timezone={data!.event.timezone} onSubmit={async (body) => { await apiClient.addOrganizerAssetComment(eventSlug, asset.id, { body }); setNotice(`Comment posted on ${asset.filename}.`); reload(); }} />
                       </div>
                     ))}
