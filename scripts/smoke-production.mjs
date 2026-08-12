@@ -19,6 +19,18 @@ async function get(path, { auth = false, kind = "json" } = {}) {
   }
 }
 
+async function getWithTransientRetry(path, options) {
+  try {
+    return await get(path, options);
+  } catch (error) {
+    // Airtable status crosses two external edges (Worker -> Airtable). One
+    // timeout is not proof of a broken integration, so retry it once while
+    // still failing closed on persistent errors or incomplete status data.
+    if (!(error instanceof Error) || error.name !== "AbortError") throw error;
+    return get(path, options);
+  }
+}
+
 async function check(name, run) {
   try {
     await run();
@@ -98,7 +110,7 @@ if (!passcode) {
   });
 
   await check("Airtable integration status", async () => {
-    const airtable = await get("/api/airtable/status", { auth: true });
+    const airtable = await getWithTransientRetry("/api/airtable/status", { auth: true });
     const missingTables = (airtable.tables ?? []).filter((table) => !(airtable.baseTables ?? []).includes(table));
     const issues = [
       ...(!airtable.reachable ? [`unreachable${airtable.error ? ` (${airtable.error})` : ""}`] : []),
