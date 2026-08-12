@@ -1,15 +1,19 @@
-Lectern is the open-source program side of Sessionboard. It covers the operational job from call for speakers through a published agenda, and it runs as one Cloudflare Worker with D1 and R2. The product is intentionally straightforward: reliable conference operations first, with no AI workflow required.
+This is Lectern — an open-source replacement for Sessionboard's programme side: call for papers, review, speaker operations, and the published agenda, in one Cloudflare-native app. [[slnc 675]]
 
-We start on the public call for speakers. The form is generated from event configuration, and choosing Workshop reveals a workshop-length question that is both visible and required. Switching formats removes it. The browser and API share the same conditional rules, so hidden fields never become accidental blockers. Submitting creates the speaker and proposal in D1 and confirms the public-to-organizer round trip.
+Every conference gets a public home: the programme, the schedule, and a speaker gallery, all rendered from the same data the organizer manages. [[slnc 2025]]
 
-Inside the organizer console, the new proposal is immediately available for review. Approve, Maybe, and Deny are guarded decisions, not cosmetic buttons. Approving the proposal creates its program session while preserving CFP lineage. Repeating approval reuses that same session, so retries cannot duplicate the agenda.
+The call for papers is a real form with conditional logic — and there are no accounts anywhere. A speaker who loses their link asks for it by email, right here. [[slnc 1125]] Pick Workshop as the format and a required workshop-length field appears. The API enforces the same rule, so a hidden field is never demanded. [[slnc 900]] Co-presenters attach with role labels, and they stay attached through review, acceptance, and the published session. [[slnc 1125]] Submitting shows a reference id on screen and sends a receipted confirmation email — every send in Lectern is logged with a receipt. [[slnc 2700]]
 
-The agenda begins with deliberately planted room and speaker conflicts. They are described in plain language and recompute as sessions move. Dragging a session to Workshop Studio persists the new room and immediately lowers the conflict count.
+The organizer console is one passcode, published deliberately so judges can walk in. [[slnc 2025]]
 
-Not every program item begins as a proposal. A sponsor keynote can be added directly from the agenda with no source submission. Lectern stores that distinction explicitly and marks the session Direct, which covers invited talks, sponsor commitments, and last-minute additions without corrupting the CFP model.
+The new proposal is already in Reviews, with its speakers and their bios. Decisions are a two-step flow. First a committee note — notes stack per reviewer name, so a solo organizer can escalate to a committee without accounts. [[slnc 900]] Then Lectern drafts the acceptance email from that note, for human review before anything sends. [[slnc 1350]] Deliver and approve: the decision, the note, and the receipted email land together, and the speaker's portal updates instantly. [[slnc 1575]]
 
-The speaker-facing portal is a real workflow rather than a read-only profile. The speaker can update their public bio, complete onboarding tasks, and see progress change immediately. Headshots, slides, and documents upload through the portal into R2 and appear as first-class asset records that can be downloaded again.
+Accepted talks become sessions. Auto-place fills the unscheduled ones against rooms and conflicts. [[slnc 900]] Publishing is an explicit action with a receipt — and schedule notices carry each speaker's exact slot, never fired by a drag. [[slnc 2250]]
 
-Communications are tied to live program data. The organizer previews a reminder or session update, downloads a standards-based calendar file, and records a simulated delivery receipt. The calendar includes the scheduled UTC start and end, title, description, room, and confirmed status. External email credentials are optional, so judging never depends on a third-party sender.
+The public schedule updates immediately: time, room, track, and format on every block, with calendar files and embeddable widgets behind it. [[slnc 2475]]
 
-Finally, the Integrations screen proves the live Airtable mirror: eight operational tables and fifty-three reconciled records, with safe retries, rate limiting, and idempotent mappings. D1 remains authoritative, so Airtable cannot take down the demo. Public schedule, session, and speaker embeds publish the same program data. Lectern is open source, deployable, and ready to clone.
+Every speaker has a personal portal behind a capability link: their proposals with live status and editing, their tasks with due dates, uploads, and their own itinerary. [[slnc 2475]]
+
+Organizer-side, every deliverable is versioned and exportable as a ZIP, and every email ever sent sits in the outbox with its receipt. [[slnc 2025]]
+
+Lectern. Open source, MIT — and measured against the organizer's own eval kit. The score, the method, and every verdict are in the repo.

@@ -83,8 +83,37 @@ import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/de
 import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+const WALKTHROUGH_R2_KEY = "submission/lectern-walkthrough-final.mp4";
+const WALKTHROUGH_FILENAME = "lectern-walkthrough-final.mp4";
+
+function walkthroughHeaders(object: R2Object): Headers {
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("content-type", "video/mp4");
+  headers.set("content-length", String(object.size));
+  headers.set("content-disposition", `inline; filename="${WALKTHROUGH_FILENAME}"`);
+  headers.set("cache-control", "public, max-age=3600");
+  headers.set("etag", object.httpEtag);
+  return headers;
+}
 
 export const api = new Hono<{ Bindings: Env }>();
+
+// The narrated walkthrough lives in R2 rather than the git repository. This
+// stable public URL keeps the handoff tied to the deployed open-source project
+// without committing a multi-megabyte binary to source control. The recording
+// is reproducible: scripts/record-walkthrough.mjs drives the live deployment,
+// and `pnpm walkthrough:narrate` renders the narrated final.
+api.on(["GET", "HEAD"], "/public/walkthrough.mp4", async (c) => {
+  if (c.req.method === "HEAD") {
+    const object = await c.env.BUCKET.head(WALKTHROUGH_R2_KEY);
+    if (!object) return errorResponse(404, "walkthrough_missing", "The walkthrough has not been published.");
+    return new Response(null, { headers: walkthroughHeaders(object) });
+  }
+  const object = await c.env.BUCKET.get(WALKTHROUGH_R2_KEY);
+  if (!object) return errorResponse(404, "walkthrough_missing", "The walkthrough has not been published.");
+  return new Response(object.body, { headers: walkthroughHeaders(object) });
+});
 
 async function saveCfpDraft(c: Context<{ Bindings: Env }>, token: string) {
   const slug = c.req.param("slug") ?? "";
@@ -864,6 +893,7 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/speaker-tasks/remind", auth: "organizer", purpose: "Record bulk reminders for selected incomplete speakers." },
       { method: "POST", path: "/events/:slug/communications/bulk", auth: "organizer", purpose: "Record a free-form bulk communication and per-recipient receipts." },
       { method: "POST", path: "/events/:slug/speaker-links", auth: "public", purpose: "Email a submitter their capability links again; the response never reveals whether the address matched." },
+      { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Narrated three-minute product walkthrough recorded against this deployment." },
       { method: "GET", path: "/events/:slug/evaluations", auth: "organizer", purpose: "Round setup, reviewer progress, assignments, and weighted results." },
       { method: "POST", path: "/events/:slug/evaluations/rounds", auth: "organizer", purpose: "Create an evaluation round and its weighted scorecard." },
       { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId", auth: "organizer", purpose: "Update an evaluation round and its weighted scorecard." },

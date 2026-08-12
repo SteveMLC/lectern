@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "repositoryUrl": "https://github.com/SteveMLC/lectern",
   "demoUrl": "https://lectern.lectern-go7.workers.dev",
+  "videoUrl": "https://lectern.lectern-go7.workers.dev/api/public/walkthrough.mp4",
+  "videoSha256": "4db6dd28d0a716ce4680bf3d952ba1e68712776baa1d823ee2baee7ffe82daf7",
+  "videoEtag": "9d92b554405ba2e4a5971edff8d8f673",
+  "videoBytes": 6554279,
+  "videoDurationSeconds": 175.83,
   "submissionFormUrl": null,
   "deadline": "2026-08-13T05:00:00.000Z",
   "reimbursementMaxUsd": 500

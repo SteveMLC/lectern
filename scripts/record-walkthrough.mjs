@@ -98,9 +98,9 @@ await attempt("speaking experience", async () => {
 });
 await dwell(1200);
 await attempt("add co-presenter", () => page.getByRole("button", { name: "Add co-presenter" }).click());
-await attempt("co name", () => page.getByLabel("Full name", { exact: false }).nth(1).fill("Marcus Okafor"));
-await attempt("co email", () => page.getByLabel("Email", { exact: false }).nth(1).fill("marcus@cloudreach.example"));
-await attempt("co role label", () => page.getByLabel("Role label", { exact: false }).first().fill("Co-author"));
+await attempt("co name", () => page.locator("#co-name-0").fill("Marcus Okafor"));
+await attempt("co email", () => page.locator("#co-email-0").fill("marcus@cloudreach.example"));
+await attempt("co role label", () => page.locator("#co-role-0").fill("Co-author"));
 await dwell(1500);
 await attempt("scroll to submit", () => page.mouse.wheel(0, 1400));
 await dwell(1200);
@@ -131,7 +131,7 @@ await attempt("committee note", () => page.getByPlaceholder(/loved the live-demo
 await dwell(2500);
 await attempt("draft acceptance email", () => page.getByRole("button", { name: "Draft acceptance email" }).click({ timeout: 8000 }));
 await dwell(4500);
-await attempt("send & approve", () => page.getByRole("button", { name: /Send & Approve/i }).click({ timeout: 8000 }));
+await attempt("deliver & approve", () => page.getByRole("button", { name: /Deliver &/i }).click({ timeout: 15000 }));
 await dwell(2500);
 await until(114);
 

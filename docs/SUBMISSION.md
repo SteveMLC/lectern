@@ -43,22 +43,22 @@ Lectern is an open-source, cloneable replacement for the core conference-program
 - [x] Check browser console and mobile-width admin navigation.
 - [x] Run the guarded production reset twice: 53 clean Airtable mappings, 0 remaining duplicates/orphans, strict gate 6/6.
 - [x] Add deployed URL here.
-- [x] Record and decode-validate a clean 1280×720 walkthrough; local ignored submission cut is 2:59.76, and production was reset afterward.
+- [x] Record and decode-validate a clean 1280×720 narrated walkthrough (2:55.83) against the live Lectern deployment; production was reset afterward.
 - [x] Persist provider-reported counters for every runtime AI draft and export them into the append-only reimbursement ledger without request content.
 - [ ] Add the organizer form URL when it is sent in Discord and submit with buffer.
 
 ## Submission Assets
 
-- The walkthrough video was withdrawn from the submission package on 2026-08-12 (the brief requires no video). Local drafts stay in `output/playwright/` (ignored by git); declaring a `videoUrl` in `submission.json` re-arms every preflight video check.
-- Machine-readable handoff: `submission.json` keeps the repository, demo, deadline, reimbursement cap, and eventual organizer-form URL in one validated place.
+- Narrated walkthrough (2:56, H.264 1280x720, no video is required by the brief — this is a bonus): https://lectern.lectern-go7.workers.dev/api/public/walkthrough.mp4. Fully reproducible: `node scripts/record-walkthrough.mjs` drives the live deployment scene by scene, `pnpm walkthrough:narrate` renders the narrated final from `docs/WALKTHROUGH_NARRATION.txt`, and `pnpm walkthrough:publish` replaces the R2 object.
+- Machine-readable handoff: `submission.json` keeps the repository, demo, walkthrough, deadline, reimbursement cap, and eventual organizer-form URL in one validated place.
 - The current official brief says the form will be sent out; it does not contain a submission-form URL as of August 10, 2026. Watch the organizer Discord before final submission.
 
-Run `pnpm usage:runtime` after any production AI-assisted draft, then run `pnpm submission:preflight` immediately before upload. Preflight re-runs the release gate and strict production smoke test, fails if a persisted runtime event is missing from the ledger, checks the public GitHub repository, confirms the current commit is on `origin/main`, and reports a missing organizer-form URL or receipt evidence without inventing them. (Video checks are dormant while no `videoUrl` is declared.) Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form URL exists.
+Run `pnpm usage:runtime` after any production AI-assisted draft, then run `pnpm submission:preflight` immediately before upload. Preflight re-runs the release gate and strict production smoke test, fails if a persisted runtime event is missing from the ledger, checks the public GitHub repository, confirms the current commit is on `origin/main`, and reports a missing organizer-form URL or receipt evidence without inventing them. Video checks are armed: the local final, its published copy, hash, ETag, and duration are all validated. Set `REQUIRE_SUBMISSION_URLS=1` for the final no-warning gate after the organizer form URL exists.
 
 ## Known Intentional Limits
 
 - D1 is the full backend. Airtable mirrors the eight judging-relevant operational tables, but it is intentionally not in the request path.
-- Email delivery is simulated and persisted; no external email is sent without credentials.
+- Email delivery is real (Resend) for allowlisted recipients and receipted-simulated for everyone else; every send is persisted with its receipt either way.
 - Decision-feedback drafting is optional seasoning: the organizer always edits the draft, and the no-key/failure template deliberately excludes blunt internal notes.
 - Agenda supports drag-and-drop room scheduling plus day, track, room, and list projections; explicit room/time controls remain as the precise keyboard/mobile fallback.
 - Speaker portal links use stable demo tokens; expiring production magic links are not claimed.
