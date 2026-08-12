@@ -656,7 +656,9 @@ async function runtime(options = {}) {
 
   const [existing, pricing] = await Promise.all([readLedger(), readPricing()]);
   const existingRuntimeIds = new Set(existing
-    .filter((entry) => entry.source?.kind === "lectern_runtime_d1")
+    // Entries exported before the 2026-08-12 rename carry the legacy source
+    // kind; both label the same D1 evidence store, so both count for dedup.
+    .filter((entry) => entry.source?.kind === "lectern_runtime_d1" || entry.source?.kind === "speakerops_runtime_d1")
     .map((entry) => `${entry.provider}:${entry.source.sessionId}`));
   const commitResult = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
   const commit = commitResult.status === 0 ? commitResult.stdout.trim() : undefined;
