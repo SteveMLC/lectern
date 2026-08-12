@@ -83,6 +83,7 @@ export interface SpeakerOpsRepo {
   createRoom(input: CreateRoomInput): Promise<EventBundle>;
   createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
   simulateCommunication(input: SimulateCommunicationInput): Promise<void>;
+  queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
   listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
@@ -163,6 +164,11 @@ export interface SimulateCommunicationInput {
   subject: string;
   bodyMd: string;
   now: string;
+}
+
+export interface QueueDueTaskRemindersResult {
+  queued: number;
+  taskIds: string[];
 }
 
 export interface SaveEvaluationRoundInput {

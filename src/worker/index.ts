@@ -6,6 +6,7 @@ import { api } from "./routes/api";
 import { demoApi } from "./routes/demo";
 import { demoPage } from "./routes/demoPage";
 import { llms } from "./routes/llms";
+import { createRepo } from "./repo/factory";
 
 /**
  * One Worker serves everything:
@@ -34,4 +35,15 @@ app.onError((err, _c) => {
   return errorResponse(500, "internal", "Internal error.");
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const now = new Date();
+    const dueBefore = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    ctx.waitUntil(
+      createRepo(env)
+        .queueDueTaskReminders(now.toISOString(), dueBefore.toISOString())
+        .then((result) => console.log(`automatic task reminders queued: ${result.queued}`)),
+    );
+  },
+};

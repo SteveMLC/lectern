@@ -46,7 +46,7 @@ import {
 } from "../../shared/contracts";
 import { canEditSpeakerProposal, isCfpOpen } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
-import { buildCalendarInvite } from "../../shared/domain/ics";
+import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
@@ -72,6 +72,11 @@ function walkthroughHeaders(object: R2Object): Headers {
 }
 
 export const api = new Hono<{ Bindings: Env }>();
+
+function runtimeAiConfig(env: Env): { apiKey?: string; model?: string } {
+  if (env.AI_RUNTIME_MODE !== "enabled") return {};
+  return { apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL };
+}
 
 async function uploadSpeakerAsset(
   c: Context<{ Bindings: Env }>,
@@ -135,7 +140,7 @@ function safeCssColor(value: string | null): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#eef2ff";
 }
 
-function embedDocument(title: string, body: string): Response {
+function embedDocument(title: string, body: string, interactive = false): Response {
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -173,20 +178,37 @@ function embedDocument(title: string, body: string): Response {
     .group { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 16px 0 2px;
              text-transform: uppercase; }
     .group:first-of-type { margin-top: 4px; }
+    .controls { display: grid; gap: 8px; grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(110px, auto)); margin: 0 0 14px; }
+    .control { border: 1px solid #d4d4d8; border-radius: 8px; color: #18181b; font: inherit; min-width: 0; padding: 8px 10px; }
+    .count { color: #71717a; font-size: 12px; margin: -5px 0 12px; }
+    details summary { color: #4338ca; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 8px; }
     @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
   </style>
 </head>
-<body><main class="wrap">${body}</main></body>
+<body><main class="wrap">${body}</main>${interactive ? `<script>
+const items=[...document.querySelectorAll('[data-search]')];
+const count=document.querySelector('[data-count]');
+function filter(){
+ const q=(document.querySelector('[data-query]')?.value||'').toLowerCase();
+ const track=document.querySelector('[data-track]')?.value||'';
+ const format=document.querySelector('[data-format]')?.value||'';
+ const room=document.querySelector('[data-room]')?.value||'';
+ let visible=0;
+ for(const item of items){const show=(!q||item.dataset.search.includes(q))&&(!track||item.dataset.track===track)&&(!format||item.dataset.format===format)&&(!room||item.dataset.room===room);item.hidden=!show;if(show)visible++;}
+ if(count) count.textContent=visible+' result'+(visible===1?'':'s');
+}
+document.querySelectorAll('[data-filter]').forEach((node)=>node.addEventListener('input',filter));filter();
+</script>` : ""}</body>
 </html>`,
     {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "public, max-age=60",
         // img-src 'self' is required or headshots silently vanish: with
-        // default-src 'none' the browser blocks them and the gallery renders
-        // as broken alt text. Scripts stay forbidden.
+        // default-src 'none' the browser blocks headshots. Interactive embeds
+        // opt into only their generated inline filter script; no external code.
         "content-security-policy":
-          "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors *",
+          `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; ${interactive ? "script-src 'unsafe-inline';" : ""} base-uri 'none'; frame-ancestors *`,
       },
     },
   );
@@ -276,40 +298,38 @@ function renderSessionsEmbed(data: PublicSessionsResponse): Response {
   if (data.sessions.length === 0) {
     body = `<div class="empty">Sessions coming soon.</div>`;
   } else {
-    const byTrack = new Map<string, typeof data.sessions>();
-    for (const session of data.sessions) {
-      const track = session.track?.name ?? "Unassigned track";
-      byTrack.set(track, [...(byTrack.get(track) ?? []), session]);
-    }
-    body = [...byTrack.entries()]
-      .map(([track, sessions]) => {
-        const items = sessions
-          .map(
-            (session) => `<article class="item">
+    const tracks = [...new Set(data.sessions.map((session) => session.track?.name ?? "Unassigned track"))].sort();
+    const formats = [...new Set(data.sessions.map((session) => session.format))].sort();
+    const items = data.sessions
+      .map((session) => {
+        const track = session.track?.name ?? "Unassigned track";
+        const speakerSearch = session.speakers.map((speaker) => `${speaker.name} ${speaker.title ?? ""} ${speaker.company ?? ""}`).join(" ");
+        return `<article class="item" data-search="${escapeHtml(`${session.title} ${speakerSearch}`.toLowerCase())}" data-track="${escapeHtml(track)}" data-format="${escapeHtml(session.format)}" data-room="">
   <p class="title">${escapeHtml(session.title)}</p>
-  <div class="meta">${escapeHtml(session.format)} · ${sessionSpeakers(session.speakers)}</div>
-  <p class="abstract">${escapeHtml(session.abstract)}</p>
-</article>`,
-          )
-          .join("");
-        return `<h2 class="group">${escapeHtml(track)} · ${sessions.length}</h2><section class="stack">${items}</section>`;
-      })
-      .join("");
+  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
+  <p class="abstract">${escapeHtml(session.abstract.slice(0, 180))}${session.abstract.length > 180 ? "…" : ""}</p>
+  ${session.abstract.length > 180 ? `<details><summary>Show more</summary><p class="abstract">${escapeHtml(session.abstract)}</p></details>` : ""}
+</article>`;
+      }).join("");
+    body = `<div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search titles or speakers" aria-label="Search sessions" /><select class="control" data-filter data-track aria-label="Filter by track"><option value="">All tracks</option>${tracks.map((track) => `<option>${escapeHtml(track)}</option>`).join("")}</select><select class="control" data-filter data-format aria-label="Filter by format"><option value="">All formats</option>${formats.map((format) => `<option>${escapeHtml(format)}</option>`).join("")}</select></div><div class="count" data-count></div><section class="stack">${items}</section>`;
   }
 
   return embedDocument(
     `${data.event.name} sessions`,
-    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">The full catalogue, grouped by track</div></header>${body}`,
+    `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">Search and filter the full catalogue</div></header>${body}`,
+    true,
   );
 }
 
 function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
+  const surname = (name: string) => name.trim().split(/\s+/).at(-1) ?? name;
+  const speakers = [...data.speakers].sort((a, b) => surname(a.name).localeCompare(surname(b.name)) || a.name.localeCompare(b.name));
   const items =
-    data.speakers.length === 0
+    speakers.length === 0
       ? `<div class="empty">Speakers coming soon.</div>`
-      : data.speakers
+      : speakers
           .map(
-            (speaker) => `<article class="item speaker">
+            (speaker) => `<article class="item speaker" data-search="${escapeHtml(speaker.name.toLowerCase())}" data-track="" data-format="" data-room="">
   ${
     speaker.headshotUrl
       ? `<img class="avatar" src="${escapeHtml(speaker.headshotUrl)}" alt="${escapeHtml(speaker.name)} headshot" loading="lazy" />`
@@ -326,7 +346,8 @@ function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
 
   return embedDocument(
     `${data.event.name} speakers`,
-    `<header class="header"><div class="eyebrow">Speakers</div><h1>${escapeHtml(data.event.name)}</h1></header><section class="stack">${items}</section>`,
+    `<header class="header"><div class="eyebrow">Speakers</div><h1>${escapeHtml(data.event.name)}</h1></header><div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search speakers" aria-label="Search speakers" /></div><div class="count" data-count></div><section class="stack">${items}</section>`,
+    true,
   );
 }
 
@@ -467,6 +488,7 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated-message delivery receipts for the event outbox." },
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
+      { method: "GET", path: "/public/events/:slug/itinerary.ics?sessions=id,id", auth: "public", purpose: "Export an attendee's selected scheduled sessions as one RFC 5545 calendar." },
       { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "asset link", purpose: "Stream a stored asset." },
@@ -541,6 +563,20 @@ api.post("/events/:slug/submissions", async (c) => {
     submissionId: randomId("sub"),
     now,
   });
+
+  const primary = submission.speakers[0];
+  if (primary) {
+    await repo.simulateCommunication({
+      messageId: randomId("msg"),
+      attemptId: randomId("del"),
+      eventId: bundle.event.id,
+      speakerId: primary.speakerId,
+      toEmail: primary.email,
+      subject: `Proposal received: ${submission.title}`,
+      bodyMd: `Hi ${primary.name},\n\nWe received “${submission.title}” for ${bundle.event.name}.\n\nTrack its status and make edits from your speaker portal.`,
+      now,
+    });
+  }
 
   const body: CreateSubmissionResponse = { submission };
   return c.json(body, 201);
@@ -1018,7 +1054,7 @@ api.post("/events/:slug/submissions/:submissionId/feedback-draft", organizerAuth
       portalUrl,
       onboardingTasks,
     },
-    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+    runtimeAiConfig(c.env),
   );
 
   await recordAiUsageEvent(c.env, "decision_feedback_draft", draft.providerEvidence);
@@ -1149,7 +1185,7 @@ api.post("/events/:slug/sessions/:sessionId/schedule-notice-draft", organizerAut
       icsUrl,
       note: parsed.data.note,
     },
-    { apiKey: c.env.ANTHROPIC_API_KEY, model: c.env.ANTHROPIC_MODEL },
+    runtimeAiConfig(c.env),
   );
 
   await recordAiUsageEvent(c.env, "schedule_notice_draft", draft.providerEvidence);
@@ -1440,6 +1476,37 @@ api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {
       "content-type": "text/calendar; charset=utf-8",
       "content-disposition": `attachment; filename="${filename}"`,
       "cache-control": "public, max-age=60",
+    },
+  });
+});
+
+api.get("/public/events/:slug/itinerary.ics", async (c) => {
+  const schedule = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
+  if (!schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const requested = (c.req.query("sessions") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+  if (requested.length === 0 || requested.length > 50) {
+    return errorResponse(422, "validation_error", "Choose between 1 and 50 session ids.");
+  }
+  const selected = schedule.slots.filter((slot) => requested.includes(slot.session.id));
+  if (selected.length !== new Set(requested).size) {
+    return errorResponse(404, "session_not_found", "One or more selected sessions are not scheduled for this event.");
+  }
+  const generatedAt = new Date().toISOString();
+  const calendar = buildCalendarCollection(selected.map((slot) => ({
+    uid: `${slot.session.id}@speakerops`,
+    eventName: schedule.event.name,
+    sessionTitle: slot.session.title,
+    description: slot.session.abstract,
+    location: slot.room?.name ?? "Room pending",
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    generatedAt,
+  })));
+  return new Response(calendar, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8",
+      "content-disposition": `attachment; filename="${schedule.event.slug}-my-itinerary.ics"`,
+      "cache-control": "private, no-store",
     },
   });
 });

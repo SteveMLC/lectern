@@ -18,4 +18,6 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   /** Optional model override for feedback drafting (default claude-sonnet-5). */
   ANTHROPIC_MODEL?: string;
+  /** Must be exactly "enabled" before the runtime may use ANTHROPIC_API_KEY. Defaults off. */
+  AI_RUNTIME_MODE?: string;
 }

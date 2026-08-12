@@ -384,6 +384,10 @@ export class AirtableRepo implements SpeakerOpsRepo {
     this.cache.delete(AIRTABLE_TABLES.messages);
   }
 
+  async queueDueTaskReminders(_now: string, _dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
+    throw new AirtableNotWiredError("queueDueTaskReminders");
+  }
+
   async listMessages(_eventId: string): Promise<OutboxMessage[]> {
     throw new AirtableNotWiredError("listMessages");
   }

@@ -1995,6 +1995,52 @@ export class D1Repo implements SpeakerOpsRepo {
     ]);
   }
 
+  async queueDueTaskReminders(now: string, dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
+    const rows = await this.db.prepare(
+      `SELECT st.id AS task_id, st.event_id, sp.id AS speaker_id, sp.email, sp.name AS speaker_name,
+              td.label AS task_label, td.due_at, e.name AS event_name
+       FROM speaker_tasks st
+       JOIN task_definitions td ON td.id = st.task_definition_id
+       JOIN speakers sp ON sp.id = st.speaker_id AND sp.event_id = st.event_id
+       JOIN events e ON e.id = st.event_id
+       WHERE st.status != 'complete' AND td.due_at IS NOT NULL AND td.due_at <= ?1
+       ORDER BY td.due_at, st.id`,
+    ).bind(dueBefore).all<{
+      task_id: string; event_id: string; speaker_id: string; email: string; speaker_name: string;
+      task_label: string; due_at: string; event_name: string;
+    }>();
+    const candidates = rows.results ?? [];
+    if (candidates.length === 0) return { queued: 0, taskIds: [] };
+
+    const statements: D1PreparedStatement[] = [];
+    for (const row of candidates) {
+      const suffix = `${row.task_id}_${row.due_at}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const messageId = `msg_auto_due_${suffix}`;
+      statements.push(
+        this.db.prepare(
+          `INSERT OR IGNORE INTO messages
+             (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
+           VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'sent_simulated', ?7)`,
+        ).bind(
+          messageId, row.event_id, row.speaker_id, row.email,
+          `Reminder: ${row.task_label} is due`,
+          `Hi ${row.speaker_name},\n\nYour ${row.task_label} task for ${row.event_name} is incomplete and was due ${row.due_at}.\n\nOpen your speaker portal to complete it.`,
+          now,
+        ),
+        this.db.prepare(
+          `INSERT OR IGNORE INTO delivery_attempts
+             (id, message_id, attempted_at, mode, status, provider_id, error)
+           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
+        ).bind(`del_auto_due_${suffix}`, messageId, now),
+      );
+    }
+    const results = await this.db.batch(statements);
+    const taskIds = candidates
+      .filter((_row, index) => (results[index * 2]?.meta.changes ?? 0) > 0)
+      .map((row) => row.task_id);
+    return { queued: taskIds.length, taskIds };
+  }
+
   async listMessages(eventId: string): Promise<OutboxMessage[]> {
     const rows = await this.db.prepare(
       `SELECT m.id, m.to_email, m.subject, m.status, m.created_at,

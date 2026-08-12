@@ -1,6 +1,6 @@
 # Evaluation gap ledger
 
-Baseline: official sbek run `2026-08-12T00-14-16`. The run contains 84 rubric items: 46 received product verdicts and 38 could not be judged because the evaluator's capped Anthropic credit was exhausted. No sbek scenario was re-run during this work.
+Baseline: official sbek run `2026-08-12T00-14-16`. The run emitted 84 rubric rows: 46 received product verdicts and 38 could not be judged because the evaluator's capped Anthropic credit was exhausted. The source specifications contain **86 required items**; CFP-08 and SPK-16 were absent from the run output and are now explicitly tracked below. No sbek scenario was re-run during this work.
 
 Status meanings: **FIXED** means implemented or an existing passing behavior was preserved and locally rechecked; **PARTIAL** states the remaining gap; **PARKED** records a deliberate scope/architecture decision. Production must apply `0003_review_workflows.sql` and `0004_round_scorecards.sql` before deploying this branch.
 
@@ -50,7 +50,7 @@ The baseline reason for every AIA item was “judge call failed because the eval
 | AIA-07 | CANNOT JUDGE | Evaluator credit exhausted before publish judging. | **PARTIAL** — every confirmed placement is immediately public, but there is no explicit publish/go-live button. |
 | AIA-08 | CANNOT JUDGE | Evaluator credit exhausted before assisted scheduling judging. | **FIXED** — one-action conflict-aware “Auto-place unscheduled”; V7. |
 
-## Call for Papers (17/17 logged)
+## Call for Papers (18/18 logged)
 
 | ID | Baseline | Judge reason (one line) | Decision / local verification |
 | --- | --- | --- | --- |
@@ -61,6 +61,7 @@ The baseline reason for every AIA item was “judge call failed because the eval
 | CFP-05 | PARTIAL | Submission worked, but the speaker portal did not list proposals/status. | **FIXED** — speaker-safe “Your proposals” with status and reference; V1. |
 | CFP-06 | PASS | Submitted proposal data round-tripped intact to organizers. | **FIXED (preserved)** — shared contracts and validation retained. |
 | CFP-07 | NOT FOUND | No save-draft or resume-later path existed. | **PARKED** — durable anonymous draft recovery needs a separate token lifecycle; avoided a half-secured implementation. |
+| CFP-08 | OMITTED BY RUN | Source rubric requires automatic submission confirmation in email or the in-app outbox. | **FIXED** — each successful proposal now records a simulated confirmation with recipient, event, and proposal title in the durable outbox. |
 | CFP-09 | NOT FOUND | No proposal editing surface or PATCH route existed. | **FIXED** — capability-scoped title/abstract/answer editing; V1. |
 | CFP-10 | NOT FOUND | No reviewer provisioning or reviewer-scoped dashboard existed. | **FIXED** — per-round reviewer pool and capability queue; V2/V3. |
 | CFP-11 | PARTIAL | Named notes persisted, but there was no numeric scorecard/reviewer completion. | **FIXED** — stored criteria, recommendation, comments, and completion; V2/V3. |
@@ -99,24 +100,24 @@ The baseline reason for every EMB item was “judge call failed because the eval
 
 | ID | Baseline | Judge reason (one line) | Decision / local verification |
 | --- | --- | --- | --- |
-| EMB-01 | CANNOT JUDGE | Evaluator credit exhausted before sessions-widget judging. | **PARTIAL** — populated session cards exist, but no Show more and catalogue cards omit slot facts. |
-| EMB-02 | CANNOT JUDGE | Evaluator credit exhausted before session-search judging. | **PARKED** — no public session keyword search. |
-| EMB-03 | CANNOT JUDGE | Evaluator credit exhausted before facet judging. | **PARKED** — no public sessions facet control. |
-| EMB-04 | CANNOT JUDGE | Evaluator credit exhausted before speaker-directory judging. | **PARTIAL** — headshot/name/title/company render with graceful initials; surname ordering is not guaranteed. |
+| EMB-01 | CANNOT JUDGE | Evaluator credit exhausted before sessions-widget judging. | **PARTIAL** — populated cards include title, description expansion, speaker job metadata, Format, and Track; catalogue records still omit date/time and room. |
+| EMB-02 | CANNOT JUDGE | Evaluator credit exhausted before session-search judging. | **FIXED** — public sessions embed searches title and speaker identity metadata with a live result count. |
+| EMB-03 | CANNOT JUDGE | Evaluator credit exhausted before facet judging. | **PARTIAL** — working Track and Format facets narrow the public sessions embed; room facet awaits slot metadata in catalogue records. |
+| EMB-04 | CANNOT JUDGE | Evaluator credit exhausted before speaker-directory judging. | **FIXED** — headshot/name/title/company render with graceful initials and deterministic surname ordering. |
 | EMB-05 | CANNOT JUDGE | Evaluator credit exhausted before speaker-detail judging. | **PARKED** — public speaker detail/search remains absent. |
 | EMB-06 | CANNOT JUDGE | Evaluator credit exhausted before public-agenda judging. | **FIXED (preserved)** — schedule is grouped by day/time with room, title, track, and speakers. |
 | EMB-07 | CANNOT JUDGE | Evaluator credit exhausted before agenda-day navigation judging. | **PARTIAL** — itinerary has day tabs; legacy iframe agenda remains grouped sections without tabs. |
 | EMB-08 | CANNOT JUDGE | Evaluator credit exhausted before agenda-detail judging. | **PARKED** — no public agenda detail modal/back flow. |
-| EMB-09 | CANNOT JUDGE | Evaluator credit exhausted before itinerary-content judging. | **PARTIAL** — chronological day tabs/title/time/room/full speaker names exist; cards omit descriptions and speaker job metadata. |
+| EMB-09 | CANNOT JUDGE | Evaluator credit exhausted before itinerary-content judging. | **FIXED** — chronological day tabs plus track, format, title, description, time, room, and complete speaker job metadata. |
 | EMB-10 | CANNOT JUDGE | Evaluator credit exhausted before personal-schedule judging. | **FIXED** — anonymous star/save produces exactly the selected browser-local itinerary; V6. |
-| EMB-11 | CANNOT JUDGE | Evaluator credit exhausted before itinerary persistence/export judging. | **PARTIAL** — selection persists across reload and clears; selection-level calendar export is absent. |
-| EMB-12 | CANNOT JUDGE | Evaluator credit exhausted before gallery judging. | **PARTIAL** — photo cards/initial fallbacks exist; search and surname sort are absent. |
+| EMB-11 | CANNOT JUDGE | Evaluator credit exhausted before itinerary persistence/export judging. | **FIXED** — browser-local selection persists across reload and exports the exact chosen sessions as one multi-event `.ics`. |
+| EMB-12 | CANNOT JUDGE | Evaluator credit exhausted before gallery judging. | **PARTIAL** — photo cards, initials fallback, search, and surname sort exist; the list remains a single-column directory rather than a distinct gallery grid. |
 | EMB-13 | CANNOT JUDGE | Evaluator credit exhausted before gallery-detail judging. | **PARKED** — no gallery detail modal with sessions. |
 | EMB-14 | CANNOT JUDGE | Evaluator credit exhausted before distribution judging. | **PARTIAL** — schedule/sessions/speakers plus itinerary are public; itinerary is a page component rather than a standalone iframe. |
 | EMB-15 | CANNOT JUDGE | Evaluator credit exhausted before embed-generator judging. | **PARTIAL** — retrievable snippets/feed URLs exist in API docs/preview; no saved/configurable embed builder. |
 | EMB-16 | CANNOT JUDGE | Evaluator credit exhausted before consistency judging. | **FIXED (preserved)** — all public surfaces read the same schedule/session/speaker endpoints immediately. |
 
-## Speaker Management (15/15 logged)
+## Speaker Management (16/16 logged)
 
 | ID | Baseline | Judge reason (one line) | Decision / local verification |
 | --- | --- | --- | --- |
@@ -135,6 +136,14 @@ The baseline reason for every EMB item was “judge call failed because the eval
 | SPK-13 | PARTIAL | Send succeeded, but recipient selection and communications history were incomplete. | **PARTIAL** — history/outbox is fixed; multi-select/all-speaker broadcast remains absent; V5. |
 | SPK-14 | PASS | Templates resolved recipient-specific names, tasks, portal URLs, and slot facts. | **FIXED (preserved)** — drafting/template logic unchanged. |
 | SPK-15 | PARTIAL | Speaker profiles lacked logistics/custom fields; only submission travel support existed. | **PARKED** — CFP custom fields were added, not a second speaker-profile custom-field system. |
+| SPK-16 | OMITTED BY RUN | Source rubric requires automatic due-date reminders without an organizer manually sending. | **FIXED** — a six-hour scheduled trigger records idempotent simulated reminders for incomplete tasks due within 48 hours or overdue, including task and due date in the outbox. |
+
+## Zero-spend verification policy
+
+- `pnpm verify` is the default and performs no paid model calls. It now fails if any of the 86 required rubric IDs disappears from this ledger.
+- Runtime drafting stays deterministic unless `AI_RUNTIME_MODE=enabled`; an API key by itself cannot spend money.
+- `pnpm eval:paid` fails closed unless one scenario, at most 20 turns, an explicit approval phrase, a non-sensitive approval ticket, and an approved ceiling of at most $2 are all supplied. The ceiling is an authorization record, not provider-side enforcement; the operator must still watch provider billing.
+- The official evaluator is not a completeness oracle: its incomplete 84-row output is why the repository now verifies against the 86-item source manifest.
 
 ## Ranked stretch not represented in the completed run
 
