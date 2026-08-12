@@ -136,7 +136,7 @@ The baseline reason for every EMB item was “judge call failed because the eval
 | SPK-13 | PARTIAL | Send succeeded, but recipient selection and communications history were incomplete. | **PARTIAL** — history/outbox is fixed; multi-select/all-speaker broadcast remains absent; V5. |
 | SPK-14 | PASS | Templates resolved recipient-specific names, tasks, portal URLs, and slot facts. | **FIXED (preserved)** — drafting/template logic unchanged. |
 | SPK-15 | PARTIAL | Speaker profiles lacked logistics/custom fields; only submission travel support existed. | **PARKED** — CFP custom fields were added, not a second speaker-profile custom-field system. |
-| SPK-16 | OMITTED BY RUN | Source rubric requires automatic due-date reminders without an organizer manually sending. | **FIXED** — a six-hour scheduled trigger records idempotent simulated reminders for incomplete tasks due within 48 hours or overdue, including task and due date in the outbox. |
+| SPK-16 | OMITTED BY RUN | Source rubric requires automatic due-date reminders without an organizer manually sending. | **PARTIAL** — a six-hour scheduled trigger records idempotent reminders for incomplete tasks due within 48 hours or overdue, including task and due date in the outbox; actual inbox delivery still requires the Resend transport to be wired and proven. |
 
 ## Zero-spend verification policy
 
