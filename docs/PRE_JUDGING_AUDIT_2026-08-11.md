@@ -1,3 +1,5 @@
+> **Note (2026-08-12):** the product was renamed **Lectern** later this day; names and URLs in this dated record describe the pre-rename deployment.
+
 # SpeakerOps pre-judging hostile audit — 2026-08-11
 
 ## Verdict

@@ -44,7 +44,7 @@ import type {
   DecideSubmissionInput,
   SpeakerPortalBundle,
   SpeakerPortalSession,
-  SpeakerOpsRepo,
+  LecternRepo,
   SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpdateSessionInput,
@@ -660,7 +660,7 @@ const ALL_STATUSES: SubmissionStatus[] = [
 // Repository
 // ---------------------------------------------------------------------------
 
-export class D1Repo implements SpeakerOpsRepo {
+export class D1Repo implements LecternRepo {
   constructor(
     private readonly db: D1Database,
     private readonly emailDelivery: EmailDelivery = createEmailDelivery({}),

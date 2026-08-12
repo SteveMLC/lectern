@@ -1,5 +1,5 @@
-const baseUrl = (process.env.SPEAKEROPS_BASE_URL ?? "https://speakerops.speakerops-go7.workers.dev").replace(/\/$/, "");
-const passcode = process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
+const baseUrl = (process.env.LECTERN_BASE_URL ?? "https://lectern.lectern-go7.workers.dev").replace(/\/$/, "");
+const passcode = process.env.LECTERN_ORGANIZER_PASSCODE;
 const requireAirtable = process.env.REQUIRE_AIRTABLE === "1";
 const checks = [];
 const warnings = [];
@@ -45,8 +45,8 @@ await check("Landing page and agent-readable handoff", async () => {
     get("/llms.txt", { kind: "text" }),
     get("/demo", { kind: "text" }),
   ]);
-  assert(home.includes("SpeakerOps"), "landing page is missing the product name");
-  assert(llms.includes("SpeakerOps") && llms.includes("horizon-2026"), "/llms.txt is missing the judging handoff");
+  assert(home.includes("Lectern"), "landing page is missing the product name");
+  assert(llms.includes("Lectern") && llms.includes("horizon-2026"), "/llms.txt is missing the judging handoff");
   assert(demo.includes('id="passcode-form"'), "demo passcode is not wrapped in a semantic form");
   assert(demo.includes('autocomplete="current-password"'), "demo passcode is missing autocomplete metadata");
 });
@@ -97,7 +97,7 @@ await check("Published submission walkthrough", async () => {
 });
 
 if (!passcode) {
-  warnings.push("Set SPEAKEROPS_ORGANIZER_PASSCODE to include organizer and Airtable checks.");
+  warnings.push("Set LECTERN_ORGANIZER_PASSCODE to include organizer and Airtable checks.");
 } else {
   await check("Organizer counts", async () => {
     const counts = await get("/api/events/horizon-2026/counts", { auth: true });

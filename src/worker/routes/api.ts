@@ -81,19 +81,6 @@ import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/de
 import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-const WALKTHROUGH_R2_KEY = "submission/speakerops-walkthrough-final.mp4";
-const WALKTHROUGH_FILENAME = "speakerops-walkthrough-final.mp4";
-
-function walkthroughHeaders(object: R2Object): Headers {
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("content-type", "video/mp4");
-  headers.set("content-length", String(object.size));
-  headers.set("content-disposition", `inline; filename="${WALKTHROUGH_FILENAME}"`);
-  headers.set("cache-control", "public, max-age=3600");
-  headers.set("etag", object.httpEtag);
-  return headers;
-}
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -335,7 +322,7 @@ const dayPanels=[...document.querySelectorAll('[data-day-panel]')];
 for(const button of dayButtons)button.addEventListener('click',()=>{for(const candidate of dayButtons)candidate.setAttribute('aria-selected',String(candidate===button));for(const panel of dayPanels)panel.hidden=panel.dataset.dayPanel!==button.dataset.dayButton;});
 const itinerary=document.querySelector('[data-itinerary]');
 if(itinerary){
- const key='speakerops.itinerary.'+itinerary.dataset.itinerary;
+ const key='lectern.itinerary.'+itinerary.dataset.itinerary;
  let saved=[];try{saved=JSON.parse(localStorage.getItem(key)||'[]')}catch{}
  const buttons=[...document.querySelectorAll('[data-save-id]')];const personal=document.querySelector('[data-personal]');const exportLink=document.querySelector('[data-export]');
  function draw(){for(const button of buttons){const on=saved.includes(button.dataset.saveId);button.setAttribute('aria-pressed',String(on));button.textContent=on?'★ Saved':'☆ Save';button.closest('[data-session-card]').hidden=Boolean(personal?.checked&&!on)}if(count)count.textContent=saved.length+' saved';if(exportLink){exportLink.hidden=saved.length===0;exportLink.href='/api/public/events/'+encodeURIComponent(itinerary.dataset.itinerary)+'/itinerary.ics?sessions='+encodeURIComponent(saved.join(','));}}
@@ -537,7 +524,7 @@ api.get("/health", async (c) => {
   }
   const body: HealthResponse = {
     ok: db,
-    service: "speakerops",
+    service: "lectern",
     version: pkg.version,
     dataBackend: c.env.DATA_BACKEND === "airtable" ? "airtable" : "d1",
     time: new Date().toISOString(),
@@ -793,7 +780,7 @@ api.get("/embeds/events/:slug/itinerary", async (c) => {
 
 api.get("/docs", (c) =>
   c.json({
-    name: "SpeakerOps API",
+    name: "Lectern API",
     version: pkg.version,
     basePath: "/api",
     auth: {
@@ -1980,7 +1967,7 @@ api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {
   if (!slot) return errorResponse(404, "session_not_scheduled", "That session has no published placement.");
 
   const ics = buildCalendarInvite({
-    uid: `${slot.session.id}@speakerops`,
+    uid: `${slot.session.id}@lectern`,
     eventName: bundle.event.name,
     sessionTitle: slot.session.title,
     description: slot.session.abstract,
@@ -2005,7 +1992,7 @@ api.get("/public/events/:slug/agenda.ics", async (c) => {
   const schedule = filterSchedule(loaded, embedOptions(c).track);
   const generatedAt = new Date().toISOString();
   const calendar = buildCalendarCollection(schedule.slots.map((slot) => ({
-    uid: `${slot.session.id}@speakerops`,
+    uid: `${slot.session.id}@lectern`,
     eventName: schedule.event.name,
     sessionTitle: slot.session.title,
     description: slot.session.abstract,
@@ -2036,7 +2023,7 @@ api.get("/public/events/:slug/itinerary.ics", async (c) => {
   }
   const generatedAt = new Date().toISOString();
   const calendar = buildCalendarCollection(selected.map((slot) => ({
-    uid: `${slot.session.id}@speakerops`,
+    uid: `${slot.session.id}@lectern`,
     eventName: schedule.event.name,
     sessionTitle: slot.session.title,
     description: slot.session.abstract,
@@ -2052,21 +2039,6 @@ api.get("/public/events/:slug/itinerary.ics", async (c) => {
       "cache-control": "private, no-store",
     },
   });
-});
-
-// The submission walkthrough lives in R2 rather than the git repository. This
-// stable public URL keeps the handoff tied to the deployed open-source project
-// without committing a multi-megabyte binary to source control.
-api.on(["GET", "HEAD"], "/public/walkthrough.mp4", async (c) => {
-  if (c.req.method === "HEAD") {
-    const object = await c.env.BUCKET.head(WALKTHROUGH_R2_KEY);
-    if (!object) return errorResponse(404, "walkthrough_missing", "The submission walkthrough has not been published.");
-    return new Response(null, { headers: walkthroughHeaders(object) });
-  }
-
-  const object = await c.env.BUCKET.get(WALKTHROUGH_R2_KEY);
-  if (!object) return errorResponse(404, "walkthrough_missing", "The submission walkthrough has not been published.");
-  return new Response(object.body, { headers: walkthroughHeaders(object) });
 });
 
 // ---------------------------------------------------------------------------

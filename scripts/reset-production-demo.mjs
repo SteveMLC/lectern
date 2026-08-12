@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
 
-const baseUrl = (process.env.SPEAKEROPS_BASE_URL ?? "https://speakerops.speakerops-go7.workers.dev").replace(/\/$/, "");
-const passcode = process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
-const eventSlug = process.env.SPEAKEROPS_EVENT_SLUG ?? "horizon-2026";
-const judgingDatasetKey = process.env.SPEAKEROPS_JUDGING_DATASET_KEY ?? "groundwork-2026";
+const baseUrl = (process.env.LECTERN_BASE_URL ?? "https://lectern.lectern-go7.workers.dev").replace(/\/$/, "");
+const passcode = process.env.LECTERN_ORGANIZER_PASSCODE;
+const eventSlug = process.env.LECTERN_EVENT_SLUG ?? "horizon-2026";
+const judgingDatasetKey = process.env.LECTERN_JUDGING_DATASET_KEY ?? "groundwork-2026";
 
 if (!passcode) {
-  throw new Error("Set SPEAKEROPS_ORGANIZER_PASSCODE before resetting production.");
+  throw new Error("Set LECTERN_ORGANIZER_PASSCODE before resetting production.");
 }
 
 const headers = { Authorization: `Bearer ${passcode}` };
@@ -64,8 +64,8 @@ if (!sync.ok || !sync.reconciliationReadAvailable) {
 
 run(process.execPath, ["scripts/smoke-production.mjs"], {
   ...process.env,
-  SPEAKEROPS_BASE_URL: baseUrl,
-  SPEAKEROPS_ORGANIZER_PASSCODE: passcode,
+  LECTERN_BASE_URL: baseUrl,
+  LECTERN_ORGANIZER_PASSCODE: passcode,
   REQUIRE_AIRTABLE: "1",
 });
 

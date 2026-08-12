@@ -1,4 +1,4 @@
-# SpeakerOps Critical Path
+# Lectern Critical Path
 
 The judging-critical product path is implemented on `main`. All six feature issues are production-proven, and the Cloudflare production deployment is live.
 
@@ -12,16 +12,16 @@ The judging-critical product path is implemented on `main`. All six feature issu
 - Drag-and-drop room scheduling with day, track, room, and list projections; exact room/time controls remain available, and room/speaker conflicts recompute immediately.
 - Editable speaker portal: profile, task completion/reopen, and speaker-facing R2 uploads.
 - Reminder and session-update previews, persisted simulated deliveries, and `.ics` downloads.
-- Live Airtable mirror: eight SpeakerOps tables, idempotent record mapping, 210 ms request spacing, 429 retry, and D1 as the authoritative fallback.
+- Live Airtable mirror: eight Lectern tables, idempotent record mapping, 210 ms request spacing, 429 retry, and D1 as the authoritative fallback.
 - Public event, CFP, schedule/session/speaker embeds, API docs, deterministic seed, and Liam's Groundwork demo loader.
 - Persistent organizer event switcher so the loaded Groundwork dataset is reachable from every admin screen.
 
 Verification evidence:
 
 - `pnpm verify` passes typecheck, tests, production build, and Worker deployment dry-run.
-- `SPEAKEROPS_ORGANIZER_PASSCODE=... pnpm smoke:production` verifies the deployed Worker, D1/R2 health, public program data, embeds, calendar handoff, organizer data, and Airtable safety state without mutating judge data. Add `REQUIRE_AIRTABLE=1` for the strict bonus gate.
+- `LECTERN_ORGANIZER_PASSCODE=... pnpm smoke:production` verifies the deployed Worker, D1/R2 health, public program data, embeds, calendar handoff, organizer data, and Airtable safety state without mutating judge data. Add `REQUIRE_AIRTABLE=1` for the strict bonus gate.
 - The production smoke gate requires the full Groundwork judging dataset: 10 scheduled sessions, at least one direct invited/sponsor session, and public speakers. The guarded remote reset reloads Groundwork automatically after reseeding D1 so the documented walkthrough cannot silently disappear.
-- Production deployment: https://speakerops.speakerops-go7.workers.dev
+- Production deployment: https://lectern.lectern-go7.workers.dev
 - Production `/api/health` reports `ok: true`, D1 healthy, and R2 bound.
 - The full automated suite passes across domain, agenda drag placement, demo-loader, calendar, timezone, Airtable adapter, reimbursement integrity, guarded reset, and embed sanitization coverage; the current count is reported by `pnpm test` rather than frozen in this document.
 - Local D1 API round trips verified decisions, direct sessions, agenda moves/conflicts, profile/task writes, R2 upload/download, communication delivery records, and calendar downloads.
@@ -32,14 +32,14 @@ Verification evidence:
 
 ## Production Cloudflare Placement
 
-Wrangler is authenticated as `sgovoni@gmail.com` against Cloudflare account `Sgovoni@gmail.com's Account`. SpeakerOps currently uses this account for:
+Wrangler is authenticated as `sgovoni@gmail.com` against Cloudflare account `Sgovoni@gmail.com's Account`. Lectern currently uses this account for:
 
-- Worker: `speakerops`
-- workers.dev subdomain: `speakerops-go7.workers.dev`
-- D1 database: `speakerops-db`
-- R2 bucket: `speakerops-assets`
+- Worker: `lectern`
+- workers.dev subdomain: `lectern-go7.workers.dev`
+- D1 database: `lectern-db`
+- R2 bucket: `lectern-assets`
 
-This keeps the hackathon deployment isolated from Nealac/Qualora infrastructure. If SpeakerOps becomes a long-term product, it can be migrated into a consolidated Cloudflare account by exporting/importing D1 data and copying R2 objects.
+This keeps the hackathon deployment isolated from Nealac/Qualora infrastructure. If Lectern becomes a long-term product, it can be migrated into a consolidated Cloudflare account by exporting/importing D1 data and copying R2 objects.
 
 Do not flip the full judging demo to Airtable. D1 is the complete backend; Airtable is a documented bonus proof.
 

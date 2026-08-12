@@ -289,7 +289,7 @@ export async function aiDraft(
     return {
       ...deterministicDraft(input),
       model: result.model,
-      note: "AI drafting returned no usable draft, so SpeakerOps used the safe template.",
+      note: "AI drafting returned no usable draft, so Lectern used the safe template.",
       providerEvidence: result.providerEvidence,
     };
   }

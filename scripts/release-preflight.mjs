@@ -9,8 +9,8 @@ if (!databaseId || databaseId === "00000000-0000-0000-0000-000000000000") {
   problems.push("Replace the placeholder D1 database_id in wrangler.jsonc.");
 }
 
-if (!/"bucket_name"\s*:\s*"speakerops-assets"/.test(wranglerConfig)) {
-  problems.push('Configure the R2 bucket binding as "speakerops-assets" in wrangler.jsonc.');
+if (!/"bucket_name"\s*:\s*"lectern-assets"/.test(wranglerConfig)) {
+  problems.push('Configure the R2 bucket binding as "lectern-assets" in wrangler.jsonc.');
 }
 
 const whoami = spawnSync("pnpm", ["exec", "wrangler", "whoami"], {

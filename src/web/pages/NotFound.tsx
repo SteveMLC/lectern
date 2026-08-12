@@ -6,7 +6,7 @@ export function NotFound() {
       <p className="text-sm font-semibold text-accent">404</p>
       <h1 className="text-2xl font-semibold text-zinc-900">Page not found</h1>
       <Link to="/" className="text-sm font-medium text-accent hover:underline">
-        Back to SpeakerOps
+        Back to Lectern
       </Link>
     </div>
   );

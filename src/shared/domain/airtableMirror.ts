@@ -138,8 +138,12 @@ export function estimateRequests(plan: MirrorPlan): number {
 /**
  * "SpeakerOps ID" is the stable join key in every table. Field names are
  * written for a human reading the base, not for the code.
+ *
+ * The column keeps the product's original name (Lectern launched as
+ * "SpeakerOps"): it lives in provisioned Airtable bases, so renaming it here
+ * would orphan every existing row.
  */
-export const SPEAKEROPS_ID_FIELD = "SpeakerOps ID";
+export const LECTERN_ID_FIELD = "SpeakerOps ID";
 
 export interface MirrorSourceRow {
   [column: string]: string | number | null;
@@ -155,7 +159,7 @@ export function mapEventRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Name: textOrNull(r.name),
       Slug: textOrNull(r.slug),
       Tagline: textOrNull(r.tagline),
@@ -171,7 +175,7 @@ export function mapTrackRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Name: textOrNull(r.name),
       Description: textOrNull(r.description),
       Event: textOrNull(r.event_id),
@@ -183,7 +187,7 @@ export function mapRoomRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Name: textOrNull(r.name),
       Capacity: typeof r.capacity === "number" ? r.capacity : null,
       Event: textOrNull(r.event_id),
@@ -195,7 +199,7 @@ export function mapSpeakerRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Name: textOrNull(r.name),
       Email: textOrNull(r.email),
       Company: textOrNull(r.company),
@@ -210,7 +214,7 @@ export function mapSubmissionRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Title: textOrNull(r.title),
       Abstract: textOrNull(r.abstract),
       Status: textOrNull(r.status),
@@ -226,7 +230,7 @@ export function mapSessionRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Title: textOrNull(r.title),
       Format: textOrNull(r.format),
       Status: textOrNull(r.status),
@@ -242,7 +246,7 @@ export function mapAgendaRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Session: textOrNull(r.session_title),
       Room: textOrNull(r.room_name),
       "Starts At": isoOrNull(r.starts_at),
@@ -255,7 +259,7 @@ export function mapTaskRow(r: MirrorSourceRow): MirrorRow {
   return {
     internalId: String(r.id),
     fields: {
-      [SPEAKEROPS_ID_FIELD]: String(r.id),
+      [LECTERN_ID_FIELD]: String(r.id),
       Speaker: textOrNull(r.speaker_name),
       Task: textOrNull(r.task_label),
       Status: textOrNull(r.status),
@@ -267,7 +271,7 @@ export function mapTaskRow(r: MirrorSourceRow): MirrorRow {
 /** Column types for auto-creating the base schema via the Meta API. */
 export const TABLE_SCHEMA: Record<MirrorTable, { name: string; type: string }[]> = {
   Events: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Name", type: "singleLineText" },
     { name: "Slug", type: "singleLineText" },
     { name: "Tagline", type: "singleLineText" },
@@ -277,19 +281,19 @@ export const TABLE_SCHEMA: Record<MirrorTable, { name: string; type: string }[]>
     { name: "Venue", type: "singleLineText" },
   ],
   Tracks: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Name", type: "singleLineText" },
     { name: "Description", type: "multilineText" },
     { name: "Event", type: "singleLineText" },
   ],
   Rooms: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Name", type: "singleLineText" },
     { name: "Capacity", type: "number" },
     { name: "Event", type: "singleLineText" },
   ],
   Speakers: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Name", type: "singleLineText" },
     { name: "Email", type: "email" },
     { name: "Company", type: "singleLineText" },
@@ -298,7 +302,7 @@ export const TABLE_SCHEMA: Record<MirrorTable, { name: string; type: string }[]>
     { name: "Location", type: "singleLineText" },
   ],
   Submissions: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Title", type: "singleLineText" },
     { name: "Abstract", type: "multilineText" },
     { name: "Status", type: "singleLineText" },
@@ -308,7 +312,7 @@ export const TABLE_SCHEMA: Record<MirrorTable, { name: string; type: string }[]>
     { name: "Submitted At", type: "singleLineText" },
   ],
   Sessions: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Title", type: "singleLineText" },
     { name: "Format", type: "singleLineText" },
     { name: "Status", type: "singleLineText" },
@@ -318,14 +322,14 @@ export const TABLE_SCHEMA: Record<MirrorTable, { name: string; type: string }[]>
     { name: "Speakers", type: "singleLineText" },
   ],
   Agenda: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Session", type: "singleLineText" },
     { name: "Room", type: "singleLineText" },
     { name: "Starts At", type: "singleLineText" },
     { name: "Ends At", type: "singleLineText" },
   ],
   Tasks: [
-    { name: SPEAKEROPS_ID_FIELD, type: "singleLineText" },
+    { name: LECTERN_ID_FIELD, type: "singleLineText" },
     { name: "Speaker", type: "singleLineText" },
     { name: "Task", type: "singleLineText" },
     { name: "Status", type: "singleLineText" },

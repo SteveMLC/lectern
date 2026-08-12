@@ -76,7 +76,7 @@ import {
  * it is never part of the built bundle.
  */
 
-const PASSCODE_KEY = "speakerops.organizer.passcode";
+const PASSCODE_KEY = "lectern.organizer.passcode";
 
 export function getPasscode(): string | null {
   return sessionStorage.getItem(PASSCODE_KEY);

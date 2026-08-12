@@ -76,7 +76,7 @@ export function SpeakerPortal() {
             Priya Sharma
           </Link>
           <Link className="text-sm font-medium text-accent hover:underline" to="/">
-            Back to SpeakerOps
+            Back to Lectern
           </Link>
         </div>
       </div>

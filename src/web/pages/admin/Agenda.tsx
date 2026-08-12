@@ -355,7 +355,7 @@ export function Agenda() {
                       event.preventDefault();
                       void dropOnRoom(
                         room.id,
-                        event.dataTransfer.getData("application/x-speakerops-session") ||
+                        event.dataTransfer.getData("application/x-lectern-session") ||
                           event.dataTransfer.getData("text/plain"),
                       );
                     }}
@@ -644,7 +644,7 @@ function SessionCard({
       aria-label={draggable ? `${session.title}, draggable session` : undefined}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("application/x-speakerops-session", session.id);
+        event.dataTransfer.setData("application/x-lectern-session", session.id);
         event.dataTransfer.setData("text/plain", session.id);
         onDragStart?.();
       }}

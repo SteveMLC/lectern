@@ -1,14 +1,14 @@
 import type { Env } from "../env";
 import { AirtableRepo } from "./airtable/airtableRepo";
 import { D1Repo } from "./d1/d1Repo";
-import type { SpeakerOpsRepo } from "./types";
+import type { LecternRepo } from "./types";
 import { createEmailDelivery } from "../integrations/emailDelivery";
 
 /**
  * Single place the backend is chosen. Handlers never know which store they
  * are talking to. D1 is the default and the always-works demo fallback.
  */
-export function createRepo(env: Env): SpeakerOpsRepo {
+export function createRepo(env: Env): LecternRepo {
   const emailDelivery = createEmailDelivery(env);
   if (env.DATA_BACKEND === "airtable") {
     if (!env.AIRTABLE_TOKEN || !env.AIRTABLE_BASE_ID) {

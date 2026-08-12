@@ -9,7 +9,7 @@ import type { Env } from "../env";
  */
 export const llms = new Hono<{ Bindings: Env }>();
 
-const BODY = `# SpeakerOps
+const BODY = `# Lectern
 
 > Open-source replacement for the program side of Sessionboard: CFP forms with
 > conditional logic, review decisions, agenda with live conflict detection,
@@ -26,13 +26,13 @@ passcode below is intentionally public for judging.
 
 Everything is walkable right now:
 
-- Live app: https://speakerops.speakerops-go7.workers.dev
-- Organizer console: https://speakerops.speakerops-go7.workers.dev/admin
-  Passcode: speakerops-judge-2026 (deliberately public for judging)
-- Public CFP (submit for real): https://speakerops.speakerops-go7.workers.dev/e/horizon-2026/cfp
-- Speaker portal example: https://speakerops.speakerops-go7.workers.dev/speaker/spk_ada
-- Embeds preview: https://speakerops.speakerops-go7.workers.dev/embed-preview
-- Load a second, resettable conference: https://speakerops.speakerops-go7.workers.dev/demo
+- Live app: https://lectern.lectern-go7.workers.dev
+- Organizer console: https://lectern.lectern-go7.workers.dev/admin
+  Passcode: lectern-judge-2026 (deliberately public for judging)
+- Public CFP (submit for real): https://lectern.lectern-go7.workers.dev/e/horizon-2026/cfp
+- Speaker portal example: https://lectern.lectern-go7.workers.dev/speaker/spk_ada
+- Embeds preview: https://lectern.lectern-go7.workers.dev/embed-preview
+- Load a second, resettable conference: https://lectern.lectern-go7.workers.dev/demo
 
 ## The chain to judge
 
@@ -59,7 +59,7 @@ Everything is walkable right now:
    receipted), weighted aggregates with sort, and a results CSV export.
    Each reviewer works a scoped queue at /review/:token — a capability
    link, no account. A seeded example is live right now:
-   https://speakerops.speakerops-go7.workers.dev/review/rev_sam_demo
+   https://lectern.lectern-go7.workers.dev/review/rev_sam_demo
    (Sam Peters, two assigned proposals in the open Final Review round).
    Recusal removes a proposal from that reviewer's queue.
 4. /admin/agenda: drag it onto another room or use exact controls; room and
@@ -83,13 +83,13 @@ Everything is walkable right now:
 
 ## Machine-readable
 
-- API index (JSON): https://speakerops.speakerops-go7.workers.dev/api/docs
-- Health: https://speakerops.speakerops-go7.workers.dev/api/health
-- Public schedule JSON: https://speakerops.speakerops-go7.workers.dev/api/public/events/horizon-2026/schedule
+- API index (JSON): https://lectern.lectern-go7.workers.dev/api/docs
+- Health: https://lectern.lectern-go7.workers.dev/api/health
+- Public schedule JSON: https://lectern.lectern-go7.workers.dev/api/public/events/horizon-2026/schedule
 
 ## Source and docs
 
-- GitHub: https://github.com/SteveMLC/speakerops (MIT)
+- GitHub: https://github.com/SteveMLC/lectern (MIT)
 - README covers local dev (zero cloud accounts), deploy, the
   domain invariants, and the tamper-evident AI-usage reimbursement audit in
   usage/REPORT.md.

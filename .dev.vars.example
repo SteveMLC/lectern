@@ -2,7 +2,7 @@
 # Production values are set with `wrangler secret put <NAME>`.
 
 # Passcode for the organizer console (required).
-ORGANIZER_PASSCODE=speakerops-dev
+ORGANIZER_PASSCODE=lectern-dev
 
 # Optional — Airtable mirror. The token needs schema.bases:read,
 # schema.bases:write, and data.records:write; the mirror creates its own
@@ -13,7 +13,7 @@ ORGANIZER_PASSCODE=speakerops-dev
 # Optional — real email sending. All four values are required for live mail;
 # leave mode disabled to retain the persisted simulated outbox.
 # RESEND_API_KEY=
-# RESEND_FROM_EMAIL=SpeakerOps <updates@your-verified-domain.example>
+# RESEND_FROM_EMAIL=Lectern <updates@your-verified-domain.example>
 # EMAIL_DELIVERY_MODE=disabled
 # EMAIL_DELIVERY_ALLOWLIST=you@example.com
 

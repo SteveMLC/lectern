@@ -25,7 +25,7 @@ import type {
   CreateDirectSessionInput,
   DecideSubmissionInput,
   SpeakerPortalBundle,
-  SpeakerOpsRepo,
+  LecternRepo,
   SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpdateSessionInput,
@@ -124,7 +124,7 @@ function nullableString(fields: Record<string, unknown>, name: string): string |
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-export class AirtableRepo implements SpeakerOpsRepo {
+export class AirtableRepo implements LecternRepo {
   private readonly fetcher: typeof fetch;
   private readonly clock: () => number;
   private readonly sleep: (ms: number) => Promise<void>;

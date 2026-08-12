@@ -34,7 +34,7 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
     "Submitted at",
     "Abstract",
     "Committee notes",
-    "SpeakerOps ID",
+    "Lectern ID",
   ];
   const rows = submissions.map((s) => [
     s.title,
@@ -61,7 +61,7 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
 
 export function reviewResultsToCsv(workspace: EvaluationWorkspaceResponse): string {
   return toCsv([
-    ["Title", "Track", "Weighted aggregate", "Completed reviews", "Submission status", "SpeakerOps ID"],
+    ["Title", "Track", "Weighted aggregate", "Completed reviews", "Submission status", "Lectern ID"],
     ...workspace.results.map((result) => {
       const submission = workspace.submissions.find((item) => item.id === result.submissionId);
       return [

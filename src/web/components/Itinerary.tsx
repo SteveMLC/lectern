@@ -4,7 +4,7 @@ import { Button, Card, EmptyState } from "./ui";
 import { formatDateTime } from "../lib/status";
 
 export function Itinerary({ schedule }: { schedule: PublicScheduleResponse }) {
-  const storageKey = `speakerops.itinerary.${schedule.event.slug}`;
+  const storageKey = `lectern.itinerary.${schedule.event.slug}`;
   const [saved, setSaved] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(storageKey) ?? "[]") as string[]; } catch { return []; }
   });

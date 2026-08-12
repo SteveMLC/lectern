@@ -76,7 +76,7 @@ export function createEmailDelivery(
           headers: {
             authorization: `Bearer ${env.RESEND_API_KEY}`,
             "content-type": "application/json",
-            "idempotency-key": `speakerops/${input.messageId}`,
+            "idempotency-key": `lectern/${input.messageId}`,
           },
           body: JSON.stringify({
             from: env.RESEND_FROM_EMAIL,

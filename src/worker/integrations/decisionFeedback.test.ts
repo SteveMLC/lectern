@@ -18,7 +18,7 @@ const APPROVE_INPUT: FeedbackDraftInput = {
   ...INPUT,
   decision: "approve",
   reasoning: "loved the contrarian take — main stage material",
-  portalUrl: "https://speakerops.example/speaker/spk_tob",
+  portalUrl: "https://lectern.example/speaker/spk_tob",
   onboardingTasks: ["Upload your headshot", "Confirm your bio", "Upload draft slides", "Book your AV check"],
 };
 
@@ -60,7 +60,7 @@ describe("deterministicDraft", () => {
     const draft = deterministicDraft({ ...APPROVE_INPUT });
     expect(draft.subject).toContain("You're speaking at");
     expect(draft.bodyMd).toContain("is accepted");
-    expect(draft.bodyMd).toContain("https://speakerops.example/speaker/spk_tob");
+    expect(draft.bodyMd).toContain("https://lectern.example/speaker/spk_tob");
     expect(draft.bodyMd).toContain("- Upload your headshot");
     expect(draft.bodyMd).toContain("- Confirm your bio");
     // Internal note stays internal even on a happy decision.
@@ -71,7 +71,7 @@ describe("deterministicDraft", () => {
 
   it("acceptance without task definitions still reads complete", () => {
     const draft = deterministicDraft({ ...APPROVE_INPUT, onboardingTasks: [] });
-    expect(draft.bodyMd).toContain("https://speakerops.example/speaker/spk_tob");
+    expect(draft.bodyMd).toContain("https://lectern.example/speaker/spk_tob");
     // No empty bullet-list block when the event defines no onboarding tasks.
     expect(draft.bodyMd).not.toMatch(/^- /m);
   });
@@ -165,7 +165,7 @@ describe("draftDecisionFeedback", () => {
     }));
     const draft = await draftDecisionFeedback(APPROVE_INPUT, { apiKey: "k", fetcher });
     expect(draft.aiUsed).toBe(true);
-    expect(draft.bodyMd).toContain("Your speaker portal: https://speakerops.example/speaker/spk_tob");
+    expect(draft.bodyMd).toContain("Your speaker portal: https://lectern.example/speaker/spk_tob");
   });
 
   it("sends the portal link and checklist to the model for acceptances", async () => {
@@ -179,7 +179,7 @@ describe("draftDecisionFeedback", () => {
             type: "tool_use",
             input: {
               subject: "S",
-              body: "Body with https://speakerops.example/speaker/spk_tob included.",
+              body: "Body with https://lectern.example/speaker/spk_tob included.",
             },
           },
         ],
@@ -188,7 +188,7 @@ describe("draftDecisionFeedback", () => {
     const draft = await draftDecisionFeedback(APPROVE_INPUT, { apiKey: "k", fetcher });
     const sentPrompt = JSON.stringify(calls[0]!.body.messages);
     expect(sentPrompt).toContain("ACCEPTANCE email");
-    expect(sentPrompt).toContain("https://speakerops.example/speaker/spk_tob");
+    expect(sentPrompt).toContain("https://lectern.example/speaker/spk_tob");
     expect(sentPrompt).toContain("Book your AV check");
     // Link already present — no duplicate appended.
     expect(draft.bodyMd.match(/speaker\/spk_tob/g)).toHaveLength(1);

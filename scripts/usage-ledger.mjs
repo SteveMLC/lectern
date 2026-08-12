@@ -14,7 +14,7 @@ const reportPath = resolve(root, "usage/REPORT.md");
 const sourcesPath = resolve(root, "usage/private/sources.json");
 const runtimeEvidencePath = resolve(root, "usage/private/runtime-ai-usage.json");
 const privateEvidenceRoot = resolve(root, "usage/private");
-const defaultRuntimeUrl = "https://speakerops.speakerops-go7.workers.dev";
+const defaultRuntimeUrl = "https://lectern.lectern-go7.workers.dev";
 const runtimePrivacyNotice = "Provider counters only; prompts, reviewer notes, and generated content are not stored.";
 const runtimeColumns = [
   "provider",
@@ -569,7 +569,7 @@ export function runtimeEventToEntry(event, pricing, options = {}) {
     id: `usage-${occurredAt.slice(0, 10).replaceAll("-", "")}-runtime-${idHash}`,
     recordedAt: options.recordedAt ?? new Date().toISOString(),
     period: { start: occurredAt, end: occurredAt },
-    actor: { name: "SpeakerOps runtime", surface: options.surface ?? defaultRuntimeUrl },
+    actor: { name: "Lectern runtime", surface: options.surface ?? defaultRuntimeUrl },
     provider,
     model,
     category: "runtime_ai_feature",
@@ -585,7 +585,7 @@ export function runtimeEventToEntry(event, pricing, options = {}) {
       receiptStatus: "pending_provider_invoice",
     },
     source: {
-      kind: "speakerops_runtime_d1",
+      kind: "lectern_runtime_d1",
       sessionId: requestId,
       sha256,
       lineCount: 1,
@@ -594,7 +594,7 @@ export function runtimeEventToEntry(event, pricing, options = {}) {
     },
     commits: options.commit ? [options.commit] : [],
     artifacts: [options.surface ?? defaultRuntimeUrl, `runtime:${purpose}`],
-    notes: ["Exported from privacy-safe SpeakerOps D1 counters; prompts, reviewer notes, and generated content were never stored."],
+    notes: ["Exported from privacy-safe Lectern D1 counters; prompts, reviewer notes, and generated content were never stored."],
   };
 }
 
@@ -613,7 +613,7 @@ export function runtimePayloadFromD1Results(results, generatedAt = new Date().to
 async function loadRuntimePayload(options, baseUrl) {
   if (options.d1 && options.file) throw new Error("runtime accepts either --d1 or --file, not both");
   if (options.d1) {
-    const database = options.database ?? "speakerops-db";
+    const database = options.database ?? "lectern-db";
     const sql = `SELECT ${runtimeColumns.join(", ")} FROM ai_usage_events ORDER BY occurred_at ASC, provider_request_id ASC`;
     const result = spawnSync("pnpm", ["exec", "wrangler", "d1", "execute", database, "--remote", "--json", "--command", sql], {
       cwd: root,
@@ -630,8 +630,8 @@ async function loadRuntimePayload(options, baseUrl) {
     return payload;
   }
 
-  const passcode = options.passcode ?? process.env.SPEAKEROPS_ORGANIZER_PASSCODE;
-  if (!passcode) throw new Error("runtime requires --passcode, SPEAKEROPS_ORGANIZER_PASSCODE, --file, or --d1");
+  const passcode = options.passcode ?? process.env.LECTERN_ORGANIZER_PASSCODE;
+  if (!passcode) throw new Error("runtime requires --passcode, LECTERN_ORGANIZER_PASSCODE, --file, or --d1");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   let response;
@@ -648,7 +648,7 @@ async function loadRuntimePayload(options, baseUrl) {
 }
 
 async function runtime(options = {}) {
-  const baseUrl = (options.url ?? process.env.SPEAKEROPS_BASE_URL ?? defaultRuntimeUrl).replace(/\/$/, "");
+  const baseUrl = (options.url ?? process.env.LECTERN_BASE_URL ?? defaultRuntimeUrl).replace(/\/$/, "");
   const payload = await loadRuntimePayload(options, baseUrl);
   if (payload?.schemaVersion !== 1 || !Array.isArray(payload.events)) {
     throw new Error("Runtime AI usage export did not return the expected schema.");
@@ -656,7 +656,7 @@ async function runtime(options = {}) {
 
   const [existing, pricing] = await Promise.all([readLedger(), readPricing()]);
   const existingRuntimeIds = new Set(existing
-    .filter((entry) => entry.source?.kind === "speakerops_runtime_d1")
+    .filter((entry) => entry.source?.kind === "lectern_runtime_d1")
     .map((entry) => `${entry.provider}:${entry.source.sessionId}`));
   const commitResult = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
   const commit = commitResult.status === 0 ? commitResult.stdout.trim() : undefined;
@@ -887,7 +887,7 @@ async function providerImport(options = {}) {
       && entry.model === aggregate.model
       && entry.period.start.slice(0, 10) === aggregate.day;
     const runtimeTokens = existing
-      .filter((entry) => matchesDayAndModel(entry) && entry.source?.kind === "speakerops_runtime_d1")
+      .filter((entry) => matchesDayAndModel(entry) && entry.source?.kind === "lectern_runtime_d1")
       .reduce((sum, entry) => addTokens(sum, entry.tokens), normalizeTokens());
     const alreadyImported = existing
       .filter((entry) => matchesDayAndModel(entry) && entry.source?.kind === "anthropic_provider_usage_export")
@@ -914,7 +914,7 @@ async function providerImport(options = {}) {
       provider: "anthropic",
       model: aggregate.model,
       category: options.category ?? "product_api_evaluation",
-      description: options.description ?? "Provider-reported API usage used for SpeakerOps product testing and evaluation, excluding request-level runtime counters already logged by the application.",
+      description: options.description ?? "Provider-reported API usage used for Lectern product testing and evaluation, excluding request-level runtime counters already logged by the application.",
       measurement: "provider_reported",
       calls: null,
       tokens,
@@ -937,7 +937,7 @@ async function providerImport(options = {}) {
       artifacts: options.artifacts ? options.artifacts.split(",").filter(Boolean) : ["docs/eval", "src/worker/integrations"],
       notes: [
         "Imported from the provider usage export; API key identifiers and workspace metadata remain private.",
-        "Persisted SpeakerOps runtime request counters were subtracted before this aggregate was appended, preventing token double-counting.",
+        "Persisted Lectern runtime request counters were subtracted before this aggregate was appended, preventing token double-counting.",
         "The provider export does not report request count in this view, so calls is null.",
       ],
     });

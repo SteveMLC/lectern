@@ -10,11 +10,11 @@ const approvedUsd = Number(value("--approved-usd"));
 const ticket = value("--approval-ticket");
 const scenarios = value("--scenarios");
 const maxTurns = Number(value("--max-turns"));
-const explicitApproval = process.env.SPEAKEROPS_PAID_EVAL_APPROVED === "YES_SPEND_API_BUDGET";
+const explicitApproval = process.env.LECTERN_PAID_EVAL_APPROVED === "YES_SPEND_API_BUDGET";
 const sbekDirectory = process.env.SBEK_DIR;
 
 const problems = [];
-if (!explicitApproval) problems.push("set SPEAKEROPS_PAID_EVAL_APPROVED=YES_SPEND_API_BUDGET for this one command");
+if (!explicitApproval) problems.push("set LECTERN_PAID_EVAL_APPROVED=YES_SPEND_API_BUDGET for this one command");
 if (!Number.isFinite(approvedUsd) || approvedUsd <= 0 || approvedUsd > 2) {
   problems.push("pass --approved-usd with a positive cap no greater than 2");
 }

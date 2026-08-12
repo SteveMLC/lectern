@@ -6,7 +6,7 @@
 
 ```bash
 pnpm db:reset:local
-SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm db:reset:remote
+LECTERN_ORGANIZER_PASSCODE=lectern-judge-2026 pnpm db:reset:remote
 ```
 
 The local reset aliases the local seed. The raw remote seed remains available for first-time provisioning only:

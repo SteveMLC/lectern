@@ -1,6 +1,6 @@
-# SpeakerOps API and Embeds
+# Lectern API and Embeds
 
-SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. Public event routes do not require auth and do not include speaker email addresses, review data, private tasks, or organizer notes. Speaker-portal tokens and asset ids are scoped capability links: anyone holding one can access only that linked speaker or file.
+Lectern exposes the same public program data as JSON and iframe-ready HTML. Public event routes do not require auth and do not include speaker email addresses, review data, private tasks, or organizer notes. Speaker-portal tokens and asset ids are scoped capability links: anyone holding one can access only that linked speaker or file.
 
 ## Public JSON
 

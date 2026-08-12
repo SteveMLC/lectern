@@ -12,8 +12,8 @@ const INPUT: ScheduleNoticeInput = {
   speakerNames: ["Marco Reyes", "Lin Zhao"],
   slotSummary: "Thursday, September 10 · 2:30 – 3:15 PM PDT",
   roomName: "Main Hall",
-  scheduleUrl: "https://speakerops.example/e/horizon-2026",
-  icsUrl: "https://speakerops.example/api/public/events/horizon-2026/sessions/ses_1/calendar.ics",
+  scheduleUrl: "https://lectern.example/e/horizon-2026",
+  icsUrl: "https://lectern.example/api/public/events/horizon-2026/sessions/ses_1/calendar.ics",
   note: "gave them the post-keynote slot — biggest room of the day",
 };
 

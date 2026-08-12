@@ -1,26 +1,26 @@
-# SpeakerOps
+# Lectern
 
 **CFP to published agenda, without the enterprise tax.**
 
-SpeakerOps is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, drag-and-drop agenda scheduling with live conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
+Lectern is an open-source replacement for the program side of Sessionboard: call-for-speakers forms with conditional logic, proposal decisions, acceptance-to-session flow, drag-and-drop agenda scheduling with live conflict detection, a speaker portal with real file uploads, templated communications with calendar invites, and embeddable public schedule, session, and speaker pages.
 
 Built for [Kill My SaaS 1](https://forge.smol.ai/). Cloudflare-native: one Worker serves the API and the app, D1 stores operational data, R2 stores speaker assets, and a rate-safe, idempotent Airtable mirror pushes the operational record into the organizer's base.
 
 ## Try it live
 
-**https://speakerops.speakerops-go7.workers.dev**
+**https://lectern.lectern-go7.workers.dev**
 
-Organizer passcode: **`speakerops-judge-2026`** — a deliberately public demo passcode, not a credential. It is distinct from the local development default, so a checkout of this repo never shares a passcode with the hosted demo. On your own deploy, set your own with `wrangler secret put ORGANIZER_PASSCODE`.
+Organizer passcode: **`lectern-judge-2026`** — a deliberately public demo passcode, not a credential. It is distinct from the local development default, so a checkout of this repo never shares a passcode with the hosted demo. On your own deploy, set your own with `wrangler secret put ORGANIZER_PASSCODE`.
 
 A five-minute tour, in order:
 
 | # | Do this | What it proves |
 | --- | --- | --- |
-| 1 | [Open the event page](https://speakerops.speakerops-go7.workers.dev/e/horizon-2026) | Seeded conference: 4 tracks, 3 rooms, CFP open |
-| 2 | [Submit a proposal](https://speakerops.speakerops-go7.workers.dev/e/horizon-2026/cfp) — pick **Workshop** as the format | A conditional field appears, and it is required. Switch back to Talk and it vanishes. The API enforces the same rule, so a hidden field is never demanded |
-| 3 | [Open the organizer console](https://speakerops.speakerops-go7.workers.dev/admin) and go to Submissions | Your proposal is there with its speaker attached — the full public-to-organizer round trip |
-| 4 | [Load a second conference](https://speakerops.speakerops-go7.workers.dev/demo) | A hand-authored dataset with staged scheduling conflicts. The same button resets it, so you can break anything here safely |
-| 5 | [View the embeds](https://speakerops.speakerops-go7.workers.dev/embed-preview) | Iframe-ready schedule, sessions, and speaker gallery. Narrow the window — they are mobile-first |
+| 1 | [Open the event page](https://lectern.lectern-go7.workers.dev/e/horizon-2026) | Seeded conference: 4 tracks, 3 rooms, CFP open |
+| 2 | [Submit a proposal](https://lectern.lectern-go7.workers.dev/e/horizon-2026/cfp) — pick **Workshop** as the format | A conditional field appears, and it is required. Switch back to Talk and it vanishes. The API enforces the same rule, so a hidden field is never demanded |
+| 3 | [Open the organizer console](https://lectern.lectern-go7.workers.dev/admin) and go to Submissions | Your proposal is there with its speaker attached — the full public-to-organizer round trip |
+| 4 | [Load a second conference](https://lectern.lectern-go7.workers.dev/demo) | A hand-authored dataset with staged scheduling conflicts. The same button resets it, so you can break anything here safely |
+| 5 | [View the embeds](https://lectern.lectern-go7.workers.dev/embed-preview) | Iframe-ready schedule, sessions, and speaker gallery. Narrow the window — they are mobile-first |
 
 Break the demo on purpose. **Reset** on `/demo` restores the loaded conference to exactly what its files describe, and the seeded event has a one-command reset too.
 
@@ -56,7 +56,7 @@ Latest organizer FAQ from Discord:
 - Decision email from inside the app is a bonus, especially when it can carry feedback or change requests.
 - Day/room scheduling with drag-and-drop and conflict detection is enough.
 - Email/calendar workflows should exist at MVP depth through preview/simulated send, with Resend or Cloudflare email wiring when a key is available.
-- Accelevents is optional. SpeakerOps includes a generic, Excel-friendly submissions CSV handoff; an Accelevents-specific field mapper is deliberately out of scope.
+- Accelevents is optional. Lectern includes a generic, Excel-friendly submissions CSV handoff; an Accelevents-specific field mapper is deliberately out of scope.
 - Admin UI is the highest-priority surface.
 
 ## We ran the judge on ourselves
@@ -79,7 +79,7 @@ An independent hostile audit ran the day before:
 - **Data:** D1 (SQLite) with plain SQL migrations; R2 for uploaded files.
 - **Contracts:** Zod schemas in `src/shared/contracts`, used by the API for request validation and by the web app for response validation. Drift fails loudly.
 - **Domain logic:** pure, tested functions in `src/shared/domain` (conflicts, acceptance, CFP window, conditional rules). No I/O, injected clocks.
-- **Persistence boundary:** `src/worker/repo` — handlers only see the `SpeakerOpsRepo` interface, and `D1Repo` is the complete product backend. Airtable stays in the rate-safe operational mirror boundary rather than the judging request path.
+- **Persistence boundary:** `src/worker/repo` — handlers only see the `LecternRepo` interface, and `D1Repo` is the complete product backend. Airtable stays in the rate-safe operational mirror boundary rather than the judging request path.
 
 ## Local development
 
@@ -100,14 +100,14 @@ pnpm exec wrangler dev             # terminal 1: API + built assets on :8787
 pnpm dev:web                       # terminal 2: Vite dev server, proxies /api to :8787
 ```
 
-Organizer console: open `/admin` and use the passcode from `.dev.vars` (`speakerops-dev` by default).
+Organizer console: open `/admin` and use the passcode from `.dev.vars` (`lectern-dev` by default).
 
 Public docs and embeds:
 
 - `/docs` or `/api-docs` — endpoint reference and embed snippets.
 - `/embed-preview` — live schedule, sessions, and speakers iframes for the seeded event.
 - `/api/docs` — machine-readable endpoint index.
-- [`/api/public/walkthrough.mp4`](https://speakerops.speakerops-go7.workers.dev/api/public/walkthrough.mp4) — narrated three-minute submission walkthrough served from R2.
+- [`/api/public/walkthrough.mp4`](https://lectern.lectern-go7.workers.dev/api/public/walkthrough.mp4) — narrated three-minute submission walkthrough served from R2.
 
 Checks:
 
@@ -162,7 +162,7 @@ The deployed URL serves the app, the API, and the seeded demo event immediately.
 After Airtable is configured, use the guarded reset for rehearsals and recording:
 
 ```bash
-SPEAKEROPS_ORGANIZER_PASSCODE=speakerops-judge-2026 pnpm demo:reset:remote
+LECTERN_ORGANIZER_PASSCODE=lectern-judge-2026 pnpm demo:reset:remote
 ```
 
 It fails before mutation unless Airtable record reconciliation is available, then restores D1, reconciles the mirror, removes only duplicate app-owned rows, and requires the strict production gate to pass.
@@ -243,7 +243,7 @@ The shipped dataset, **Groundwork 2026**, carries 12 speakers, 20 submissions ac
 
 ## Airtable mirror
 
-Plenty of event teams already run their operations out of Airtable. SpeakerOps mirrors an event's records into a base so those people see submissions, decisions, the schedule, and outstanding speaker tasks without opening the app. **The hosted demo's mirror is live**: the first sync built its own tables in a template-created base (adopting the template's Speakers table by adding only its missing columns) and pushed the full seeded event — 53 records across 8 tables; re-syncing updates in place.
+Plenty of event teams already run their operations out of Airtable. Lectern mirrors an event's records into a base so those people see submissions, decisions, the schedule, and outstanding speaker tasks without opening the app. **The hosted demo's mirror is live**: the first sync built its own tables in a template-created base (adopting the template's Speakers table by adding only its missing columns) and pushed the full seeded event — 53 records across 8 tables; re-syncing updates in place.
 
 **D1 stays authoritative.** Airtable is a mirror, not the backend, and that is a deliberate call:
 

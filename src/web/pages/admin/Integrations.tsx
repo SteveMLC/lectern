@@ -50,7 +50,7 @@ export function Integrations() {
             {data.recordReadError ? <p className="mt-4 text-sm text-amber-700">Add Airtable data.records:read so resets can reconcile safely.</p> : null}
 
             <a
-              href="https://github.com/SteveMLC/speakerops/blob/main/docs/AIRTABLE.md"
+              href="https://github.com/SteveMLC/lectern/blob/main/docs/AIRTABLE.md"
               target="_blank"
               rel="noreferrer"
               className="mt-5 inline-flex rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"

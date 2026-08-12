@@ -22,7 +22,7 @@ export interface Env {
   AI_RUNTIME_MODE?: string;
   /** Secret. Resend API credential; never exposed to the browser. */
   RESEND_API_KEY?: string;
-  /** Verified Resend sender, for example "SpeakerOps <updates@example.com>". */
+  /** Verified Resend sender, for example "Lectern <updates@example.com>". */
   RESEND_FROM_EMAIL?: string;
   /** Optional comma-separated recipient allowlist for safe demo/test delivery. */
   EMAIL_DELIVERY_ALLOWLIST?: string;
