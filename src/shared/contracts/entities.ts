@@ -49,6 +49,9 @@ export type SessionFormat = z.infer<typeof SessionFormat>;
 export const SpeakerRole = z.enum(["primary", "co_speaker"]);
 export type SpeakerRole = z.infer<typeof SpeakerRole>;
 
+export const SpeakerWorkflowStatus = z.enum(["prospect", "invited", "confirmed", "declined"]);
+export type SpeakerWorkflowStatus = z.infer<typeof SpeakerWorkflowStatus>;
+
 export const FieldType = z.enum([
   "text",
   "textarea",
@@ -220,6 +223,8 @@ export const Speaker = z.object({
   title: z.string().nullable(),
   bio: z.string().nullable(),
   location: z.string().nullable(),
+  workflowStatus: SpeakerWorkflowStatus,
+  logisticsNotes: z.string().nullable(),
   socials: SpeakerSocials.nullable(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,

@@ -5,6 +5,7 @@ import type {
   EventSummary,
   EvaluationWorkspaceResponse,
   OrganizerAgendaResponse,
+  OrganizerSpeakersResponse,
   OrganizerSession,
   PublicScheduleResponse,
   PublicSessionsResponse,
@@ -26,9 +27,13 @@ import type {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  CreateOrganizerSpeakerRequest,
+  UpdateOrganizerSpeakerRequest,
+  CfpDraftRequest,
   SubmissionListItem,
   TaskDefinition,
 } from "../../shared/contracts";
+import type { SpeakerCsvRow } from "../../shared/domain/speakerCsv";
 
 /**
  * Persistence boundary. Route handlers and domain code talk to this interface
@@ -49,6 +54,10 @@ export interface SpeakerOpsRepo {
   getPublicSchedule(slug: string): Promise<PublicScheduleResponse | null>;
   getPublicSessions(slug: string): Promise<PublicSessionsResponse | null>;
   getPublicSpeakers(slug: string): Promise<PublicSpeakersResponse | null>;
+  getOrganizerSpeakers(eventId: string): Promise<OrganizerSpeakersResponse["speakers"]>;
+  createOrganizerSpeaker(input: CreateOrganizerSpeakerInput): Promise<Speaker>;
+  updateOrganizerSpeaker(input: UpdateOrganizerSpeakerInput): Promise<Speaker>;
+  importOrganizerSpeakers(input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }>;
 
   /**
    * Public CFP intake. Upserts the speaker by (event, email) — a returning
@@ -56,6 +65,8 @@ export interface SpeakerOpsRepo {
    * speaker link. Returns the full organizer-view list item.
    */
   createCfpSubmission(input: CreateCfpSubmissionInput): Promise<SubmissionListItem>;
+  saveCfpDraft(input: SaveCfpDraftInput): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest }>;
+  getCfpDraft(eventId: string, token: string): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest } | null>;
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
@@ -95,6 +106,32 @@ export interface UpdateSessionInput {
   eventId: string;
   title: string;
   abstract: string;
+  now: string;
+}
+
+export interface CreateOrganizerSpeakerInput extends CreateOrganizerSpeakerRequest {
+  id: string;
+  eventId: string;
+  now: string;
+}
+
+export interface UpdateOrganizerSpeakerInput extends UpdateOrganizerSpeakerRequest {
+  id: string;
+  eventId: string;
+  now: string;
+}
+
+export interface ImportOrganizerSpeakersInput {
+  eventId: string;
+  rows: Array<SpeakerCsvRow & { id: string }>;
+  now: string;
+}
+
+export interface SaveCfpDraftInput {
+  token: string;
+  eventId: string;
+  formId: string;
+  draft: CfpDraftRequest;
   now: string;
 }
 

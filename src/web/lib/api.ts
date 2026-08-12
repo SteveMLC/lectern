@@ -7,6 +7,8 @@ import {
   UpdateSessionRequest,
   AirtableMirrorStatusResponse,
   CfpSubmissionRequest,
+  CfpDraftRequest,
+  CfpDraftResponse,
   CommunicationKind,
   CommunicationPreviewResponse,
   CreateDirectSessionRequest,
@@ -32,6 +34,11 @@ import {
   PublicSessionsResponse,
   PublicSpeakersResponse,
   OrganizerSpeakersResponse,
+  CreateOrganizerSpeakerRequest,
+  UpdateOrganizerSpeakerRequest,
+  OrganizerSpeakerMutationResponse,
+  ImportOrganizerSpeakersRequest,
+  ImportOrganizerSpeakersResponse,
   SpeakerPortalResponse,
   SimulateCommunicationRequest,
   SimulateCommunicationResponse,
@@ -150,11 +157,50 @@ export const apiClient = {
   organizerSpeakers: (slug: string) =>
     request(OrganizerSpeakersResponse, `/api/events/${encodeURIComponent(slug)}/speakers`, undefined, { auth: true }),
 
+  createOrganizerSpeaker: (slug: string, body: CreateOrganizerSpeakerRequest) =>
+    request(
+      OrganizerSpeakerMutationResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  updateOrganizerSpeaker: (slug: string, speakerId: string, body: UpdateOrganizerSpeakerRequest) =>
+    request(
+      OrganizerSpeakerMutationResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers/${encodeURIComponent(speakerId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  importOrganizerSpeakers: (slug: string, body: ImportOrganizerSpeakersRequest) =>
+    request(
+      ImportOrganizerSpeakersResponse,
+      `/api/events/${encodeURIComponent(slug)}/speakers/import`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
   submitCfp: (slug: string, body: CfpSubmissionRequest) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  saveCfpDraft: (slug: string, token: string | null, body: CfpDraftRequest) =>
+    request(
+      CfpDraftResponse,
+      token
+        ? `/api/events/${encodeURIComponent(slug)}/drafts/${encodeURIComponent(token)}`
+        : `/api/events/${encodeURIComponent(slug)}/drafts`,
+      { method: token ? "PUT" : "POST", body: JSON.stringify(body) },
+    ),
+
+  cfpDraft: (slug: string, token: string) =>
+    request(
+      CfpDraftResponse,
+      `/api/events/${encodeURIComponent(slug)}/drafts/${encodeURIComponent(token)}`,
+    ),
 
   submissions: (slug: string) =>
     request(

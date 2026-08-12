@@ -9,6 +9,7 @@ import type {
   Form,
   FormField,
   OrganizerAgendaResponse,
+  OrganizerSpeakersResponse,
   OrganizerSession,
   PublicScheduleResponse,
   PublicSession,
@@ -31,7 +32,9 @@ import type {
   SubmissionStatus,
   TaskDefinition,
   Track,
+  CfpDraftRequest as CfpDraftRequestType,
 } from "../../../shared/contracts";
+import { CfpDraftRequest } from "../../../shared/contracts";
 import type {
   CreateDirectSessionInput,
   CreateCfpSubmissionInput,
@@ -56,6 +59,10 @@ import type {
   CreateTrackInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  SaveCfpDraftInput,
+  CreateOrganizerSpeakerInput,
+  UpdateOrganizerSpeakerInput,
+  ImportOrganizerSpeakersInput,
 } from "../types";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
@@ -147,6 +154,8 @@ interface SpeakerRow {
   bio: string | null;
   location: string | null;
   socials_json: string | null;
+  workflow_status: string;
+  logistics_notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -408,6 +417,8 @@ function mapSpeaker(r: SpeakerRow): Speaker {
     title: r.title,
     bio: r.bio,
     location: r.location,
+    workflowStatus: r.workflow_status as Speaker["workflowStatus"],
+    logisticsNotes: r.logistics_notes,
     socials: parseJson<Speaker["socials"]>(r.socials_json, null),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -701,7 +712,7 @@ export class D1Repo implements SpeakerOpsRepo {
         `INSERT INTO forms
          (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
           opens_at, closes_at, max_speakers_per_submission, allow_drafts, created_at, updated_at)
-         VALUES (?, ?, 'cfp', 'Call for Speakers', NULL, NULL, 1, NULL, NULL, 3, 0, ?, ?)`,
+         VALUES (?, ?, 'cfp', 'Call for Speakers', NULL, NULL, 1, NULL, NULL, 3, 1, ?, ?)`,
       ).bind(input.formId, input.eventId, input.now, input.now),
       this.db.prepare(
         "INSERT INTO evaluation_plans (id, event_id, name, description, created_at) VALUES (?, ?, 'Program Committee Review', NULL, ?)",
@@ -886,6 +897,83 @@ export class D1Repo implements SpeakerOpsRepo {
     };
   }
 
+  async getOrganizerSpeakers(eventId: string): Promise<OrganizerSpeakersResponse["speakers"]> {
+    const [speakersRes, assetsRes] = await this.db.batch([
+      this.db.prepare(
+        `SELECT sp.*,
+          (SELECT sa.id FROM speaker_assets sa WHERE sa.speaker_id = sp.id AND sa.kind = 'headshot' ORDER BY sa.uploaded_at DESC LIMIT 1) AS headshot_asset_id,
+          (SELECT COUNT(*) FROM speaker_tasks st WHERE st.speaker_id = sp.id) AS total_tasks,
+          (SELECT COUNT(*) FROM speaker_tasks st WHERE st.speaker_id = sp.id AND st.status = 'complete') AS completed_tasks
+         FROM speakers sp WHERE sp.event_id = ? ORDER BY sp.name`,
+      ).bind(eventId),
+      this.db.prepare(
+        `SELECT sa.* FROM speaker_assets sa JOIN speakers sp ON sp.id = sa.speaker_id
+         WHERE sp.event_id = ? ORDER BY sa.uploaded_at DESC`,
+      ).bind(eventId),
+    ]);
+    const assets = ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset);
+    return ((speakersRes?.results ?? []) as unknown as Array<SpeakerRow & {
+      headshot_asset_id: string | null; total_tasks: number; completed_tasks: number;
+    }>).map((row) => ({
+      ...mapPublicSpeaker(row),
+      email: row.email,
+      workflowStatus: row.workflow_status as OrganizerSpeakersResponse["speakers"][number]["workflowStatus"],
+      logisticsNotes: row.logistics_notes,
+      totalTasks: Number(row.total_tasks),
+      completedTasks: Number(row.completed_tasks),
+      assets: assets.filter((asset) => asset.speakerId === row.id),
+    }));
+  }
+
+  async createOrganizerSpeaker(input: CreateOrganizerSpeakerInput): Promise<Speaker> {
+    await this.db.prepare(
+      `INSERT INTO speakers
+       (id, event_id, email, name, company, title, bio, location, socials_json,
+        workflow_status, logistics_notes, created_at, updated_at)
+       VALUES (?1, ?2, lower(?3), ?4, ?5, ?6, ?7, NULL, NULL, ?8, ?9, ?10, ?10)`,
+    ).bind(input.id, input.eventId, input.email, input.name, input.company, input.title,
+      input.bio, input.workflowStatus, input.logisticsNotes, input.now).run();
+    const speaker = await this.getSpeakerById(input.id);
+    if (!speaker) throw new Error("speaker_not_found");
+    return speaker;
+  }
+
+  async updateOrganizerSpeaker(input: UpdateOrganizerSpeakerInput): Promise<Speaker> {
+    const result = await this.db.prepare(
+      `UPDATE speakers SET name = ?1, company = ?2, title = ?3, bio = ?4,
+        workflow_status = ?5, logistics_notes = ?6, updated_at = ?7
+       WHERE id = ?8 AND event_id = ?9`,
+    ).bind(input.name, input.company, input.title, input.bio, input.workflowStatus,
+      input.logisticsNotes, input.now, input.id, input.eventId).run();
+    if (!result.meta.changes) throw new Error("speaker_not_found");
+    const speaker = await this.getSpeakerById(input.id);
+    if (!speaker) throw new Error("speaker_not_found");
+    return speaker;
+  }
+
+  async importOrganizerSpeakers(input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }> {
+    if (input.rows.length === 0) return { imported: 0, updated: 0, total: 0 };
+    const placeholders = input.rows.map(() => "?").join(",");
+    const existing = await this.db.prepare(
+      `SELECT lower(email) AS email FROM speakers WHERE event_id = ? AND lower(email) IN (${placeholders})`,
+    ).bind(input.eventId, ...input.rows.map((row) => row.email.toLowerCase())).all<{ email: string }>();
+    const existingEmails = new Set(existing.results.map((row) => row.email));
+    await this.db.batch(input.rows.map((row) => this.db.prepare(
+      `INSERT INTO speakers
+       (id, event_id, email, name, company, title, bio, location, socials_json,
+        workflow_status, logistics_notes, created_at, updated_at)
+       VALUES (?1, ?2, lower(?3), ?4, ?5, ?6, ?7, NULL, NULL, 'invited', NULL, ?8, ?8)
+       ON CONFLICT(event_id, email) DO UPDATE SET
+        name = excluded.name,
+        company = COALESCE(excluded.company, speakers.company),
+        title = COALESCE(excluded.title, speakers.title),
+        bio = COALESCE(excluded.bio, speakers.bio),
+        updated_at = excluded.updated_at`,
+    ).bind(row.id, input.eventId, row.email, row.name, row.company, row.title, row.bio, input.now)));
+    const updated = input.rows.filter((row) => existingEmails.has(row.email.toLowerCase())).length;
+    return { imported: input.rows.length - updated, updated, total: input.rows.length };
+  }
+
   async createCfpSubmission(input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     const upsertSpeaker = async (speaker: CreateCfpSubmissionInput["speaker"], id: string) => {
       const row = await this.db.prepare(
@@ -947,6 +1035,28 @@ export class D1Repo implements SpeakerOpsRepo {
     const created = await this.getSubmissionById(input.submissionId);
     if (!created) throw new Error("Submission not found after insert.");
     return created;
+  }
+
+  async saveCfpDraft(input: SaveCfpDraftInput): Promise<{ token: string; savedAt: string; draft: CfpDraftRequestType }> {
+    await this.db.prepare(
+      `INSERT INTO cfp_drafts (token, event_id, form_id, payload_json, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+       ON CONFLICT(token) DO UPDATE SET
+         payload_json = excluded.payload_json,
+         updated_at = excluded.updated_at
+       WHERE cfp_drafts.event_id = excluded.event_id AND cfp_drafts.form_id = excluded.form_id`,
+    ).bind(input.token, input.eventId, input.formId, JSON.stringify(input.draft), input.now).run();
+    return { token: input.token, savedAt: input.now, draft: input.draft };
+  }
+
+  async getCfpDraft(eventId: string, token: string): Promise<{ token: string; savedAt: string; draft: CfpDraftRequestType } | null> {
+    const row = await this.db.prepare(
+      "SELECT token, payload_json, updated_at FROM cfp_drafts WHERE event_id = ? AND token = ?",
+    ).bind(eventId, token).first<{ token: string; payload_json: string; updated_at: string }>();
+    if (!row) return null;
+    const parsed = CfpDraftRequest.safeParse(parseJson<unknown>(row.payload_json, null));
+    if (!parsed.success) return null;
+    return { token: row.token, savedAt: row.updated_at, draft: parsed.data };
   }
 
   async listSubmissions(eventId: string): Promise<SubmissionListItem[]> {

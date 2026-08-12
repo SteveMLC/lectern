@@ -12,6 +12,7 @@ import {
   Speaker,
   SpeakerAsset,
   SpeakerRole,
+  SpeakerWorkflowStatus,
   SpeakerTask,
   Submission,
   SubmissionStatus,
@@ -210,6 +211,8 @@ export type PublicSpeakersResponse = z.infer<typeof PublicSpeakersResponse>;
 
 export const OrganizerSpeaker = PublicSpeaker.extend({
   email: z.email(),
+  workflowStatus: SpeakerWorkflowStatus,
+  logisticsNotes: z.string().nullable(),
   completedTasks: z.number().int().nonnegative(),
   totalTasks: z.number().int().nonnegative(),
   assets: z.array(SpeakerAsset),
@@ -221,6 +224,32 @@ export const OrganizerSpeakersResponse = z.object({
   speakers: z.array(OrganizerSpeaker),
 });
 export type OrganizerSpeakersResponse = z.infer<typeof OrganizerSpeakersResponse>;
+
+export const CreateOrganizerSpeakerRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.email().max(254),
+  company: z.string().trim().max(120).nullable().default(null),
+  title: z.string().trim().max(120).nullable().default(null),
+  bio: z.string().trim().max(2000).nullable().default(null),
+  workflowStatus: SpeakerWorkflowStatus.default("invited"),
+  logisticsNotes: z.string().trim().max(2000).nullable().default(null),
+});
+export type CreateOrganizerSpeakerRequest = z.infer<typeof CreateOrganizerSpeakerRequest>;
+
+export const UpdateOrganizerSpeakerRequest = CreateOrganizerSpeakerRequest.omit({ email: true });
+export type UpdateOrganizerSpeakerRequest = z.infer<typeof UpdateOrganizerSpeakerRequest>;
+
+export const OrganizerSpeakerMutationResponse = z.object({ speaker: Speaker });
+export type OrganizerSpeakerMutationResponse = z.infer<typeof OrganizerSpeakerMutationResponse>;
+
+export const ImportOrganizerSpeakersRequest = z.object({ csv: z.string().min(1).max(500_000) });
+export type ImportOrganizerSpeakersRequest = z.infer<typeof ImportOrganizerSpeakersRequest>;
+export const ImportOrganizerSpeakersResponse = z.object({
+  imported: z.number().int().nonnegative(),
+  updated: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type ImportOrganizerSpeakersResponse = z.infer<typeof ImportOrganizerSpeakersResponse>;
 
 // ---------------------------------------------------------------------------
 // CFP submission (public)
@@ -249,6 +278,35 @@ export const CfpSubmissionRequest = z.object({
   answers: z.record(z.string(), z.unknown()).optional(),
 });
 export type CfpSubmissionRequest = z.infer<typeof CfpSubmissionRequest>;
+
+const CfpDraftSpeaker = z.object({
+  name: z.string().max(120).optional(),
+  email: z.string().max(254).optional(),
+  company: z.string().max(120).optional(),
+  title: z.string().max(120).optional(),
+  bio: z.string().max(2000).optional(),
+});
+
+/** A deliberately permissive partial form. Only the title is required so the
+ * evaluator's title-only save/resume path is a first-class workflow. */
+export const CfpDraftRequest = z.object({
+  speaker: CfpDraftSpeaker.optional(),
+  coSpeakers: z.array(CfpDraftSpeaker).max(2).optional(),
+  title: z.string().trim().min(1).max(200),
+  abstract: z.string().max(5000).optional(),
+  trackId: z.string().max(120).optional(),
+  format: SessionFormat.optional(),
+  answers: z.record(z.string(), z.unknown()).optional(),
+});
+export type CfpDraftRequest = z.infer<typeof CfpDraftRequest>;
+
+export const CfpDraftResponse = z.object({
+  token: z.string(),
+  savedAt: z.iso.datetime({ offset: true }),
+  resumeUrl: z.string(),
+  draft: CfpDraftRequest,
+});
+export type CfpDraftResponse = z.infer<typeof CfpDraftResponse>;
 
 // ---------------------------------------------------------------------------
 // Submissions (organizer)

@@ -8,11 +8,13 @@ import type {
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
+  OrganizerSpeakersResponse,
   Speaker,
   SpeakerAsset,
   ReviewerQueueResponse,
   OutboxMessage,
   SubmissionListItem,
+  CfpDraftRequest,
 } from "../../../shared/contracts";
 import type {
   CreateCfpSubmissionInput,
@@ -37,6 +39,10 @@ import type {
   CreateTrackInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  SaveCfpDraftInput,
+  CreateOrganizerSpeakerInput,
+  UpdateOrganizerSpeakerInput,
+  ImportOrganizerSpeakersInput,
 } from "../types";
 
 /**
@@ -244,6 +250,22 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("getPublicSpeakers");
   }
 
+  async getOrganizerSpeakers(_eventId: string): Promise<OrganizerSpeakersResponse["speakers"]> {
+    throw new AirtableNotWiredError("getOrganizerSpeakers");
+  }
+
+  async createOrganizerSpeaker(_input: CreateOrganizerSpeakerInput): Promise<Speaker> {
+    throw new AirtableNotWiredError("createOrganizerSpeaker");
+  }
+
+  async updateOrganizerSpeaker(_input: UpdateOrganizerSpeakerInput): Promise<Speaker> {
+    throw new AirtableNotWiredError("updateOrganizerSpeaker");
+  }
+
+  async importOrganizerSpeakers(_input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }> {
+    throw new AirtableNotWiredError("importOrganizerSpeakers");
+  }
+
   async createEvent(_input: CreateEventInput): Promise<EventBundle> { throw new AirtableNotWiredError("createEvent"); }
   async updateEventSettings(_input: UpdateEventSettingsInput): Promise<EventBundle> { throw new AirtableNotWiredError("updateEventSettings"); }
   async createTrack(_input: CreateTrackInput): Promise<EventBundle> { throw new AirtableNotWiredError("createTrack"); }
@@ -252,6 +274,14 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async createCfpSubmission(_input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     throw new AirtableNotWiredError("createCfpSubmission");
+  }
+
+  async saveCfpDraft(_input: SaveCfpDraftInput): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest }> {
+    throw new AirtableNotWiredError("saveCfpDraft");
+  }
+
+  async getCfpDraft(_eventId: string, _token: string): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest } | null> {
+    throw new AirtableNotWiredError("getCfpDraft");
   }
 
   async listSubmissions(_eventId: string): Promise<SubmissionListItem[]> {
@@ -305,6 +335,8 @@ export class AirtableRepo implements SpeakerOpsRepo {
       title: nullableString(fields, "Title"),
       bio: nullableString(fields, "Bio"),
       location: nullableString(fields, "Location"),
+      workflowStatus: "invited",
+      logisticsNotes: null,
       socials:
         typeof socials === "string" && socials.trim()
           ? (JSON.parse(socials) as Speaker["socials"])

@@ -5,6 +5,8 @@ import {
   AgendaSlotRequest,
   UpdateSessionRequest,
   CfpSubmissionRequest,
+  CfpDraftRequest,
+  type CfpDraftResponse,
   CommunicationKind,
   type CommunicationPreviewResponse,
   CreateDirectSessionRequest,
@@ -22,6 +24,11 @@ import {
   type OrganizerAgendaResponse,
   type PublishAgendaResponse,
   type OrganizerSpeakersResponse,
+  CreateOrganizerSpeakerRequest,
+  UpdateOrganizerSpeakerRequest,
+  type OrganizerSpeakerMutationResponse,
+  ImportOrganizerSpeakersRequest,
+  type ImportOrganizerSpeakersResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
@@ -50,6 +57,7 @@ import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "..
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
+import { parseSpeakerCsv } from "../../shared/domain/speakerCsv";
 import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
@@ -74,6 +82,38 @@ function walkthroughHeaders(object: R2Object): Headers {
 }
 
 export const api = new Hono<{ Bindings: Env }>();
+
+async function saveCfpDraft(c: Context<{ Bindings: Env }>, token: string) {
+  const slug = c.req.param("slug") ?? "";
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(slug);
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp || !bundle.cfp.form.allowDrafts) {
+    return errorResponse(409, "drafts_unavailable", "This call for speakers does not accept drafts.");
+  }
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = CfpDraftRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Draft is invalid.", parsed.error.issues);
+  }
+  const saved = await repo.saveCfpDraft({
+    token,
+    eventId: bundle.event.id,
+    formId: bundle.cfp.form.id,
+    draft: parsed.data,
+    now: new Date().toISOString(),
+  });
+  const body: CfpDraftResponse = {
+    ...saved,
+    resumeUrl: `/e/${encodeURIComponent(slug)}/cfp?draft=${encodeURIComponent(token)}`,
+  };
+  return c.json(body);
+}
 
 function runtimeAiConfig(env: Env): { apiKey?: string; model?: string } {
   if (env.AI_RUNTIME_MODE !== "enabled") return {};
@@ -462,23 +502,80 @@ api.get("/public/events/:slug/speakers", async (c) => {
 
 api.get("/events/:slug/speakers", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
-  const roster = await repo.getPublicSpeakers(c.req.param("slug"));
-  if (!roster) return errorResponse(404, "event_not_found", "No event with that slug.");
-  const portals = await Promise.all(roster.speakers.map((speaker) => repo.getSpeakerPortalByToken(speaker.id)));
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   const body: OrganizerSpeakersResponse = {
-    event: roster.event,
-    speakers: roster.speakers.map((speaker, index) => {
-      const tasks = portals[index]?.tasks ?? [];
-      return {
-        ...speaker,
-        email: portals[index]?.speaker.email ?? "unknown@example.invalid",
-        totalTasks: tasks.length,
-        completedTasks: tasks.filter(({ task }) => task.status === "complete").length,
-        assets: portals[index]?.assets ?? [],
-      };
-    }),
+    event: {
+      id: bundle.event.id, slug: bundle.event.slug, name: bundle.event.name,
+      tagline: bundle.event.tagline, startsOn: bundle.event.startsOn,
+      endsOn: bundle.event.endsOn, timezone: bundle.event.timezone,
+    },
+    speakers: await repo.getOrganizerSpeakers(bundle.event.id),
   };
   return c.json(body);
+});
+
+api.post("/events/:slug/speakers", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateOrganizerSpeakerRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Speaker is invalid.", parsed.error.issues);
+  try {
+    const speaker = await repo.createOrganizerSpeaker({
+      ...parsed.data, id: randomId("spk"), eventId: bundle.event.id, now: new Date().toISOString(),
+    });
+    const body: OrganizerSpeakerMutationResponse = { speaker };
+    return c.json(body, 201);
+  } catch (caught) {
+    if (caught instanceof Error && /UNIQUE constraint failed/.test(caught.message)) {
+      return errorResponse(409, "speaker_exists", "A speaker with that email already exists for this event.");
+    }
+    throw caught;
+  }
+});
+
+api.post("/events/:slug/speakers/import", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = ImportOrganizerSpeakersRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "CSV import is invalid.", parsed.error.issues);
+  let rows;
+  try { rows = parseSpeakerCsv(parsed.data.csv); }
+  catch (caught) { return errorResponse(422, "csv_invalid", caught instanceof Error ? caught.message : "CSV is invalid."); }
+  const body: ImportOrganizerSpeakersResponse = await repo.importOrganizerSpeakers({
+    eventId: bundle.event.id,
+    rows: rows.map((row) => ({ ...row, id: randomId("spk") })),
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
+api.patch("/events/:slug/speakers/:speakerId", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = UpdateOrganizerSpeakerRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Speaker is invalid.", parsed.error.issues);
+  try {
+    const speaker = await repo.updateOrganizerSpeaker({
+      ...parsed.data, id: c.req.param("speakerId"), eventId: bundle.event.id, now: new Date().toISOString(),
+    });
+    const body: OrganizerSpeakerMutationResponse = { speaker };
+    return c.json(body);
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "speaker_not_found") {
+      return errorResponse(404, "speaker_not_found", "No speaker with that id for this event.");
+    }
+    throw caught;
+  }
 });
 
 api.get("/embeds/events/:slug/schedule", async (c) => {
@@ -599,6 +696,29 @@ api.get("/docs", (c) =>
 // ---------------------------------------------------------------------------
 // Public: CFP submission (the write half of the golden path)
 // ---------------------------------------------------------------------------
+
+api.post("/events/:slug/drafts", async (c) => saveCfpDraft(c, randomId("draft")));
+
+api.put("/events/:slug/drafts/:token", async (c) => {
+  const token = c.req.param("token").trim();
+  if (!token) return errorResponse(404, "draft_not_found", "No proposal draft with that link.");
+  return saveCfpDraft(c, token);
+});
+
+api.get("/events/:slug/drafts/:token", async (c) => {
+  const slug = c.req.param("slug");
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(slug);
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const draft = await repo.getCfpDraft(bundle.event.id, token);
+  if (!draft) return errorResponse(404, "draft_not_found", "No proposal draft with that link.");
+  const body: CfpDraftResponse = {
+    ...draft,
+    resumeUrl: `/e/${encodeURIComponent(slug)}/cfp?draft=${encodeURIComponent(token)}`,
+  };
+  return c.json(body);
+});
 
 api.post("/events/:slug/submissions", async (c) => {
   const repo = createRepo(c.env);

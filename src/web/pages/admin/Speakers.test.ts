@@ -12,6 +12,8 @@ const speakers: SpeakerWithTaskProgress[] = [
     socials: null,
     headshotUrl: null,
     email: "ada@nimbus.test",
+    workflowStatus: "confirmed",
+    logisticsNotes: null,
     assets: [],
     completedTasks: 1,
     totalTasks: 3,
@@ -26,6 +28,8 @@ const speakers: SpeakerWithTaskProgress[] = [
     socials: null,
     headshotUrl: null,
     email: "priya@eval.test",
+    workflowStatus: "confirmed",
+    logisticsNotes: "Vegetarian",
     assets: [],
     completedTasks: 2,
     totalTasks: 2,
@@ -40,6 +44,8 @@ const speakers: SpeakerWithTaskProgress[] = [
     socials: null,
     headshotUrl: null,
     email: "omar@stack.test",
+    workflowStatus: "invited",
+    logisticsNotes: null,
     assets: [],
     completedTasks: 0,
     totalTasks: 0,
@@ -56,5 +62,10 @@ describe("speaker roster filters", () => {
     expect(filterSpeakerRoster(speakers, "", "needs_work").map(({ id }) => id)).toEqual(["ada"]);
     expect(filterSpeakerRoster(speakers, "", "complete").map(({ id }) => id)).toEqual(["priya"]);
     expect(filterSpeakerRoster(speakers, "", "no_tasks").map(({ id }) => id)).toEqual(["omar"]);
+  });
+
+  it("filters the persistent workflow status", () => {
+    expect(filterSpeakerRoster(speakers, "", "all", "confirmed").map(({ id }) => id)).toEqual(["ada", "priya"]);
+    expect(filterSpeakerRoster(speakers, "", "all", "invited").map(({ id }) => id)).toEqual(["omar"]);
   });
 });

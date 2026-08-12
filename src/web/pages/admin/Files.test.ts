@@ -10,6 +10,8 @@ const base = {
   location: null,
   socials: null,
   headshotUrl: null,
+  workflowStatus: "confirmed" as const,
+  logisticsNotes: null,
 };
 const speakers: OrganizerSpeaker[] = [
   { ...base, id: "ada", name: "Ada Okafor", email: "ada@nimbus.test", company: "Nimbus Labs", completedTasks: 1, totalTasks: 3, assets: [{ id: "asset_1", speakerId: "ada", kind: "slides", filename: "slides.pdf", contentType: "application/pdf", sizeBytes: 42, r2Key: "x", uploadedAt: "2026-08-11T00:00:00Z" }] },
