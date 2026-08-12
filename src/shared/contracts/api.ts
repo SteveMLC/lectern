@@ -209,8 +209,10 @@ export const PublicSpeakersResponse = z.object({
 export type PublicSpeakersResponse = z.infer<typeof PublicSpeakersResponse>;
 
 export const OrganizerSpeaker = PublicSpeaker.extend({
+  email: z.email(),
   completedTasks: z.number().int().nonnegative(),
   totalTasks: z.number().int().nonnegative(),
+  assets: z.array(SpeakerAsset),
 });
 export type OrganizerSpeaker = z.infer<typeof OrganizerSpeaker>;
 

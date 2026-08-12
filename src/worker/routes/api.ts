@@ -470,8 +470,10 @@ api.get("/events/:slug/speakers", organizerAuth, async (c) => {
       const tasks = portals[index]?.tasks ?? [];
       return {
         ...speaker,
+        email: portals[index]?.speaker.email ?? "unknown@example.invalid",
         totalTasks: tasks.length,
         completedTasks: tasks.filter(({ task }) => task.status === "complete").length,
+        assets: portals[index]?.assets ?? [],
       };
     }),
   };

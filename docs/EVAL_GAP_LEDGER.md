@@ -85,7 +85,7 @@ The baseline reason for every CNT item was “judge call failed because the eval
 | CNT-04 | CANNOT JUDGE | Evaluator credit exhausted before version judging. | **FIXED** — all versions remain downloadable with timestamp and per-kind Latest marker; V8. |
 | CNT-05 | CANNOT JUDGE | Evaluator credit exhausted before file-comment judging. | **PARKED** — no file-comment schema/thread was added; versioning carried higher value and lower risk. |
 | CNT-06 | CANNOT JUDGE | Evaluator credit exhausted before upload-constraint judging. | **FIXED (preserved)** — uploader states headshot/slides/document and 10 MB limit; server enforces it. |
-| CNT-07 | CANNOT JUDGE | Evaluator credit exhausted before deliverables-dashboard judging. | **PARTIAL** — central files view exists, but no task-status filter/dashboard; V8. |
+| CNT-07 | CANNOT JUDGE | Evaluator credit exhausted before deliverables-dashboard judging. | **FIXED** — central deliverables dashboard summarizes uploads/missing files/open tasks and filters by speaker identity, upload state, or incomplete tasks. |
 | CNT-08 | CANNOT JUDGE | Evaluator credit exhausted before bulk-reminder judging. | **PARTIAL** — single-speaker reminders and receipts exist; speaker bulk selection remains absent. |
 | CNT-09 | CANNOT JUDGE | Evaluator credit exhausted before session-edit judging. | **FIXED (preserved)** — Agenda “Edit details” persists title/abstract. |
 | CNT-10 | CANNOT JUDGE | Evaluator credit exhausted before organizer speaker-edit judging. | **FIXED (preserved)** — roster opens the profile/files surface and changes persist. |
