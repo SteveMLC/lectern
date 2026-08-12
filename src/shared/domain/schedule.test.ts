@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AgendaSlot, SessionSpeaker } from "../contracts";
-import { findScheduleConflicts, rangesOverlap } from "./schedule";
+import type { AgendaSlot, OrganizerSession, SessionSpeaker } from "../contracts";
+import { findScheduleConflicts, planAutoPlacements, rangesOverlap } from "./schedule";
 
 const T = (hhmm: string) => `2026-10-14T${hhmm}:00Z`;
 
@@ -61,6 +61,38 @@ describe("rangesOverlap", () => {
     expect(() => rangesOverlap(T("10:00"), T("09:00"), T("11:00"), T("12:00"))).toThrow(
       RangeError,
     );
+  });
+});
+
+describe("planAutoPlacements", () => {
+  function session(id: string, title: string, speakerId: string): OrganizerSession {
+    return {
+      id, eventId: "evt", sourceSubmissionId: null, trackId: null, title,
+      abstract: "A sufficiently long abstract for testing.", format: "talk",
+      status: "confirmed", origin: "direct", createdAt: T("00:00"), updatedAt: T("00:00"),
+      trackName: null,
+      speakers: [{ id: speakerId, name: speakerId, company: null, title: null, role: "primary", sortOrder: 0 }],
+      slot: null,
+    };
+  }
+
+  it("packs different speakers in parallel rooms", () => {
+    const plan = planAutoPlacements(
+      [session("a", "A", "speaker-a"), session("b", "B", "speaker-b")],
+      ["room-1", "room-2"], ["2026-10-14"], "UTC",
+    );
+    expect(plan).toHaveLength(2);
+    expect(plan[0]!.startsAt).toBe(plan[1]!.startsAt);
+    expect(plan[0]!.roomId).not.toBe(plan[1]!.roomId);
+  });
+
+  it("never overlaps two sessions sharing a speaker", () => {
+    const plan = planAutoPlacements(
+      [session("a", "A", "shared"), session("b", "B", "shared")],
+      ["room-1", "room-2"], ["2026-10-14"], "UTC",
+    );
+    expect(plan).toHaveLength(2);
+    expect(rangesOverlap(plan[0]!.startsAt, plan[0]!.endsAt, plan[1]!.startsAt, plan[1]!.endsAt)).toBe(false);
   });
 });
 

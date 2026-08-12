@@ -42,6 +42,7 @@ interface FormState {
   trackId: string;
   format: SessionFormat;
   answers: Record<string, unknown>;
+  coSpeakers: Array<{ name: string; email: string; company: string; role: string; bio: string }>;
 }
 
 const INITIAL: FormState = {
@@ -55,6 +56,7 @@ const INITIAL: FormState = {
   trackId: "",
   format: "talk",
   answers: {},
+  coSpeakers: [],
 };
 
 export function CfpPage() {
@@ -151,6 +153,12 @@ export function CfpPage() {
         title: form.role.trim() || undefined,
         bio: form.bio.trim() || undefined,
       },
+      coSpeakers: form.coSpeakers.map((speaker) => ({
+        name: speaker.name.trim(), email: speaker.email.trim(),
+        company: speaker.company.trim() || undefined,
+        title: speaker.role.trim() || undefined,
+        bio: speaker.bio.trim() || undefined,
+      })),
       title: form.title.trim(),
       abstract: form.abstract.trim(),
       trackId: form.trackId,
@@ -259,6 +267,14 @@ export function CfpPage() {
           </Card>
 
           <Card className="space-y-4 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div><h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Co-presenters</h2><p className="mt-1 text-xs text-zinc-500">Names and role labels stay attached to this proposal and its accepted session.</p></div>
+              {form.coSpeakers.length < Math.max(0, cfp.form.maxSpeakersPerSubmission - 1) ? <Button type="button" variant="secondary" onClick={() => setForm((current) => ({ ...current, coSpeakers: [...current.coSpeakers, { name: "", email: "", company: "", role: "Co-presenter", bio: "" }] }))}>Add co-presenter</Button> : null}
+            </div>
+            {form.coSpeakers.map((speaker, index) => <div key={index} className="grid gap-4 rounded-lg border border-zinc-200 p-4 sm:grid-cols-2"><Field label="Full name" required error={fieldErrors[`coSpeakers.${index}.name`]}><Input value={speaker.name} onChange={(event) => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} /></Field><Field label="Email" required error={fieldErrors[`coSpeakers.${index}.email`]}><Input type="email" value={speaker.email} onChange={(event) => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.map((item, itemIndex) => itemIndex === index ? { ...item, email: event.target.value } : item) }))} /></Field><Field label="Company"><Input value={speaker.company} onChange={(event) => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.map((item, itemIndex) => itemIndex === index ? { ...item, company: event.target.value } : item) }))} /></Field><Field label="Role label"><Input value={speaker.role} onChange={(event) => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.map((item, itemIndex) => itemIndex === index ? { ...item, role: event.target.value } : item) }))} /></Field><div className="sm:col-span-2"><Field label="Short bio"><Textarea value={speaker.bio} onChange={(event) => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.map((item, itemIndex) => itemIndex === index ? { ...item, bio: event.target.value } : item) }))} /></Field></div><div className="sm:col-span-2"><Button type="button" variant="ghost" onClick={() => setForm((current) => ({ ...current, coSpeakers: current.coSpeakers.filter((_, itemIndex) => itemIndex !== index) }))}>Remove co-presenter</Button></div></div>)}
+          </Card>
+
+          <Card className="space-y-4 p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               Your proposal
             </h2>
@@ -331,8 +347,7 @@ export function CfpPage() {
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-zinc-400">
-              Up to {cfp.form.maxSpeakersPerSubmission} speakers per session. Co-speakers can be
-              added after acceptance.
+              Up to {cfp.form.maxSpeakersPerSubmission} speakers per session.
             </p>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Submitting…" : "Submit proposal"}

@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Card, ErrorBanner, Spinner } from "../components/ui";
 import { apiClient } from "../lib/api";
 import { useAsync } from "../lib/useAsync";
+import { Itinerary } from "../components/Itinerary";
 
 const PREVIEWS = [
   { key: "schedule", title: "Schedule", height: 560 },
@@ -52,6 +53,8 @@ export function EmbedPreview() {
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
         {loading ? <Spinner label="Loading public data" /> : null}
         {firstError ? <ErrorBanner message={firstError.message} /> : null}
+
+        {schedule.data ? <Itinerary schedule={schedule.data} /> : null}
 
         {PREVIEWS.map((preview) => (
           <Card key={preview.key} className="overflow-hidden">

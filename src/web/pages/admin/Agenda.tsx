@@ -25,6 +25,7 @@ import {
 } from "../../components/ui";
 import { ApiRequestError, apiClient } from "../../lib/api";
 import { formatZonedLocalInput, zonedLocalInputToIso } from "../../../shared/domain/timezone";
+import { planAutoPlacements } from "../../../shared/domain/schedule";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 
@@ -38,7 +39,7 @@ interface AgendaData {
 
 export function Agenda() {
   const { eventSlug } = useAdminContext();
-  const { data, error, loading } = useAsync(async (): Promise<AgendaData> => {
+  const { data, error, loading, reload } = useAsync(async (): Promise<AgendaData> => {
     const [bundle, agenda, speakerResponse] = await Promise.all([
       apiClient.eventBundle(eventSlug),
       apiClient.agenda(eventSlug),
@@ -57,6 +58,10 @@ export function Agenda() {
   const [trackFilter, setTrackFilter] = useState("all");
   const [roomFilter, setRoomFilter] = useState("all");
   const [directOpen, setDirectOpen] = useState(false);
+  const [roomOpen, setRoomOpen] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [roomCapacity, setRoomCapacity] = useState("");
+  const [autoPlacing, setAutoPlacing] = useState(false);
 
   const agenda = agendaOverride ?? data?.agenda;
   const conflictedSessions = useMemo(
@@ -93,6 +98,32 @@ export function Agenda() {
       draggedSessionIdRef.current = null;
       setDragOverRoomId(null);
     }
+  }
+
+  async function autoPlace() {
+    if (!agenda || !data || autoPlacing) return;
+    const plan = planAutoPlacements(
+      agenda.sessions,
+      data.bundle.rooms.map((room) => room.id),
+      eventDateRange(data.bundle.event.startsOn, data.bundle.event.endsOn),
+      data.bundle.event.timezone,
+    );
+    if (plan.length === 0) {
+      setNotice("No conflict-free open slots were available for unscheduled sessions.");
+      return;
+    }
+    setAutoPlacing(true); setActionError(null);
+    try {
+      let next = agenda;
+      for (const placement of plan) {
+        next = await apiClient.placeSession(eventSlug, placement.sessionId, placement);
+      }
+      setAgendaOverride(next);
+      setNotice(`${plan.length} unscheduled session${plan.length === 1 ? "" : "s"} auto-placed without adding room or speaker conflicts.`);
+    } catch (caught) {
+      setActionError(caught instanceof ApiRequestError ? caught.message : "Auto-placement stopped before completion.");
+      await refreshAgenda();
+    } finally { setAutoPlacing(false); }
   }
 
   if (loading && !data) return <Spinner label="Loading program" />;
@@ -150,7 +181,13 @@ export function Agenda() {
             <option value="all">All rooms</option>
             {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
           </Select>
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
+            <Button type="button" className="px-3 py-1.5 text-xs" variant="secondary" disabled={autoPlacing || unscheduled.length === 0 || data.bundle.rooms.length === 0} onClick={() => void autoPlace()}>
+              {autoPlacing ? "Auto-placing…" : "Auto-place unscheduled"}
+            </Button>
+            <Button type="button" className="px-3 py-1.5 text-xs" variant="secondary" onClick={() => setRoomOpen((value) => !value)}>
+              {roomOpen ? "Cancel room" : "+ Add room"}
+            </Button>
             <Button
               type="button"
               className="px-3 py-1.5 text-xs"
@@ -163,6 +200,30 @@ export function Agenda() {
           </div>
         </div>
       </Card>
+
+      {roomOpen ? (
+        <Card className="mb-4 p-4">
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setActionError(null);
+              try {
+                await apiClient.createRoom(eventSlug, { name: roomName, capacity: roomCapacity ? Number(roomCapacity) : null });
+                setRoomName(""); setRoomCapacity(""); setRoomOpen(false);
+                setNotice("Room added to the agenda board.");
+                reload();
+              } catch (caught) {
+                setActionError(caught instanceof ApiRequestError ? caught.message : "Room could not be added.");
+              }
+            }}
+          >
+            <Field label="Room name" required><Input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></Field>
+            <Field label="Capacity"><Input type="number" min={1} value={roomCapacity} onChange={(event) => setRoomCapacity(event.target.value)} /></Field>
+            <Button type="submit">Add room</Button>
+          </form>
+        </Card>
+      ) : null}
 
       {directOpen ? (
         <DirectSessionForm

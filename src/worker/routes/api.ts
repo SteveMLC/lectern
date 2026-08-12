@@ -11,7 +11,13 @@ import {
   type CreateDirectSessionResponse,
   type CreateSubmissionResponse,
   type EventCounts,
+  type EvaluationWorkspaceResponse,
   type EventsListResponse,
+  CreateEventRequest,
+  UpdateEventSettingsRequest,
+  CreateTrackRequest,
+  CreateRoomRequest,
+  CreateFormFieldRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
   type PublicScheduleResponse,
@@ -30,9 +36,16 @@ import {
   type UploadAssetResponse,
   UpdateSpeakerProfileRequest,
   UpdateSpeakerTaskRequest,
+  UpdateSpeakerProposalRequest,
+  SaveEvaluationRoundRequest,
+  SaveRoundReviewerRequest,
+  SaveAssignmentsRequest,
+  SubmitReviewRequest,
+  type ReviewerQueueResponse,
+  type OutboxResponse,
 } from "../../shared/contracts";
-import { isCfpOpen } from "../../shared/domain/cfp";
-import { submissionsToCsv } from "../../shared/domain/csv";
+import { canEditSpeakerProposal, isCfpOpen } from "../../shared/domain/cfp";
+import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { randomId } from "../../shared/ids";
@@ -406,6 +419,11 @@ api.get("/docs", (c) =>
     endpoints: [
       { method: "GET", path: "/health", auth: "public", purpose: "Worker, version, backend, D1/R2 checks." },
       { method: "GET", path: "/events", auth: "public", purpose: "List public events." },
+      { method: "POST", path: "/events", auth: "organizer", purpose: "Create an event with a CFP and evaluation plan." },
+      { method: "PATCH", path: "/events/:slug", auth: "organizer", purpose: "Update CFP open/close settings." },
+      { method: "POST", path: "/events/:slug/tracks", auth: "organizer", purpose: "Create an event-scoped track." },
+      { method: "POST", path: "/events/:slug/rooms", auth: "organizer", purpose: "Create an event-scoped agenda room." },
+      { method: "POST", path: "/events/:slug/cfp/fields", auth: "organizer", purpose: "Add a validated CFP field and optional conditional rule." },
       { method: "GET", path: "/events/:slug", auth: "public", purpose: "Event bundle for event and CFP pages." },
       { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
       { method: "GET", path: "/public/events/:slug/sessions", auth: "public", purpose: "Iframe-safe sessions JSON." },
@@ -416,9 +434,22 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
+      { method: "PATCH", path: "/speaker-portal/:token/proposals/:submissionId", auth: "speaker link", purpose: "Edit the linked speaker's undecided proposal while its CFP is open." },
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "GET", path: "/events/:slug/evaluations", auth: "organizer", purpose: "Round setup, reviewer progress, assignments, and weighted results." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds", auth: "organizer", purpose: "Create an evaluation round and its weighted scorecard." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId", auth: "organizer", purpose: "Update an evaluation round and its weighted scorecard." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/reviewers", auth: "organizer", purpose: "Add or update a round reviewer and assignment cap." },
+      { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/assignments", auth: "organizer", purpose: "Replace one reviewer's exact assignments for a round." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/auto-distribute", auth: "organizer", purpose: "Round-robin unassigned proposals without exceeding reviewer caps." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", auth: "organizer", purpose: "Record a simulated reviewer reminder receipt." },
+      { method: "GET", path: "/events/:slug/evaluations.csv", auth: "organizer", purpose: "Export weighted review results with spreadsheet formula guarding." },
+      { method: "GET", path: "/reviewer/:token", auth: "reviewer link", purpose: "Return only that reviewer's assigned proposals in open rounds; blind rounds omit speaker identity." },
+      { method: "PUT", path: "/reviewer/:token/rounds/:roundId/submissions/:submissionId", auth: "reviewer link", purpose: "Submit or update the assigned proposal's scorecard, recommendation, and comments." },
+      { method: "POST", path: "/reviewer/:token/rounds/:roundId/submissions/:submissionId/recuse", auth: "reviewer link", purpose: "Recuse from an assigned proposal and remove it from the actionable queue." },
+      { method: "GET", path: "/reviewer/:token", auth: "reviewer link", purpose: "Reviewer-scoped queue containing only assigned submissions in open rounds." },
       { method: "GET", path: "/events/:slug/submissions.csv", auth: "organizer", purpose: "Submissions export as CSV (Excel-friendly)." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/feedback-draft", auth: "organizer", purpose: "Draft the decision email (acceptance, waitlist, or rejection) from the organizer's own reasoning; AI-assisted when a key is configured, deterministic template otherwise. Acceptances carry the speaker's portal link and onboarding checklist. Never auto-sends." },
       { method: "POST", path: "/events/:slug/submissions/:submissionId/decision", auth: "organizer", purpose: "Approve, waitlist, or deny a proposal; approval creates one idempotent session. An optional reasoning note is persisted as a committee review, filed under an optional reviewerName — one decider by default, named voices stack when a team weighs in." },
@@ -433,6 +464,7 @@ api.get("/docs", (c) =>
       { method: "PATCH", path: "/events/:slug/sessions/:sessionId", auth: "organizer", purpose: "Retitle or reword a session in the published program; the source submission keeps what the speaker pitched." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
+      { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated-message delivery receipts for the event outbox." },
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
@@ -456,7 +488,7 @@ api.get("/docs", (c) =>
 
 api.post("/events/:slug/submissions", async (c) => {
   const repo = createRepo(c.env);
-  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "");
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp) {
     return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
@@ -504,6 +536,7 @@ api.post("/events/:slug/submissions", async (c) => {
     format: data.format,
     answers: pruneAnswers(bundle.cfp.fields, bundle.cfp.rules, ctx),
     speaker: data.speaker,
+    coSpeakers: data.coSpeakers.map((speaker) => ({ ...speaker, id: randomId("spk") })),
     speakerId: randomId("spk"),
     submissionId: randomId("sub"),
     now,
@@ -552,6 +585,55 @@ api.patch("/speaker-portal/:token/profile", async (c) => {
   return c.json(body);
 });
 
+api.patch("/speaker-portal/:token/proposals/:submissionId", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+
+  const proposal = portal.proposals.find((item) => item.id === c.req.param("submissionId"));
+  if (!proposal) {
+    return errorResponse(404, "submission_not_found", "No proposal with that id belongs to this speaker.");
+  }
+  if (!portal.cfp || !canEditSpeakerProposal(portal.cfp.form, proposal.status, new Date().toISOString())) {
+    const message = ["draft", "submitted", "under_review"].includes(proposal.status)
+      ? "Editing is locked because this call for speakers is closed."
+      : "Editing is locked because a decision has been made.";
+    return errorResponse(409, "submission_locked", message);
+  }
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = UpdateSpeakerProposalRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Proposal is invalid.", parsed.error.issues);
+  }
+  const ctx = { format: proposal.format, answers: parsed.data.answers };
+  const missing = missingRequiredFields(portal.cfp.fields, portal.cfp.rules, ctx);
+  if (missing.length > 0) {
+    return errorResponse(
+      422,
+      "validation_error",
+      `Missing required field(s): ${missing.map((field) => field.label).join(", ")}.`,
+      missing.map((field) => ({ path: ["answers", field.key], message: "Required" })),
+    );
+  }
+
+  const body: SpeakerPortalResponse = await repo.updateSpeakerProposal({
+    speakerId: portal.speaker.id,
+    submissionId: proposal.id,
+    title: parsed.data.title,
+    abstract: parsed.data.abstract,
+    answers: pruneAnswers(portal.cfp.fields, portal.cfp.rules, ctx),
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
 api.put("/speaker-portal/:token/tasks/:taskId", async (c) => {
   const token = c.req.param("token").trim();
   const repo = createRepo(c.env);
@@ -592,6 +674,58 @@ api.post("/speaker-portal/:token/assets", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Reviewer capability queue
+// ---------------------------------------------------------------------------
+
+api.get("/reviewer/:token", async (c) => {
+  const queue = await createRepo(c.env).getReviewerQueue(c.req.param("token").trim());
+  if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
+  return c.json(queue);
+});
+
+api.put("/reviewer/:token/rounds/:roundId/submissions/:submissionId", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const queue = await repo.getReviewerQueue(token);
+  if (!queue) return errorResponse(404, "reviewer_not_found", "No reviewer queue for that link.");
+  const assignment = queue.assignments.find((item) =>
+    item.roundId === c.req.param("roundId") && item.id === c.req.param("submissionId"));
+  if (!assignment) return errorResponse(404, "assignment_not_found", "That submission is not assigned to this reviewer.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SubmitReviewRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Scorecard is invalid.", parsed.error.issues);
+  const invalid = assignment.criteria.find((criterion) => {
+    const score = parsed.data.scores[criterion.key];
+    return typeof score !== "number" || score < 1 || score > criterion.maxScore;
+  });
+  if (invalid) {
+    return errorResponse(422, "validation_error", `${invalid.label} must be scored from 1 to ${invalid.maxScore}.`);
+  }
+  await repo.submitReviewerScorecard({
+    id: randomId("rev"), token, roundId: assignment.roundId, submissionId: assignment.id,
+    ...parsed.data, now: new Date().toISOString(),
+  });
+  const body: ReviewerQueueResponse | null = await repo.getReviewerQueue(token);
+  return c.json(body);
+});
+
+api.post("/reviewer/:token/rounds/:roundId/submissions/:submissionId/recuse", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  await repo.submitReviewerScorecard({
+    id: randomId("rev"), token, roundId: c.req.param("roundId"),
+    submissionId: c.req.param("submissionId"), scores: {}, recommendation: "accept",
+    comment: "Reviewer recused due to a conflict of interest.", recuse: true,
+    now: new Date().toISOString(),
+  });
+  const body = await repo.getReviewerQueue(token);
+  return c.json(body);
+});
+
+// ---------------------------------------------------------------------------
 // Organizer (passcode-gated)
 // ---------------------------------------------------------------------------
 
@@ -604,6 +738,174 @@ api.get("/events/:slug/submissions", organizerAuth, async (c) => {
   const submissions = await repo.listSubmissions(bundle.event.id);
   const body: SubmissionsListResponse = { submissions };
   return c.json(body);
+});
+
+api.get("/events/:slug/evaluations", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  try {
+    const body: EvaluationWorkspaceResponse = await repo.getEvaluationWorkspace(bundle.event.id);
+    return c.json(body);
+  } catch (error) {
+    if (error instanceof Error && error.message === "evaluation_plan_not_found") {
+      return errorResponse(409, "evaluation_plan_not_found", "This event has no evaluation plan yet.");
+    }
+    throw error;
+  }
+});
+
+api.post("/events", organizerAuth, async (c) => {
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateEventRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Event is invalid.", parsed.error.issues);
+  if (parsed.data.endsOn < parsed.data.startsOn) return errorResponse(422, "validation_error", "Event end date must not be before its start date.");
+  try {
+    const event = await createRepo(c.env).createEvent({ ...parsed.data, eventId: randomId("evt"), formId: randomId("form"), planId: randomId("plan"), now: new Date().toISOString() });
+    return c.json(event, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) return errorResponse(409, "slug_taken", "That event slug is already in use.");
+    throw error;
+  }
+});
+
+api.patch("/events/:slug", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = UpdateEventSettingsRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Event settings are invalid.", parsed.error.issues);
+  return c.json(await repo.updateEventSettings({ eventId: bundle.event.id, ...parsed.data, now: new Date().toISOString() }));
+});
+
+api.post("/events/:slug/tracks", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateTrackRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Track is invalid.", parsed.error.issues);
+  return c.json(await repo.createTrack({ id: randomId("track"), eventId: bundle.event.id, ...parsed.data }), 201);
+});
+
+api.post("/events/:slug/rooms", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateRoomRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Room is invalid.", parsed.error.issues);
+  return c.json(await repo.createRoom({ id: randomId("room"), eventId: bundle.event.id, ...parsed.data }), 201);
+});
+
+api.post("/events/:slug/cfp/fields", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateFormFieldRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Form field is invalid.", parsed.error.issues);
+  if (bundle.cfp.fields.some((field) => field.key === parsed.data.key)) return errorResponse(409, "field_key_taken", "That field key already exists.");
+  if (parsed.data.fieldType === "select" && (!parsed.data.options || parsed.data.options.length < 2)) return errorResponse(422, "validation_error", "Select fields need at least two options.");
+  const source = parsed.data.condition?.sourceFieldKey;
+  if (source && source !== "format" && !bundle.cfp.fields.some((field) => field.key === source)) return errorResponse(422, "validation_error", "Conditional source field is unknown.");
+  return c.json(await repo.createFormField({ id: randomId("field"), ruleId: parsed.data.condition ? randomId("rule") : null, eventId: bundle.event.id, formId: bundle.cfp.form.id, ...parsed.data }), 201);
+});
+
+api.get("/events/:slug/evaluations.csv", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  return new Response(reviewResultsToCsv(workspace), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="review-results-${bundle.event.slug}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
+});
+
+async function saveRound(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "");
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch {
+    return errorResponse(400, "bad_json", "Request body must be JSON.");
+  }
+  const parsed = SaveEvaluationRoundRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Round is invalid.", parsed.error.issues);
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  const roundId = c.req.param("roundId") || randomId("round");
+  await repo.saveEvaluationRound({
+    eventId: bundle.event.id, planId: workspace.plan.id, roundId, data: parsed.data,
+    criterionIds: parsed.data.criteria.map(() => randomId("crit")),
+  });
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id), c.req.param("roundId") ? 200 : 201);
+}
+
+api.post("/events/:slug/evaluations/rounds", organizerAuth, saveRound);
+api.put("/events/:slug/evaluations/rounds/:roundId", organizerAuth, saveRound);
+
+api.put("/events/:slug/evaluations/rounds/:roundId/reviewers", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveRoundReviewerRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Reviewer is invalid.", parsed.error.issues);
+  await repo.saveRoundReviewer({
+    roundId: c.req.param("roundId"), ...parsed.data, token: randomId("reviewer"),
+    now: new Date().toISOString(),
+  });
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.put("/events/:slug/evaluations/rounds/:roundId/assignments", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveAssignmentsRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Assignments are invalid.", parsed.error.issues);
+  try {
+    await repo.saveAssignments({ roundId: c.req.param("roundId"), ...parsed.data, now: new Date().toISOString() });
+  } catch (error) {
+    if (error instanceof Error && error.message === "assignment_cap_exceeded") {
+      return errorResponse(422, "assignment_cap_exceeded", "Selection exceeds this reviewer's assignment cap.");
+    }
+    throw error;
+  }
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.post("/events/:slug/evaluations/rounds/:roundId/auto-distribute", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  await repo.autoDistributeAssignments(c.req.param("roundId"), new Date().toISOString());
+  return c.json(await repo.getEvaluationWorkspace(bundle.event.id));
+});
+
+api.post("/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const workspace = await repo.getEvaluationWorkspace(bundle.event.id);
+  const round = workspace.rounds.find((item) => item.id === c.req.param("roundId"));
+  const reviewer = round?.reviewers.find((item) => item.email === decodeURIComponent(c.req.param("email")));
+  if (!reviewer) return errorResponse(404, "reviewer_not_found", "No reviewer with that email in this round.");
+  const now = new Date().toISOString();
+  const messageId = randomId("msg");
+  await repo.simulateCommunication({
+    messageId, attemptId: randomId("del"), eventId: bundle.event.id, speakerId: null,
+    toEmail: reviewer.email, subject: `${round!.name}: ${reviewer.assigned - reviewer.complete} review(s) outstanding`,
+    bodyMd: `Hi ${reviewer.name},\n\nPlease complete your assigned reviews for ${bundle.event.name}.\n\nReviewer queue: ${new URL(c.req.url).origin}/review/${reviewer.token}`,
+    now,
+  });
+  return c.json({ messageId, status: "sent_simulated", deliveredAt: now });
 });
 
 api.get("/events/:slug/submissions.csv", organizerAuth, async (c) => {
@@ -1063,6 +1365,14 @@ api.get("/events/:slug/communications/preview", organizerAuth, async (c) => {
         ? `/api/public/events/${encodeURIComponent(bundle.event.slug)}/sessions/${encodeURIComponent(session.id)}/calendar.ics`
         : null,
   };
+  return c.json(body);
+});
+
+api.get("/events/:slug/communications", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const body: OutboxResponse = { messages: await repo.listMessages(bundle.event.id) };
   return c.json(body);
 });
 

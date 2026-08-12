@@ -5,6 +5,7 @@ import type {
   EventBundle,
   EventCounts,
   EventSummary,
+  EvaluationWorkspaceResponse,
   Form,
   FormField,
   OrganizerAgendaResponse,
@@ -21,6 +22,9 @@ import type {
   Speaker,
   SpeakerAsset,
   SpeakerTask,
+  SpeakerPortalProposal,
+  ReviewerQueueResponse,
+  OutboxMessage,
   SubmissionListItem,
   SubmissionReviewView,
   SubmissionSpeakerView,
@@ -42,10 +46,21 @@ import type {
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
+  UpdateSpeakerProposalInput,
+  SaveEvaluationRoundInput,
+  SaveRoundReviewerInput,
+  SaveAssignmentsInput,
+  SubmitReviewerScorecardInput,
+  CreateEventInput,
+  UpdateEventSettingsInput,
+  CreateTrackInput,
+  CreateRoomInput,
+  CreateFormFieldInput,
 } from "../types";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
+import { aggregateWeightedScores } from "../../../shared/domain/reviews";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -671,6 +686,89 @@ export class D1Repo implements SpeakerOpsRepo {
     return row?.ok === 1;
   }
 
+  async createEvent(input: CreateEventInput): Promise<EventBundle> {
+    await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO events
+         (id, slug, name, tagline, description, starts_on, ends_on, timezone, venue,
+          website_url, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?)`,
+      ).bind(input.eventId, input.slug, input.name, input.startsOn, input.endsOn,
+        input.timezone, input.now, input.now),
+      this.db.prepare(
+        `INSERT INTO forms
+         (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+          opens_at, closes_at, max_speakers_per_submission, allow_drafts, created_at, updated_at)
+         VALUES (?, ?, 'cfp', 'Call for Speakers', NULL, NULL, 1, NULL, NULL, 3, 0, ?, ?)`,
+      ).bind(input.formId, input.eventId, input.now, input.now),
+      this.db.prepare(
+        "INSERT INTO evaluation_plans (id, event_id, name, description, created_at) VALUES (?, ?, 'Program Committee Review', NULL, ?)",
+      ).bind(input.planId, input.eventId, input.now),
+    ]);
+    const bundle = await this.getEventBySlug(input.slug);
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async updateEventSettings(input: UpdateEventSettingsInput): Promise<EventBundle> {
+    await this.db.batch([
+      this.db.prepare(
+        "UPDATE forms SET is_open = ?, opens_at = ?, closes_at = ?, updated_at = ? WHERE event_id = ? AND kind = 'cfp'",
+      ).bind(input.cfpIsOpen ? 1 : 0, input.cfpOpensAt, input.cfpClosesAt, input.now, input.eventId),
+      this.db.prepare("UPDATE events SET updated_at = ? WHERE id = ?").bind(input.now, input.eventId),
+    ]);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async createTrack(input: CreateTrackInput): Promise<EventBundle> {
+    await this.db.prepare(
+      `INSERT INTO tracks (id, event_id, name, description, color, sort_order)
+       VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM tracks WHERE event_id = ?))`,
+    ).bind(input.id, input.eventId, input.name, input.description, input.color, input.eventId).run();
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async createRoom(input: CreateRoomInput): Promise<EventBundle> {
+    await this.db.prepare(
+      `INSERT INTO rooms (id, event_id, name, capacity, sort_order)
+       VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM rooms WHERE event_id = ?))`,
+    ).bind(input.id, input.eventId, input.name, input.capacity, input.eventId).run();
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async createFormField(input: CreateFormFieldInput): Promise<EventBundle> {
+    const statements = [this.db.prepare(
+      `INSERT INTO form_fields
+       (id, form_id, key, label, field_type, required, sort_order, help_text, options_json)
+       VALUES (?, ?, ?, ?, ?, ?,
+         (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM form_fields WHERE form_id = ?), ?, ?)`,
+    ).bind(input.id, input.formId, input.key, input.label, input.fieldType,
+      input.required ? 1 : 0, input.formId, input.helpText,
+      input.options ? JSON.stringify(input.options) : null)];
+    if (input.condition && input.ruleId) {
+      statements.push(this.db.prepare(
+        `INSERT INTO conditional_rules
+         (id, form_id, source_field_key, operator, values_json, action, target_field_key)
+         VALUES (?, ?, ?, ?, ?, 'show', ?)`,
+      ).bind(input.ruleId, input.formId, input.condition.sourceFieldKey,
+        input.condition.operator, JSON.stringify(input.condition.values), input.key));
+    }
+    await this.db.batch(statements);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
   async listEvents(): Promise<EventSummary[]> {
     const { results } = await this.db
       .prepare(
@@ -787,8 +885,8 @@ export class D1Repo implements SpeakerOpsRepo {
   }
 
   async createCfpSubmission(input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
-    const speakerRow = await this.db
-      .prepare(
+    const upsertSpeaker = async (speaker: CreateCfpSubmissionInput["speaker"], id: string) => {
+      const row = await this.db.prepare(
         `INSERT INTO speakers (id, event_id, email, name, company, title, bio, location, socials_json, created_at, updated_at)
          VALUES (?1, ?2, lower(?3), ?4, ?5, ?6, ?7, NULL, NULL, ?8, ?8)
          ON CONFLICT(event_id, email) DO UPDATE SET
@@ -798,19 +896,24 @@ export class D1Repo implements SpeakerOpsRepo {
            bio = COALESCE(excluded.bio, speakers.bio),
            updated_at = excluded.updated_at
          RETURNING id`,
-      )
-      .bind(
-        input.speakerId,
+      ).bind(
+        id,
         input.eventId,
-        input.speaker.email,
-        input.speaker.name,
-        input.speaker.company ?? null,
-        input.speaker.title ?? null,
-        input.speaker.bio ?? null,
+        speaker.email,
+        speaker.name,
+        speaker.company ?? null,
+        speaker.title ?? null,
+        speaker.bio ?? null,
         input.now,
-      )
-      .first<{ id: string }>();
-    if (!speakerRow) throw new Error("Speaker upsert returned no row.");
+      ).first<{ id: string }>();
+      if (!row) throw new Error("Speaker upsert returned no row.");
+      return row.id;
+    };
+    const primarySpeakerId = await upsertSpeaker(input.speaker, input.speakerId);
+    const coSpeakerIds: string[] = [];
+    for (const coSpeaker of input.coSpeakers) {
+      coSpeakerIds.push(await upsertSpeaker(coSpeaker, coSpeaker.id));
+    }
 
     await this.db.batch([
       this.db
@@ -829,12 +932,14 @@ export class D1Repo implements SpeakerOpsRepo {
           JSON.stringify(input.answers),
           input.now,
         ),
-      this.db
-        .prepare(
+      this.db.prepare(
           `INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order)
            VALUES (?1, ?2, 'primary', 0)`,
-        )
-        .bind(input.submissionId, speakerRow.id),
+        ).bind(input.submissionId, primarySpeakerId),
+      ...coSpeakerIds.map((speakerId, index) => this.db.prepare(
+        `INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order)
+         VALUES (?, ?, 'co_speaker', ?)`,
+      ).bind(input.submissionId, speakerId, index + 1)),
     ]);
 
     const created = await this.getSubmissionById(input.submissionId);
@@ -1366,7 +1471,7 @@ export class D1Repo implements SpeakerOpsRepo {
       .first<SpeakerRow>();
     if (!speaker) return null;
 
-    const [eventRes, sessionsRes, tasksRes, assetsRes, resourcesRes] = await this.db.batch([
+    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes] = await this.db.batch([
       this.db
         .prepare(
           "SELECT id, slug, name, tagline, starts_on, ends_on, timezone FROM events WHERE id = ?",
@@ -1382,6 +1487,16 @@ export class D1Repo implements SpeakerOpsRepo {
            LEFT JOIN rooms ON rooms.id = slot.room_id
            WHERE ss.speaker_id = ?
            ORDER BY slot.starts_at IS NULL, slot.starts_at, ses.title`,
+        )
+        .bind(speaker.id),
+      this.db
+        .prepare(
+          `SELECT s.*, t.name AS track_name
+           FROM submission_speakers ss
+           JOIN submissions s ON s.id = ss.submission_id
+           LEFT JOIN tracks t ON t.id = s.track_id
+           WHERE ss.speaker_id = ?
+           ORDER BY s.submitted_at IS NULL, s.submitted_at DESC, s.created_at DESC`,
         )
         .bind(speaker.id),
       this.db
@@ -1406,6 +1521,7 @@ export class D1Repo implements SpeakerOpsRepo {
 
     const event = ((eventRes?.results ?? []) as unknown as EventRow[])[0];
     if (!event) return null;
+    const eventBundle = await this.getEventBySlug(event.slug);
 
     const tasks = ((tasksRes?.results ?? []) as unknown as (SpeakerTaskRow & {
       def_id: string;
@@ -1444,6 +1560,20 @@ export class D1Repo implements SpeakerOpsRepo {
       sessions: ((sessionsRes?.results ?? []) as unknown as SpeakerPortalSessionRow[]).map(
         mapPortalSession,
       ),
+      proposals: ((proposalsRes?.results ?? []) as unknown as (SubmissionRow & {
+        track_name: string | null;
+      })[]).map((row): SpeakerPortalProposal => ({
+        id: row.id,
+        title: row.title,
+        abstract: row.abstract,
+        format: row.format as SpeakerPortalProposal["format"],
+        status: row.status as SpeakerPortalProposal["status"],
+        answers: parseJson<Record<string, unknown>>(row.answers_json, {}),
+        submittedAt: row.submitted_at,
+        updatedAt: row.updated_at,
+        trackName: row.track_name,
+      })),
+      cfp: eventBundle?.cfp ?? null,
       tasks,
       assets: ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset),
       resources: ((resourcesRes?.results ?? []) as unknown as ResourcePageRow[]).map(
@@ -1474,6 +1604,343 @@ export class D1Repo implements SpeakerOpsRepo {
     const portal = await this.getSpeakerPortalByToken(input.speakerId);
     if (!portal) throw new Error("speaker_not_found");
     return portal;
+  }
+
+  async updateSpeakerProposal(input: UpdateSpeakerProposalInput): Promise<SpeakerPortalBundle> {
+    const result = await this.db
+      .prepare(
+        `UPDATE submissions
+         SET title = ?1, abstract = ?2, answers_json = ?3, updated_at = ?4
+         WHERE id = ?5
+           AND EXISTS (
+             SELECT 1 FROM submission_speakers ss
+             WHERE ss.submission_id = submissions.id AND ss.speaker_id = ?6
+           )`,
+      )
+      .bind(
+        input.title,
+        input.abstract,
+        JSON.stringify(input.answers),
+        input.now,
+        input.submissionId,
+        input.speakerId,
+      )
+      .run();
+    if ((result.meta.changes ?? 0) === 0) throw new Error("submission_not_found");
+    const portal = await this.getSpeakerPortalByToken(input.speakerId);
+    if (!portal) throw new Error("Speaker portal disappeared after update.");
+    return portal;
+  }
+
+  async getEvaluationWorkspace(eventId: string): Promise<EvaluationWorkspaceResponse> {
+    const plan = await this.db
+      .prepare("SELECT id, name FROM evaluation_plans WHERE event_id = ? ORDER BY created_at LIMIT 1")
+      .bind(eventId)
+      .first<{ id: string; name: string }>();
+    if (!plan) throw new Error("evaluation_plan_not_found");
+
+    const [roundsRes, criteriaRes, reviewersRes, reviewsRes] = await this.db.batch([
+      this.db.prepare("SELECT * FROM evaluation_rounds WHERE plan_id = ? ORDER BY round_number").bind(plan.id),
+      this.db.prepare(
+        `SELECT rc.* FROM rubric_criteria rc
+         WHERE rc.plan_id = ? ORDER BY rc.round_id, rc.sort_order`,
+      ).bind(plan.id),
+      this.db.prepare(
+        `SELECT rr.*,
+          (SELECT COUNT(*) FROM review_assignments ra
+           WHERE ra.round_id = rr.round_id AND ra.reviewer_email = rr.reviewer_email) AS assigned,
+          (SELECT COUNT(*) FROM review_assignments ra
+           JOIN reviews rv ON rv.round_id = ra.round_id
+             AND rv.submission_id = ra.submission_id
+             AND rv.reviewer_email = ra.reviewer_email
+             AND rv.recommendation <> 'abstain'
+           WHERE ra.round_id = rr.round_id AND ra.reviewer_email = rr.reviewer_email) AS complete,
+          (SELECT GROUP_CONCAT(ra.submission_id, ',') FROM review_assignments ra
+           WHERE ra.round_id = rr.round_id AND ra.reviewer_email = rr.reviewer_email) AS submission_ids
+         FROM round_reviewers rr
+         JOIN evaluation_rounds er ON er.id = rr.round_id
+         WHERE er.plan_id = ? ORDER BY rr.reviewer_name`,
+      ).bind(plan.id),
+      this.db.prepare(
+        `SELECT rv.round_id, rv.submission_id, rv.scores_json
+         FROM reviews rv JOIN evaluation_rounds er ON er.id = rv.round_id
+         WHERE er.plan_id = ? AND rv.recommendation <> 'abstain'`,
+      ).bind(plan.id),
+    ]);
+
+    const roundRows = (roundsRes?.results ?? []) as unknown as Array<{
+      id: string; plan_id: string; name: string; round_number: number; status: string;
+      opens_at: string | null; closes_at: string | null; blind_mode: number;
+    }>;
+    const criterionRows = (criteriaRes?.results ?? []) as unknown as Array<{
+      id: string; round_id: string | null; key: string; label: string; max_score: number;
+      weight: number; sort_order: number;
+    }>;
+    const reviewerRows = (reviewersRes?.results ?? []) as unknown as Array<{
+      round_id: string; reviewer_name: string; reviewer_email: string; reviewer_token: string;
+      assignment_cap: number; assigned: number; complete: number; submission_ids: string | null;
+    }>;
+    const reviewRows = (reviewsRes?.results ?? []) as unknown as Array<{
+      round_id: string; submission_id: string; scores_json: string;
+    }>;
+    const submissions = await this.listSubmissions(eventId);
+
+    const rounds = roundRows.map((round) => ({
+      id: round.id,
+      planId: round.plan_id,
+      name: round.name,
+      roundNumber: round.round_number,
+      status: round.status as "pending" | "open" | "closed",
+      opensAt: round.opens_at,
+      closesAt: round.closes_at,
+      blindMode: round.blind_mode === 1,
+      criteria: criterionRows.filter((criterion) => criterion.round_id === round.id).map((criterion) => ({
+        id: criterion.id,
+        roundId: round.id,
+        key: criterion.key,
+        label: criterion.label,
+        maxScore: criterion.max_score,
+        weight: criterion.weight,
+        sortOrder: criterion.sort_order,
+      })),
+      reviewers: reviewerRows.filter((reviewer) => reviewer.round_id === round.id).map((reviewer) => ({
+        name: reviewer.reviewer_name,
+        email: reviewer.reviewer_email,
+        token: reviewer.reviewer_token,
+        assignmentCap: reviewer.assignment_cap,
+        assigned: reviewer.assigned,
+        complete: reviewer.complete,
+        submissionIds: reviewer.submission_ids ? reviewer.submission_ids.split(",") : [],
+      })),
+    }));
+
+    const results = submissions.map((submission) => {
+      const weightedReviews = reviewRows
+        .filter((review) => review.submission_id === submission.id)
+        .map((review) => {
+          const criteria = rounds.find((round) => round.id === review.round_id)?.criteria ?? [];
+          const value = aggregateWeightedScores(
+            [{ scores: parseJson<Record<string, unknown>>(review.scores_json, {}) }],
+            criteria,
+          );
+          return value;
+        })
+        .filter((value): value is number => value !== null);
+      return {
+        submissionId: submission.id,
+        title: submission.title,
+        trackName: submission.trackName,
+        aggregate: weightedReviews.length
+          ? weightedReviews.reduce((sum, value) => sum + value, 0) / weightedReviews.length
+          : null,
+        completedReviews: weightedReviews.length,
+      };
+    });
+    return { plan, rounds, submissions, results };
+  }
+
+  async saveEvaluationRound(input: SaveEvaluationRoundInput): Promise<void> {
+    const owner = await this.db.prepare(
+      "SELECT ep.id FROM evaluation_plans ep WHERE ep.id = ? AND ep.event_id = ?",
+    ).bind(input.planId, input.eventId).first<{ id: string }>();
+    if (!owner) throw new Error("evaluation_plan_not_found");
+    const exists = await this.db.prepare("SELECT id FROM evaluation_rounds WHERE id = ?")
+      .bind(input.roundId).first<{ id: string }>();
+    const statements = [
+      exists
+        ? this.db.prepare(
+            `UPDATE evaluation_rounds SET name = ?, round_number = ?, status = ?, opens_at = ?, closes_at = ?, blind_mode = ?
+             WHERE id = ? AND plan_id = ?`,
+          ).bind(input.data.name, input.data.roundNumber, input.data.status, input.data.opensAt,
+            input.data.closesAt, input.data.blindMode ? 1 : 0, input.roundId, input.planId)
+        : this.db.prepare(
+            `INSERT INTO evaluation_rounds
+             (id, plan_id, name, round_number, status, opens_at, closes_at, blind_mode)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).bind(input.roundId, input.planId, input.data.name, input.data.roundNumber,
+            input.data.status, input.data.opensAt, input.data.closesAt, input.data.blindMode ? 1 : 0),
+      this.db.prepare("DELETE FROM rubric_criteria WHERE round_id = ?").bind(input.roundId),
+      ...input.data.criteria.map((criterion, index) => this.db.prepare(
+        `INSERT INTO rubric_criteria
+         (id, plan_id, round_id, key, label, description, max_score, weight, sort_order)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+      ).bind(input.criterionIds[index], input.planId, input.roundId, criterion.key,
+        criterion.label, criterion.maxScore, criterion.weight, index)),
+    ];
+    await this.db.batch(statements);
+  }
+
+  async saveRoundReviewer(input: SaveRoundReviewerInput): Promise<void> {
+    await this.db.prepare(
+      `INSERT INTO round_reviewers
+       (round_id, reviewer_name, reviewer_email, reviewer_token, assignment_cap, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(round_id, reviewer_email) DO UPDATE SET
+         reviewer_name = excluded.reviewer_name,
+         assignment_cap = excluded.assignment_cap`,
+    ).bind(input.roundId, input.name, input.email.toLowerCase(), input.token,
+      input.assignmentCap, input.now).run();
+  }
+
+  async saveAssignments(input: SaveAssignmentsInput): Promise<void> {
+    const reviewer = await this.db.prepare(
+      "SELECT assignment_cap FROM round_reviewers WHERE round_id = ? AND reviewer_email = ?",
+    ).bind(input.roundId, input.reviewerEmail.toLowerCase()).first<{ assignment_cap: number }>();
+    if (!reviewer) throw new Error("reviewer_not_found");
+    const uniqueIds = [...new Set(input.submissionIds)];
+    if (uniqueIds.length > reviewer.assignment_cap) throw new Error("assignment_cap_exceeded");
+    await this.db.batch([
+      this.db.prepare("DELETE FROM review_assignments WHERE round_id = ? AND reviewer_email = ?")
+        .bind(input.roundId, input.reviewerEmail.toLowerCase()),
+      ...uniqueIds.map((submissionId) => this.db.prepare(
+        `INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigned_at)
+         SELECT ?, ?, s.id, ? FROM submissions s
+         JOIN evaluation_rounds er ON er.id = ?
+         JOIN evaluation_plans ep ON ep.id = er.plan_id AND ep.event_id = s.event_id
+         WHERE s.id = ?`,
+      ).bind(input.roundId, input.reviewerEmail.toLowerCase(), input.now, input.roundId, submissionId)),
+    ]);
+  }
+
+  async autoDistributeAssignments(roundId: string, now: string): Promise<void> {
+    const reviewers = await this.db.prepare(
+      `SELECT reviewer_email, assignment_cap,
+        (SELECT COUNT(*) FROM review_assignments ra WHERE ra.round_id = rr.round_id
+          AND ra.reviewer_email = rr.reviewer_email) AS assigned
+       FROM round_reviewers rr WHERE round_id = ? ORDER BY reviewer_email`,
+    ).bind(roundId).all<{ reviewer_email: string; assignment_cap: number; assigned: number }>();
+    const submissions = await this.db.prepare(
+      `SELECT s.id FROM submissions s
+       JOIN evaluation_rounds er ON er.id = ?
+       JOIN evaluation_plans ep ON ep.id = er.plan_id AND ep.event_id = s.event_id
+       WHERE s.status NOT IN ('draft','withdrawn')
+         AND NOT EXISTS (SELECT 1 FROM review_assignments ra WHERE ra.round_id = ? AND ra.submission_id = s.id)
+       ORDER BY s.submitted_at, s.id`,
+    ).bind(roundId, roundId).all<{ id: string }>();
+    const pool = (reviewers.results ?? []).map((reviewer) => ({ ...reviewer }));
+    const statements: D1PreparedStatement[] = [];
+    let cursor = 0;
+    for (const submission of submissions.results ?? []) {
+      let selected = -1;
+      for (let offset = 0; offset < pool.length; offset += 1) {
+        const index = (cursor + offset) % pool.length;
+        if (pool[index]!.assigned < pool[index]!.assignment_cap) { selected = index; break; }
+      }
+      if (selected < 0) break;
+      const reviewer = pool[selected]!;
+      statements.push(this.db.prepare(
+        "INSERT OR IGNORE INTO review_assignments (round_id, reviewer_email, submission_id, assigned_at) VALUES (?, ?, ?, ?)",
+      ).bind(roundId, reviewer.reviewer_email, submission.id, now));
+      reviewer.assigned += 1;
+      cursor = (selected + 1) % pool.length;
+    }
+    if (statements.length > 0) await this.db.batch(statements);
+  }
+
+  async getReviewerQueue(token: string): Promise<ReviewerQueueResponse | null> {
+    const reviewer = await this.db.prepare(
+      "SELECT reviewer_name, reviewer_email, reviewer_token FROM round_reviewers WHERE reviewer_token = ?",
+    ).bind(token).first<{ reviewer_name: string; reviewer_email: string; reviewer_token: string }>();
+    if (!reviewer) return null;
+    const [assignmentsRes, criteriaRes, speakersRes] = await this.db.batch([
+      this.db.prepare(
+        `SELECT ra.round_id, er.name AS round_name, er.blind_mode, s.*, t.name AS track_name,
+                rv.scores_json, rv.overall_comment, rv.recommendation, rv.submitted_at AS review_submitted_at
+         FROM review_assignments ra
+         JOIN round_reviewers rr ON rr.round_id = ra.round_id AND rr.reviewer_email = ra.reviewer_email
+         JOIN evaluation_rounds er ON er.id = ra.round_id
+         JOIN submissions s ON s.id = ra.submission_id
+         LEFT JOIN tracks t ON t.id = s.track_id
+         LEFT JOIN reviews rv ON rv.round_id = ra.round_id AND rv.submission_id = ra.submission_id
+           AND rv.reviewer_email = ra.reviewer_email
+         WHERE ra.reviewer_email = ? AND rr.reviewer_token = ?
+           AND (rv.recommendation IS NULL OR rv.recommendation <> 'abstain')
+           AND er.status = 'open'
+         ORDER BY er.round_number, s.title`,
+      ).bind(reviewer.reviewer_email, token),
+      this.db.prepare(
+        `SELECT rc.* FROM rubric_criteria rc
+         JOIN round_reviewers rr ON rr.round_id = rc.round_id
+         WHERE rr.reviewer_email = ? AND rr.reviewer_token = ? ORDER BY rc.round_id, rc.sort_order`,
+      ).bind(reviewer.reviewer_email, token),
+      this.db.prepare(
+        `SELECT ra.round_id, ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id,
+                sp.name, sp.email, sp.company, sp.bio
+         FROM review_assignments ra
+         JOIN submission_speakers ss ON ss.submission_id = ra.submission_id
+         JOIN speakers sp ON sp.id = ss.speaker_id
+         JOIN evaluation_rounds er ON er.id = ra.round_id AND er.blind_mode = 0
+         JOIN round_reviewers rr ON rr.round_id = ra.round_id AND rr.reviewer_email = ra.reviewer_email
+         WHERE rr.reviewer_email = ? AND rr.reviewer_token = ?
+         ORDER BY ss.submission_id, ss.sort_order`,
+      ).bind(reviewer.reviewer_email, token),
+    ]);
+    const assignments = (assignmentsRes?.results ?? []) as unknown as Array<SubmissionRow & {
+      round_id: string; round_name: string; blind_mode: number; track_name: string | null;
+      scores_json: string | null; overall_comment: string | null; recommendation: string | null;
+      review_submitted_at: string | null;
+    }>;
+    const criteria = (criteriaRes?.results ?? []) as unknown as Array<{
+      id: string; round_id: string; key: string; label: string; max_score: number; weight: number; sort_order: number;
+    }>;
+    const speakerRows = (speakersRes?.results ?? []) as unknown as Array<SubmissionSpeakerLinkRow & { round_id: string }>;
+    return {
+      reviewer: { name: reviewer.reviewer_name, email: reviewer.reviewer_email, token },
+      assignments: assignments.map((row) => ({
+        id: row.id,
+        title: row.title,
+        abstract: row.abstract,
+        format: row.format as SpeakerPortalProposal["format"],
+        status: row.status as SpeakerPortalProposal["status"],
+        answers: parseJson<Record<string, unknown>>(row.answers_json, {}),
+        submittedAt: row.submitted_at,
+        updatedAt: row.updated_at,
+        trackName: row.track_name,
+        roundId: row.round_id,
+        roundName: row.round_name,
+        blindMode: row.blind_mode === 1,
+        ...(row.blind_mode === 1 ? {} : { speakers: speakerRows
+          .filter((speaker) => speaker.round_id === row.round_id && speaker.submission_id === row.id)
+          .map((speaker) => ({
+            speakerId: speaker.speaker_id, role: speaker.role as SubmissionSpeakerView["role"],
+            sortOrder: speaker.sort_order, name: speaker.name, email: speaker.email,
+            company: speaker.company, bio: speaker.bio,
+          })) }),
+        criteria: criteria.filter((criterion) => criterion.round_id === row.round_id).map((criterion) => ({
+          id: criterion.id, roundId: row.round_id, key: criterion.key, label: criterion.label,
+          maxScore: criterion.max_score, weight: criterion.weight, sortOrder: criterion.sort_order,
+        })),
+        existingReview: row.recommendation && row.review_submitted_at ? {
+          scores: parseJson<Record<string, number>>(row.scores_json, {}),
+          recommendation: row.recommendation as "accept" | "reject" | "waitlist" | "abstain",
+          comment: row.overall_comment,
+          submittedAt: row.review_submitted_at,
+        } : null,
+      })),
+    };
+  }
+
+  async submitReviewerScorecard(input: SubmitReviewerScorecardInput): Promise<void> {
+    const assignment = await this.db.prepare(
+      `SELECT rr.reviewer_name, rr.reviewer_email
+       FROM round_reviewers rr
+       JOIN review_assignments ra ON ra.round_id = rr.round_id AND ra.reviewer_email = rr.reviewer_email
+       JOIN evaluation_rounds er ON er.id = rr.round_id AND er.status = 'open'
+       WHERE rr.reviewer_token = ? AND rr.round_id = ? AND ra.submission_id = ?`,
+    ).bind(input.token, input.roundId, input.submissionId)
+      .first<{ reviewer_name: string; reviewer_email: string }>();
+    if (!assignment) throw new Error("review_assignment_not_found");
+    await this.db.prepare(
+      `INSERT INTO reviews
+       (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json,
+        overall_comment, recommendation, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(round_id, submission_id, reviewer_email) DO UPDATE SET
+         scores_json = excluded.scores_json, overall_comment = excluded.overall_comment,
+         recommendation = excluded.recommendation, submitted_at = excluded.submitted_at`,
+    ).bind(input.id, input.roundId, input.submissionId, assignment.reviewer_name,
+      assignment.reviewer_email, JSON.stringify(input.scores), input.comment,
+      input.recuse ? "abstain" : input.recommendation, input.now).run();
   }
 
   async updateSpeakerTask(input: UpdateSpeakerTaskInput): Promise<SpeakerPortalBundle> {
@@ -1526,6 +1993,23 @@ export class D1Repo implements SpeakerOpsRepo {
         )
         .bind(input.attemptId, input.messageId, input.now),
     ]);
+  }
+
+  async listMessages(eventId: string): Promise<OutboxMessage[]> {
+    const rows = await this.db.prepare(
+      `SELECT m.id, m.to_email, m.subject, m.status, m.created_at,
+              (SELECT da.status FROM delivery_attempts da WHERE da.message_id = m.id
+               ORDER BY da.attempted_at DESC LIMIT 1) AS delivery_status
+       FROM messages m WHERE m.event_id = ? ORDER BY m.created_at DESC, m.id DESC`,
+    ).bind(eventId).all<{
+      id: string; to_email: string | null; subject: string; status: string;
+      created_at: string; delivery_status: string | null;
+    }>();
+    return (rows.results ?? []).map((row) => ({
+      id: row.id, toEmail: row.to_email, subject: row.subject,
+      status: row.status as OutboxMessage["status"], createdAt: row.created_at,
+      deliveryStatus: row.delivery_status as OutboxMessage["deliveryStatus"],
+    }));
   }
 
   async createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {

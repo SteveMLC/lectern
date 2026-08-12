@@ -75,6 +75,50 @@ export const EventsListResponse = z.object({
 });
 export type EventsListResponse = z.infer<typeof EventsListResponse>;
 
+export const CreateEventRequest = z.object({
+  name: z.string().trim().min(3).max(160),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  startsOn: z.iso.date(),
+  endsOn: z.iso.date(),
+  timezone: z.string().trim().min(1).max(100),
+});
+export type CreateEventRequest = z.infer<typeof CreateEventRequest>;
+
+export const UpdateEventSettingsRequest = z.object({
+  cfpIsOpen: z.boolean(),
+  cfpOpensAt: z.iso.datetime({ offset: true }).nullable(),
+  cfpClosesAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type UpdateEventSettingsRequest = z.infer<typeof UpdateEventSettingsRequest>;
+
+export const CreateTrackRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().max(500).nullable(),
+  color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
+});
+export type CreateTrackRequest = z.infer<typeof CreateTrackRequest>;
+
+export const CreateRoomRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  capacity: z.number().int().positive().nullable(),
+});
+export type CreateRoomRequest = z.infer<typeof CreateRoomRequest>;
+
+export const CreateFormFieldRequest = z.object({
+  label: z.string().trim().min(2).max(120),
+  key: z.string().trim().regex(/^[a-z][a-z0-9_]*$/).max(80),
+  fieldType: z.enum(["text", "select", "checkbox"]),
+  required: z.boolean(),
+  helpText: z.string().trim().max(300).nullable(),
+  options: z.array(z.string().trim().min(1).max(120)).max(30).nullable(),
+  condition: z.object({
+    sourceFieldKey: z.string().min(1),
+    operator: z.enum(["equals", "not_equals", "in"]),
+    values: z.array(z.string()).min(1),
+  }).nullable(),
+});
+export type CreateFormFieldRequest = z.infer<typeof CreateFormFieldRequest>;
+
 /** Everything the public event + CFP pages need in one round trip. */
 export const EventBundle = z.object({
   event: Event,
@@ -176,6 +220,13 @@ export const CfpSubmissionRequest = z.object({
     title: z.string().max(120).optional(),
     bio: z.string().max(2000).optional(),
   }),
+  coSpeakers: z.array(z.object({
+    name: z.string().min(2).max(120),
+    email: z.email().max(254),
+    company: z.string().max(120).optional(),
+    title: z.string().max(120).optional(),
+    bio: z.string().max(2000).optional(),
+  })).max(2).default([]),
   title: z.string().min(4).max(200),
   abstract: z.string().min(20).max(5000),
   trackId: z.string().min(1),
@@ -409,10 +460,28 @@ export const SpeakerPortalSession = z.object({
 });
 export type SpeakerPortalSession = z.infer<typeof SpeakerPortalSession>;
 
+/** Speaker-safe proposal projection. Committee reviews and internal decision
+ * reasoning are deliberately absent from this capability-scoped response. */
+export const SpeakerPortalProposal = Submission.pick({
+  id: true,
+  title: true,
+  abstract: true,
+  format: true,
+  status: true,
+  answers: true,
+  submittedAt: true,
+  updatedAt: true,
+}).extend({
+  trackName: z.string().nullable(),
+});
+export type SpeakerPortalProposal = z.infer<typeof SpeakerPortalProposal>;
+
 export const SpeakerPortalResponse = z.object({
   event: EventSummary,
   speaker: Speaker,
   sessions: z.array(SpeakerPortalSession),
+  proposals: z.array(SpeakerPortalProposal),
+  cfp: EventBundle.shape.cfp,
   tasks: z.array(z.object({ task: SpeakerTask, definition: TaskDefinition })),
   assets: z.array(SpeakerAsset),
   resources: z.array(ResourcePage),
@@ -440,6 +509,129 @@ export const UpdateSpeakerTaskRequest = z.object({
   status: z.enum(["pending", "complete"]),
 });
 export type UpdateSpeakerTaskRequest = z.infer<typeof UpdateSpeakerTaskRequest>;
+
+export const UpdateSpeakerProposalRequest = z.object({
+  title: z.string().trim().min(4).max(200),
+  abstract: z.string().trim().min(20).max(5000),
+  answers: z.record(z.string(), z.unknown()),
+});
+export type UpdateSpeakerProposalRequest = z.infer<typeof UpdateSpeakerProposalRequest>;
+
+// ---------------------------------------------------------------------------
+// Evaluation rounds + reviewer queues
+// ---------------------------------------------------------------------------
+
+export const ReviewCriterion = z.object({
+  id: z.string(),
+  roundId: z.string(),
+  key: z.string(),
+  label: z.string(),
+  maxScore: z.number().int().positive(),
+  weight: z.number().positive(),
+  sortOrder: z.number().int(),
+});
+export type ReviewCriterion = z.infer<typeof ReviewCriterion>;
+
+export const RoundReviewer = z.object({
+  name: z.string(),
+  email: z.email(),
+  token: z.string(),
+  assignmentCap: z.number().int().positive(),
+  assigned: z.number().int().nonnegative(),
+  complete: z.number().int().nonnegative(),
+  submissionIds: z.array(z.string()),
+});
+export type RoundReviewer = z.infer<typeof RoundReviewer>;
+
+export const EvaluationRoundView = z.object({
+  id: z.string(),
+  planId: z.string(),
+  name: z.string(),
+  roundNumber: z.number().int().positive(),
+  status: z.enum(["pending", "open", "closed"]),
+  opensAt: z.iso.datetime({ offset: true }).nullable(),
+  closesAt: z.iso.datetime({ offset: true }).nullable(),
+  blindMode: z.boolean(),
+  criteria: z.array(ReviewCriterion),
+  reviewers: z.array(RoundReviewer),
+});
+export type EvaluationRoundView = z.infer<typeof EvaluationRoundView>;
+
+export const ReviewResult = z.object({
+  submissionId: z.string(),
+  title: z.string(),
+  trackName: z.string().nullable(),
+  aggregate: z.number().nullable(),
+  completedReviews: z.number().int().nonnegative(),
+});
+export type ReviewResult = z.infer<typeof ReviewResult>;
+
+export const EvaluationWorkspaceResponse = z.object({
+  plan: z.object({ id: z.string(), name: z.string() }),
+  rounds: z.array(EvaluationRoundView),
+  submissions: z.array(SubmissionListItem),
+  results: z.array(ReviewResult),
+});
+export type EvaluationWorkspaceResponse = z.infer<typeof EvaluationWorkspaceResponse>;
+
+export const SaveEvaluationRoundRequest = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(2).max(120),
+  roundNumber: z.number().int().positive(),
+  status: z.enum(["pending", "open", "closed"]),
+  opensAt: z.iso.datetime({ offset: true }).nullable(),
+  closesAt: z.iso.datetime({ offset: true }).nullable(),
+  blindMode: z.boolean(),
+  criteria: z.array(z.object({
+    id: z.string().optional(),
+    key: z.string().trim().min(1).max(80),
+    label: z.string().trim().min(1).max(120),
+    maxScore: z.number().int().min(2).max(100),
+    weight: z.number().positive().max(100),
+  })).min(1),
+});
+export type SaveEvaluationRoundRequest = z.infer<typeof SaveEvaluationRoundRequest>;
+
+export const SaveRoundReviewerRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.email().max(254),
+  assignmentCap: z.number().int().min(1).max(1000),
+});
+export type SaveRoundReviewerRequest = z.infer<typeof SaveRoundReviewerRequest>;
+
+export const SaveAssignmentsRequest = z.object({
+  reviewerEmail: z.email(),
+  submissionIds: z.array(z.string()),
+});
+export type SaveAssignmentsRequest = z.infer<typeof SaveAssignmentsRequest>;
+
+export const ReviewerQueueSubmission = SpeakerPortalProposal.extend({
+  speakers: z.array(SubmissionSpeakerView).optional(),
+  criteria: z.array(ReviewCriterion),
+  roundId: z.string(),
+  roundName: z.string(),
+  blindMode: z.boolean(),
+  existingReview: z.object({
+    scores: z.record(z.string(), z.number()),
+    recommendation: z.enum(["accept", "reject", "waitlist", "abstain"]),
+    comment: z.string().nullable(),
+    submittedAt: z.string(),
+  }).nullable(),
+});
+export type ReviewerQueueSubmission = z.infer<typeof ReviewerQueueSubmission>;
+
+export const ReviewerQueueResponse = z.object({
+  reviewer: z.object({ name: z.string(), email: z.email(), token: z.string() }),
+  assignments: z.array(ReviewerQueueSubmission),
+});
+export type ReviewerQueueResponse = z.infer<typeof ReviewerQueueResponse>;
+
+export const SubmitReviewRequest = z.object({
+  scores: z.record(z.string(), z.number()),
+  recommendation: z.enum(["accept", "reject", "waitlist"]),
+  comment: z.string().trim().max(5000),
+});
+export type SubmitReviewRequest = z.infer<typeof SubmitReviewRequest>;
 
 // ---------------------------------------------------------------------------
 // Communications
@@ -473,6 +665,19 @@ export const SimulateCommunicationResponse = z.object({
   deliveredAt: z.iso.datetime({ offset: true }),
 });
 export type SimulateCommunicationResponse = z.infer<typeof SimulateCommunicationResponse>;
+
+export const OutboxMessage = z.object({
+  id: z.string(),
+  toEmail: z.string().nullable(),
+  subject: z.string(),
+  status: z.enum(["draft", "queued", "sent_simulated", "sent", "failed"]),
+  createdAt: z.string(),
+  deliveryStatus: z.enum(["success", "failure"]).nullable(),
+});
+export type OutboxMessage = z.infer<typeof OutboxMessage>;
+
+export const OutboxResponse = z.object({ messages: z.array(OutboxMessage) });
+export type OutboxResponse = z.infer<typeof OutboxResponse>;
 
 export const AirtableMirrorStatusResponse = z.object({
   configured: z.boolean(),

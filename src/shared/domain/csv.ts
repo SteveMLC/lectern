@@ -1,4 +1,4 @@
-import type { SubmissionListItem } from "../contracts";
+import type { EvaluationWorkspaceResponse, SubmissionListItem } from "../contracts";
 
 /**
  * CSV building, pure and RFC-4180-shaped: fields containing commas, quotes,
@@ -57,4 +57,21 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
     s.id,
   ]);
   return toCsv([header, ...rows]);
+}
+
+export function reviewResultsToCsv(workspace: EvaluationWorkspaceResponse): string {
+  return toCsv([
+    ["Title", "Track", "Weighted aggregate", "Completed reviews", "Submission status", "SpeakerOps ID"],
+    ...workspace.results.map((result) => {
+      const submission = workspace.submissions.find((item) => item.id === result.submissionId);
+      return [
+        result.title,
+        result.trackName ?? "",
+        result.aggregate === null ? "" : result.aggregate.toFixed(2),
+        String(result.completedReviews),
+        submission?.status ?? "",
+        result.submissionId,
+      ];
+    }),
+  ]);
 }

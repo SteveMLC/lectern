@@ -16,10 +16,13 @@ export function useAdminContext(): AdminContext {
 
 const NAV = [
   { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin/settings", label: "Event settings", end: false },
   { to: "/admin/submissions", label: "Submissions", end: false },
   { to: "/admin/reviews", label: "Reviews", end: false },
+  { to: "/admin/evaluations", label: "Evaluation rounds", end: false },
   { to: "/admin/agenda", label: "Agenda", end: false },
   { to: "/admin/speakers", label: "Speakers", end: false },
+  { to: "/admin/files", label: "Speaker files", end: false },
   { to: "/admin/communications", label: "Communications", end: false },
   // Resources admin editing is deliberately deferred; the route stays reachable
   // by URL but an unfinished surface gets no navigation entry during judging.

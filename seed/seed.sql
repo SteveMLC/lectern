@@ -160,14 +160,14 @@ INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order) VA
 INSERT INTO evaluation_plans (id, event_id, name, description, created_at) VALUES
 ('plan_pc2026', 'evt_horizon2026', 'Program Committee Review', 'Two-round review: screening pass, then final selection against the rubric.', '2026-07-20T09:00:00Z');
 
-INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at, closes_at) VALUES
-('round_screen', 'plan_pc2026', 'Screening',    1, 'closed', '2026-07-26T07:00:00Z', '2026-08-02T07:00:00Z'),
-('round_final',  'plan_pc2026', 'Final Review', 2, 'open',   '2026-08-02T07:00:00Z', '2026-08-28T07:00:00Z');
+INSERT INTO evaluation_rounds (id, plan_id, name, round_number, status, opens_at, closes_at, blind_mode) VALUES
+('round_screen', 'plan_pc2026', 'Screening',    1, 'closed', '2026-07-26T07:00:00Z', '2026-08-02T07:00:00Z', 0),
+('round_final',  'plan_pc2026', 'Final Review', 2, 'open',   '2026-08-02T07:00:00Z', '2026-08-28T07:00:00Z', 0);
 
-INSERT INTO rubric_criteria (id, plan_id, key, label, description, max_score, weight, sort_order) VALUES
-('crit_relevance', 'plan_pc2026', 'relevance', 'Audience relevance', 'Does this serve working engineers at Horizon?', 5, 1.0, 0),
-('crit_depth',     'plan_pc2026', 'depth',     'Technical depth',    'Real systems and real numbers beat theory.',    5, 1.0, 1),
-('crit_readiness', 'plan_pc2026', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
+INSERT INTO rubric_criteria (id, plan_id, round_id, key, label, description, max_score, weight, sort_order) VALUES
+('crit_relevance', 'plan_pc2026', 'round_screen', 'relevance', 'Audience relevance', 'Does this serve working engineers at Horizon?', 5, 1.0, 0),
+('crit_depth',     'plan_pc2026', 'round_screen', 'depth',     'Technical depth',    'Real systems and real numbers beat theory.',    5, 1.0, 1),
+('crit_readiness', 'plan_pc2026', 'round_screen', 'readiness', 'Speaker readiness',  'Evidence the speaker can deliver this well.',   5, 0.5, 2);
 
 INSERT INTO reviews (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at) VALUES
 ('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
