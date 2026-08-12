@@ -402,7 +402,7 @@ export function renderScheduleEmbed(data: PublicScheduleResponse, options: Embed
             const starts = formatEmbedTime(slot.startsAt, data.timezone);
             const ends = formatEmbedTime(slot.endsAt, data.timezone);
             return `<details class="item">
-  <summary><span class="time">${escapeHtml(starts)}</span> · ${escapeHtml(slot.session.title)}</summary>
+  <summary><span class="time">${escapeHtml(starts)}</span> · ${escapeHtml(slot.session.title)}${track ? ` <span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""} <span class="pill" style="background:#e4e4e7; color:#18181b">${escapeHtml(slot.session.format)}</span></summary>
   <div class="detail">
   <div class="row">
     <p class="title">${escapeHtml(slot.session.title)}</p>
