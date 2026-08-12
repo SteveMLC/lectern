@@ -2059,22 +2059,39 @@ export class D1Repo implements SpeakerOpsRepo {
   }
 
   async createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset> {
-    await this.db
-      .prepare(
-        `INSERT INTO speaker_assets (id, speaker_id, kind, filename, content_type, size_bytes, r2_key, uploaded_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-      )
-      .bind(
-        input.id,
-        input.speakerId,
-        input.kind,
-        input.filename,
-        input.contentType,
-        input.sizeBytes,
-        input.r2Key,
-        input.uploadedAt,
-      )
-      .run();
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO speaker_assets (id, speaker_id, kind, filename, content_type, size_bytes, r2_key, uploaded_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+        )
+        .bind(
+          input.id,
+          input.speakerId,
+          input.kind,
+          input.filename,
+          input.contentType,
+          input.sizeBytes,
+          input.r2Key,
+          input.uploadedAt,
+        ),
+      // Delivering the file IS doing the task. A speaker who uploads their
+      // slides should not also have to tick "Upload draft slides" — leaving
+      // it pending makes the checklist lie about work already done. Matched
+      // on task_definitions.key = asset kind ('headshot', 'slides'), so an
+      // event whose checklist uses other keys simply auto-completes nothing.
+      this.db
+        .prepare(
+          `UPDATE speaker_tasks
+              SET status = 'complete', completed_at = ?3, updated_at = ?3
+            WHERE speaker_id = ?1
+              AND status <> 'complete'
+              AND task_definition_id IN (
+                SELECT id FROM task_definitions WHERE key = ?2
+              )`,
+        )
+        .bind(input.speakerId, input.kind, input.uploadedAt),
+    ]);
     const created = await this.getSpeakerAssetById(input.id);
     if (!created) throw new Error("Asset not found after insert.");
     return created;
