@@ -1,0 +1,138 @@
+{
+  "CNT-11": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-02": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-03": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-05": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-06": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-07": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-08": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-09": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-10": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-11": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "EMB-12": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "SPK-06": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "SPK-07": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "SPK-10": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "SPK-16": {
+    "verdict": "pass | partial | fail | not_found",
+    "notes": ""
+  },
+  "ABS-07": {
+    "verdict": "pass",
+    "notes": "Blind mode verified live: PUT round_final blindMode=true, then the reviewer queue payload contained zero identity strings (speakers field null, no names/companies anywhere in raw JSON) while the organizer view retained identity; restored to false after."
+  },
+  "AIA-06": {
+    "verdict": "pass",
+    "notes": "Session moves + conflict recompute + persistence proven live repeatedly: drag/exact moves re-place sessions, the conflict banner count changes accordingly, and placements survive reload (exercised by the 24-check judge chain on every run)."
+  },
+  "CFP-18": {
+    "verdict": "pass",
+    "notes": "Event scoping verified live: groundwork-2026 submissions list returns 20 records, zero horizon-2026 leakage; the admin event switcher rescopes every surface."
+  },
+  "CNT-08": {
+    "verdict": "pass",
+    "notes": "Bulk reminders verified live: multi-select checkboxes + 'Send task reminders' on /admin/files, and POST /communications/bulk with two speakers returned {sent:2, recipientEmails:[ada,lin]} with receipted messages."
+  },
+  "CNT-10": {
+    "verdict": "pass",
+    "notes": "Organizer speaker editing verified live: 'Edit organizer record' UI on the roster (with workflowStatus + logisticsNotes), full-object PATCH /speakers/spk_lin returned 200 and a sentinel bio persisted into the public speakers payload; state reset afterwards."
+  },
+  "CNT-12": {
+    "verdict": "pass",
+    "notes": "Content approval gate verified live: PATCH content-approval status=needs_review removed ses_keynote from the public sessions payload; status=approved restored it. Per-session control, public output gated."
+  },
+  "CNT-14": {
+    "verdict": "pass",
+    "notes": "Bulk ZIP verified live: multi-select + 'Download latest ZIP' UI on /admin/files; POST assets/download.zip with two asset ids returned a valid application/zip (37KB) with speaker-grouped, version-prefixed entries containing real file bytes."
+  },
+  "EMB-01": {
+    "verdict": "partial",
+    "notes": "Sessions List cards show title, description with a show-more expansion, speakers with job title and company, and format/track tags — but per-card date/time and room live on the schedule and itinerary widgets rather than the catalogue cards."
+  },
+  "EMB-04": {
+    "verdict": "pass",
+    "notes": "Speakers directory verified live: entries ordered alphabetically by surname (checked programmatically), each with headshot photo, name, job title, and company."
+  },
+  "SPK-13": {
+    "verdict": "pass",
+    "notes": "Free-form bulk compose now exists (subject+body to selected speakers, receipted). Real transport proven once end to end: allowlisted Resend send, mode:resend status:sent with a provider receipt, real email arrived (PR #17); all other sends deliberately simulated with receipts."
+  },
+  "ABS-09": {
+    "verdict": "pass",
+    "notes": "Per-reviewer nudge exists on /admin/evaluations progress view; triggering records a receipted simulated message. Verified live."
+  },
+  "ABS-13": {
+    "verdict": "pass",
+    "notes": "Review results CSV export (reviewResultsToCsv) exposed from the evaluations workspace; formula-injection guarded."
+  },
+  "ABS-14": {
+    "verdict": "not_found",
+    "notes": "We deliberately do not claim AI-assisted review scoring anywhere in UI or docs; per the item's own rule this is not applicable rather than a miss."
+  },
+  "CFP-08": {
+    "verdict": "partial",
+    "notes": "No email on submission by design (on-screen confirmation with reference id instead), but every simulated send is logged in the organizer outbox at /admin/communications with recipient, subject, status and timestamp."
+  },
+  "CFP-14": {
+    "verdict": "pass",
+    "notes": "Decision emails for accept/waitlist/deny are AI-drafted from the organizer's own notes, reviewed and edited before sending, and the UI reports a receipted simulated dispatch. Verified live repeatedly. Transport additionally proven: one real allowlisted Resend delivery with provider receipt (mode:resend, status:sent)."
+  },
+  "EMB-13": {
+    "verdict": "pass",
+    "notes": "Public event page carries 'My itinerary — Anonymous and stored only in this browser'. Saved two sessions via per-card star; localStorage speakerops.itinerary.horizon-2026 held exactly ['ses_keynote','ses_from_sub_agents_prod']; per-card state shows 'Saved'; removing updates the view. Verified live."
+  },
+  "EMB-14": {
+    "verdict": "pass",
+    "notes": "Saved itinerary survived a full browser reload (localStorage), and an 'Export .ics' control is present and reports success. Verified live."
+  },
+  "EMB-15": {
+    "verdict": "pass",
+    "notes": "Organizer embed generation verified: /admin/embeds offers widget types with styled/basic iframe variants and a copyable snippet; all embed URLs render populated content to a logged-out viewer."
+  },
+  "EMB-16": {
+    "verdict": "pass",
+    "notes": "Cross-widget consistency checked live: 'Opening Keynote: The Next Decade of Building' with room Main Hall appears identically in the schedule and sessions widgets; Dana Whitfield's name/title/company identical across speakers gallery and schedule."
+  }
+}
