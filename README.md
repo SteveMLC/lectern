@@ -44,7 +44,7 @@ The complete judging path is deployed and production-proven:
 - Deterministic demo seed and one-command reset.
 - Domain layer with tests: schedule conflict detection (room + speaker double-booking), guarded review transitions, and idempotent acceptance-to-session conversion.
 
-The judging-critical product path is live on Cloudflare Workers with D1 and R2 provisioned. Release and walkthrough status lives in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
+The judging-critical product path is live on Cloudflare Workers with D1 and R2 provisioned. Release status lives in [`docs/CRITICAL_PATH.md`](docs/CRITICAL_PATH.md).
 
 ## Hackathon scope clarifications
 
@@ -129,7 +129,7 @@ The brief allows a valid submission up to $500 in AI token-cost reimbursement, s
 - `pnpm usage:runtime` imports unseen provider-reported counters from the organizer-only production audit endpoint. The app persists those counters before responding and never stores prompts, reviewer notes, or generated text in the audit table.
 
 Paid model use is fail-closed. Runtime drafting uses deterministic templates unless `AI_RUNTIME_MODE=enabled` is set in addition to an API key. The official evaluator must be launched through `pnpm eval:paid`, which requires explicit one-command approval, one scenario, at most 20 turns, and an approved ceiling no greater than $2. `pnpm verify` and the requirement-ledger check are the zero-spend default.
-- `pnpm usage:receipt` hashes a private invoice or subscription receipt and appends a sanitized allocation record without rewriting old usage evidence or committing the receipt itself.
+- `pnpm usage:provider-import` backfills provider exports without double-counting app-level request counters; `pnpm usage:receipt` hashes private subscription or API billing evidence and appends a sanitized allocation record without committing raw files.
 
 Raw session transcripts and receipts stay private (hashes are committed, contents are not) and go to the organizer on request with the claim.
 

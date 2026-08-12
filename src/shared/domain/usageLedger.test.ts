@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateCost, parseClaude, parseCodex, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, runtimePayloadFromD1Results, selectRateId, unexpectedTrackedPrivatePaths, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
+import { estimateCost, parseAnthropicUsageExport, parseClaude, parseCodex, parseCsv, parseOpenClaw, readJsonlEvidence, requirePrivateEvidenceFile, runtimeEventToEntry, runtimePayloadFromD1Results, selectRateId, unexpectedTrackedPrivatePaths, validateEntry, validateReceipt } from "../../../scripts/usage-ledger.mjs";
 
 describe("usage ledger", () => {
   it("prices cached and uncached tokens separately", () => {
@@ -29,6 +29,31 @@ describe("usage ledger", () => {
   it("requires a pricing record instead of a hardcoded model change", () => {
     expect(() => selectRateId({ rates: {} }, "openai", "new-model", "2026-08-10T00:00:00Z"))
       .toThrow("add a dated entry to usage/pricing.json");
+  });
+
+  it("parses quoted provider CSV fields without leaking metadata into usage aggregates", () => {
+    expect(parseCsv('day,workspace,tokens\n2026-08-12,"Team, Primary",42\n')).toEqual([
+      { day: "2026-08-12", workspace: "Team, Primary", tokens: "42" },
+    ]);
+  });
+
+  it("aggregates Anthropic provider exports by day and model", () => {
+    const header = "usage_date_utc,model_version,usage_input_tokens_no_cache,usage_input_tokens_cache_write_5m,usage_input_tokens_cache_write_1h,usage_input_tokens_cache_read,usage_output_tokens";
+    const results = parseAnthropicUsageExport(`${header}\n2026-08-12,claude-sonnet-5,10,20,30,40,50\n2026-08-12,claude-sonnet-5,1,2,3,4,5\n`);
+    expect(results).toEqual([{
+      day: "2026-08-12",
+      model: "claude-sonnet-5",
+      tokens: {
+        uncachedInput: 11,
+        cacheRead: 44,
+        cacheWrite: 0,
+        cacheWrite5m: 22,
+        cacheWrite1h: 33,
+        output: 55,
+        reasoningOutput: 0,
+        providerTotal: 165,
+      },
+    }]);
   });
 
   it("deduplicates repeated Claude message records", () => {
@@ -277,6 +302,44 @@ describe("usage ledger", () => {
       coversEntryIds: ["usage-1"],
     };
     expect(validateReceipt(receipt, [entry])).toEqual([]);
+  });
+
+  it("validates provider usage statements with hashed supporting purchase receipts", () => {
+    const entry = { id: "usage-api-1", provider: "anthropic", cost: { actualBilledUsd: null } };
+    const statement = {
+      schemaVersion: 1,
+      id: "receipt-api-1",
+      recordedAt: "2026-08-12T12:00:00Z",
+      provider: "anthropic",
+      label: "Anthropic API usage — August 2026",
+      period: { start: "2026-08-10T00:00:00Z", end: "2026-08-12T23:59:59Z" },
+      amountUsd: 40.13,
+      receiptStatus: "evidenced_provider_usage_statement",
+      source: { kind: "provider_usage_statement", sha256: "e".repeat(64), bytes: 200, rawEvidence: "retained_privately" },
+      supportingSources: [
+        { kind: "provider_receipt", sha256: "f".repeat(64), bytes: 100, rawEvidence: "retained_privately" },
+      ],
+      coversEntryIds: ["usage-api-1"],
+    };
+    expect(validateReceipt(statement, [entry])).toEqual([]);
+  });
+
+  it("validates zero-dollar append-only coverage extensions", () => {
+    const entry = { id: "usage-new", provider: "openai", cost: { actualBilledUsd: null } };
+    const extension = {
+      schemaVersion: 1,
+      id: "allocation-1",
+      recordedAt: "2026-08-12T12:00:00Z",
+      provider: "openai",
+      label: "ChatGPT Pro — coverage extension",
+      period: { start: "2026-07-21T00:00:00Z", end: "2026-08-21T23:59:59Z" },
+      amountUsd: 0,
+      receiptStatus: "evidenced_allocation_extension",
+      extendsReceiptId: "receipt-primary",
+      source: { kind: "existing_evidence_reference", sha256: "a".repeat(64), bytes: 123, rawEvidence: "retained_privately" },
+      coversEntryIds: ["usage-new"],
+    };
+    expect(validateReceipt(extension, [entry])).toEqual([]);
   });
 
   it("refuses to ingest an unrelated receipt outside the private evidence directory", async () => {

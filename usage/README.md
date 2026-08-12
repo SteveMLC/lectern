@@ -99,6 +99,29 @@ pnpm usage:receipt -- \
 
 By default the command covers all uncovered entries from that provider whose work period overlaps the billing period. Use `--covers usage-id-1,usage-id-2` only when a receipt needs a narrower allocation. The command hashes the raw file, appends `receipts.jsonl`, and regenerates the report. It rejects duplicate receipt files, unknown entries, provider mismatches, and double-covered work. Use `--dry-run` to inspect the allocation first.
 
+Use `--source-kinds` to keep subscription usage and metered API usage in separate, non-overlapping allocations. For prepaid APIs, the provider cost export—not the top-up face value—is the claim amount; attach purchase receipts only as supporting evidence:
+
+```bash
+pnpm usage:provider-import -- \
+  --provider anthropic \
+  --file usage/private/anthropic-api-tokens.csv
+
+pnpm usage:receipt -- \
+  --file usage/private/anthropic-api-cost.csv \
+  --supporting-files usage/private/topup-1.pdf,usage/private/topup-2.pdf \
+  --provider anthropic \
+  --label "Anthropic API token spend — August 2026" \
+  --amount 40.13 \
+  --period-start 2026-08-10T00:00:00Z \
+  --period-end 2026-08-12T23:59:59Z \
+  --evidence-kind provider_usage_statement \
+  --source-kinds speakerops_runtime_d1,anthropic_provider_usage_export
+```
+
+`usage:provider-import` is idempotent. It aggregates the private provider export by day and model, subtracts request-level application counters already in the ledger, and appends only residual provider-reported usage. API key, workspace, and billing metadata never enter the tracked ledger.
+
+After each successful `usage:sync`, the logger automatically covers new in-period entries with zero-dollar allocation extensions that reference the already-recorded receipt. This keeps receipt evidence append-only and the billed total unchanged. You can also run `pnpm usage:allocate -- --all` explicitly; validation rejects overlapping coverage.
+
 The command fails closed for files outside `usage/private/`, including symlinks that resolve outside it. This prevents broad local searches or unrelated billing documents from entering the reimbursement workflow accidentally.
 
 Never revise an earlier usage entry to add billed spend. Corrections and receipts are new immutable records, preserving the original provider evidence and git history.
@@ -108,5 +131,7 @@ Never revise an earlier usage entry to add billed spend. Corrections and receipt
 - Keep the raw JSONL files and provider/account exports in `usage/private/`; git ignores their contents.
 - Add the matching invoice or subscription receipt to `usage/private/` and record it with `pnpm usage:receipt`; do not edit an existing ledger entry.
 - Keep plan-level charges separate from the API-equivalent estimate. Do not claim both for the same usage.
+- Do not claim unused prepaid balance. Allocate the provider-reported consumed cost and keep top-up receipts as supporting proof.
+- Treat plan quota resets as usage evidence, not a separate purchase, unless a separate paid-credit receipt exists.
 - Preserve relevant commit hashes and artifact paths in each entry.
 - Run `pnpm usage:check` and attach the ledger/report plus requested private evidence when the organizer asks.
