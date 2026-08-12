@@ -217,12 +217,30 @@ export function validateReceipt(receipt, entries, seen = new Set(), covered = ne
   else if (periodEnd < periodStart) errors.push("period end must not precede period start");
   requireText("provider", receipt.provider);
   requireText("label", receipt.label);
-  if (!Number.isFinite(receipt.amountUsd) || receipt.amountUsd <= 0) errors.push("amountUsd must be positive");
-  if (receipt.receiptStatus !== "evidenced_subscription_receipt") errors.push("receiptStatus must be evidenced_subscription_receipt");
-  if (receipt.source?.kind !== "provider_receipt") errors.push("source.kind must be provider_receipt");
+  if (!Number.isFinite(receipt.amountUsd) || receipt.amountUsd < 0) errors.push("amountUsd must be non-negative");
+  const evidenceKinds = {
+    evidenced_subscription_receipt: "provider_receipt",
+    evidenced_provider_usage_statement: "provider_usage_statement",
+    evidenced_allocation_extension: "existing_evidence_reference",
+  };
+  if (!evidenceKinds[receipt.receiptStatus]) errors.push("receiptStatus must identify evidenced subscription, provider usage spend, or a coverage extension");
+  if (evidenceKinds[receipt.receiptStatus] && receipt.source?.kind !== evidenceKinds[receipt.receiptStatus]) {
+    errors.push(`source.kind must be ${evidenceKinds[receipt.receiptStatus]}`);
+  }
+  if (receipt.receiptStatus === "evidenced_allocation_extension") {
+    if (receipt.amountUsd !== 0) errors.push("allocation extensions must have amountUsd 0");
+    requireText("extendsReceiptId", receipt.extendsReceiptId);
+    if (receipt.supportingSources?.length) errors.push("allocation extensions must not duplicate supporting evidence");
+  } else if (receipt.amountUsd <= 0) errors.push("primary billing evidence amountUsd must be positive");
   if (!/^[a-f0-9]{64}$/.test(receipt.source?.sha256 ?? "")) errors.push("source.sha256 must be a SHA-256 digest");
   if (!Number.isSafeInteger(receipt.source?.bytes) || receipt.source.bytes < 1) errors.push("source.bytes must be positive");
   if (receipt.source?.rawEvidence !== "retained_privately") errors.push("source.rawEvidence must be retained_privately");
+  for (const [index, source] of (receipt.supportingSources ?? []).entries()) {
+    if (source?.kind !== "provider_receipt") errors.push(`supportingSources[${index}].kind must be provider_receipt`);
+    if (!/^[a-f0-9]{64}$/.test(source?.sha256 ?? "")) errors.push(`supportingSources[${index}].sha256 must be a SHA-256 digest`);
+    if (!Number.isSafeInteger(source?.bytes) || source.bytes < 1) errors.push(`supportingSources[${index}].bytes must be positive`);
+    if (source?.rawEvidence !== "retained_privately") errors.push(`supportingSources[${index}].rawEvidence must be retained_privately`);
+  }
   if (!Array.isArray(receipt.coversEntryIds) || receipt.coversEntryIds.length === 0) errors.push("coversEntryIds must identify at least one usage entry");
   for (const id of receipt.coversEntryIds ?? []) {
     const entry = entries.find((candidate) => candidate.id === id);
@@ -266,6 +284,74 @@ function subtractTokens(current, previous = {}) {
 
 function sourceDigest(text) {
   return createHash("sha256").update(text).digest("hex");
+}
+
+export function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') quoted = false;
+      else field += character;
+    } else if (character === '"') quoted = true;
+    else if (character === ",") {
+      row.push(field);
+      field = "";
+    } else if (character === "\n") {
+      row.push(field.replace(/\r$/, ""));
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      field = "";
+    } else field += character;
+  }
+  if (quoted) throw new Error("CSV contains an unterminated quoted field");
+  row.push(field.replace(/\r$/, ""));
+  if (row.some((value) => value !== "")) rows.push(row);
+  if (!rows.length) return [];
+  const headers = rows[0];
+  return rows.slice(1).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+}
+
+export function parseAnthropicUsageExport(text) {
+  const required = [
+    "usage_date_utc",
+    "model_version",
+    "usage_input_tokens_no_cache",
+    "usage_input_tokens_cache_write_5m",
+    "usage_input_tokens_cache_write_1h",
+    "usage_input_tokens_cache_read",
+    "usage_output_tokens",
+  ];
+  const rows = parseCsv(text);
+  if (!rows.length) throw new Error("Anthropic usage export has no usage rows");
+  for (const header of required) {
+    if (!(header in rows[0])) throw new Error(`Anthropic usage export is missing ${header}`);
+  }
+  const groups = new Map();
+  for (const row of rows) {
+    const day = row.usage_date_utc;
+    const model = row.model_version;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !model) throw new Error("Anthropic usage export has an invalid date or model");
+    const key = `${day}:${model}`;
+    const tokens = normalizeTokens({
+      uncachedInput: row.usage_input_tokens_no_cache,
+      cacheRead: row.usage_input_tokens_cache_read,
+      cacheWrite5m: row.usage_input_tokens_cache_write_5m,
+      cacheWrite1h: row.usage_input_tokens_cache_write_1h,
+      output: row.usage_output_tokens,
+    });
+    tokens.providerTotal = tokens.uncachedInput + tokens.cacheRead + tokens.cacheWrite
+      + tokens.cacheWrite5m + tokens.cacheWrite1h + tokens.output;
+    const prior = groups.get(key);
+    groups.set(key, prior ? { ...prior, tokens: addTokens(prior.tokens, tokens) } : { day, model, tokens });
+  }
+  return [...groups.values()].sort((left, right) => `${left.day}:${left.model}`.localeCompare(`${right.day}:${right.model}`));
 }
 
 export function selectRateId(pricing, provider, model, at = new Date().toISOString()) {
@@ -357,6 +443,7 @@ function cliArgs(argv) {
     else if (key === "quiet") options.quiet = true;
     else if (key === "check") options.check = true;
     else if (key === "d1") options.d1 = true;
+    else if (key === "all") options.all = true;
     else options[key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = argv[++index];
   }
   return options;
@@ -705,12 +792,170 @@ async function sync(options = {}) {
       throw new Error(`Usage source ${source.name ?? source.file}: ${error.message}`);
     }
   }
-  if (!options.dryRun && captured.length) await renderReport();
+  if (!options.dryRun && captured.length) {
+    await allocation({ all: true, quiet: true, skipReport: true });
+    await renderReport();
+  }
   if (!options.quiet) {
     const action = options.dryRun ? "would capture" : "captured";
     console.log(`AI usage sync ${action} ${captured.length} incremental entr${captured.length === 1 ? "y" : "ies"} from ${config.sources.length} configured source(s).`);
   }
   return captured;
+}
+
+async function allocation(options = {}) {
+  if (!options.all && !options.receiptId) throw new Error("allocation requires --receipt-id or --all");
+  const [entries, receipts] = await Promise.all([readLedger(), readReceipts()]);
+  const covered = new Set(receipts.flatMap((item) => item.coversEntryIds ?? []));
+  const targets = receipts.filter((receipt) =>
+    receipt.receiptStatus !== "evidenced_allocation_extension"
+      && (options.all || receipt.id === options.receiptId),
+  );
+  if (!targets.length && !options.all) throw new Error(`Unknown primary receipt ${options.receiptId}`);
+  const now = new Date().toISOString();
+  const extensions = [];
+  for (const target of targets) {
+    const sourceKinds = new Set(target.coversEntryIds
+      .map((id) => entries.find((entry) => entry.id === id)?.source?.kind)
+      .filter(Boolean));
+    const explicitIds = options.covers ? new Set(options.covers.split(",").map((id) => id.trim()).filter(Boolean)) : null;
+    const coversEntryIds = entries.filter((entry) =>
+      entry.provider === target.provider
+        && !covered.has(entry.id)
+        && entry.cost?.actualBilledUsd === null
+        && entry.period.end >= target.period.start
+        && entry.period.start <= target.period.end
+        && sourceKinds.has(entry.source?.kind)
+        && (!explicitIds || explicitIds.has(entry.id)),
+    ).map((entry) => entry.id);
+    if (!coversEntryIds.length) continue;
+    const idHash = createHash("sha256")
+      .update(`${target.id}:${coversEntryIds.join(",")}`)
+      .digest("hex")
+      .slice(0, 12);
+    const extension = {
+      schemaVersion: 1,
+      id: `allocation-${now.slice(0, 10).replaceAll("-", "")}-${idHash}`,
+      recordedAt: now,
+      provider: target.provider,
+      label: `${target.label} — coverage extension`,
+      period: target.period,
+      amountUsd: 0,
+      receiptStatus: "evidenced_allocation_extension",
+      extendsReceiptId: target.id,
+      source: {
+        kind: "existing_evidence_reference",
+        sha256: target.source.sha256,
+        bytes: target.source.bytes,
+        rawEvidence: "retained_privately",
+      },
+      coversEntryIds,
+      notes: ["Automatically appended after usage sync; references existing private billing evidence and adds no billed amount."],
+    };
+    const receiptIds = new Set([...receipts, ...extensions].map((item) => item.id));
+    const errors = validateReceipt(extension, entries, receiptIds, covered);
+    if (errors.length) throw new Error(`Allocation extension failed validation:\n- ${errors.join("\n- ")}`);
+    extensions.push(extension);
+  }
+  if (!options.dryRun && extensions.length) {
+    await appendFile(receiptsPath, `${extensions.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+    if (!options.skipReport) await renderReport();
+  }
+  if (!options.quiet) console.log(`Receipt coverage appended ${extensions.length} zero-dollar extension${extensions.length === 1 ? "" : "s"}.`);
+  return extensions;
+}
+
+async function providerImport(options = {}) {
+  if (!options.file || options.provider !== "anthropic") {
+    throw new Error("provider-import currently requires --provider anthropic and --file");
+  }
+  const exportPath = await requirePrivateEvidenceFile(expandLocalPath(options.file));
+  const [rawExport, existing, pricing] = await Promise.all([
+    readFile(exportPath),
+    readLedger(),
+    readPricing(),
+  ]);
+  const exportText = rawExport.toString("utf8");
+  const aggregates = parseAnthropicUsageExport(exportText);
+  const exportSha256 = sourceDigest(rawExport);
+  const lineCount = exportText.split(/\r?\n/).filter((line) => line.trim()).length;
+  const now = new Date().toISOString();
+  const entries = [];
+
+  for (const aggregate of aggregates) {
+    const matchesDayAndModel = (entry) => entry.provider === "anthropic"
+      && entry.model === aggregate.model
+      && entry.period.start.slice(0, 10) === aggregate.day;
+    const runtimeTokens = existing
+      .filter((entry) => matchesDayAndModel(entry) && entry.source?.kind === "speakerops_runtime_d1")
+      .reduce((sum, entry) => addTokens(sum, entry.tokens), normalizeTokens());
+    const alreadyImported = existing
+      .filter((entry) => matchesDayAndModel(entry) && entry.source?.kind === "anthropic_provider_usage_export")
+      .reduce((sum, entry) => addTokens(sum, entry.tokens), normalizeTokens());
+    const residualCumulative = subtractTokens(aggregate.tokens, runtimeTokens);
+    const tokens = subtractTokens(residualCumulative, alreadyImported);
+    if (Object.values(tokens).every((value) => value === 0)) continue;
+
+    const period = {
+      start: `${aggregate.day}T00:00:00.000Z`,
+      end: `${aggregate.day}T23:59:59.999Z`,
+    };
+    const rateId = selectRateId(pricing, "anthropic", aggregate.model, period.end);
+    const idHash = createHash("sha256")
+      .update(`${exportSha256}:${aggregate.day}:${aggregate.model}:${JSON.stringify(residualCumulative)}`)
+      .digest("hex")
+      .slice(0, 12);
+    entries.push({
+      schemaVersion: 1,
+      id: `usage-${aggregate.day.replaceAll("-", "")}-${aggregate.model}-${idHash}`,
+      recordedAt: now,
+      period,
+      actor: { name: options.actor ?? "Anthropic API evaluation and product testing", surface: options.surface ?? "Anthropic Console usage export" },
+      provider: "anthropic",
+      model: aggregate.model,
+      category: options.category ?? "product_api_evaluation",
+      description: options.description ?? "Provider-reported API usage used for SpeakerOps product testing and evaluation, excluding request-level runtime counters already logged by the application.",
+      measurement: "provider_reported",
+      calls: null,
+      tokens,
+      cost: {
+        kind: "api_list_price_estimate",
+        rateId,
+        estimatedUsd: estimateCost(tokens, pricing.rates[rateId]),
+        actualBilledUsd: null,
+        receiptStatus: "pending_provider_invoice",
+      },
+      source: {
+        kind: "anthropic_provider_usage_export",
+        sessionId: `anthropic-api-${aggregate.day}-${aggregate.model}`,
+        sha256: exportSha256,
+        lineCount,
+        rawEvidence: "retained_privately",
+        cumulative: residualCumulative,
+      },
+      commits: [],
+      artifacts: options.artifacts ? options.artifacts.split(",").filter(Boolean) : ["docs/eval", "src/worker/integrations"],
+      notes: [
+        "Imported from the provider usage export; API key identifiers and workspace metadata remain private.",
+        "Persisted SpeakerOps runtime request counters were subtracted before this aggregate was appended, preventing token double-counting.",
+        "The provider export does not report request count in this view, so calls is null.",
+      ],
+    });
+  }
+
+  const seen = new Set(existing.map((entry) => entry.id));
+  const failures = entries.flatMap((entry) => validateEntry(entry, pricing.rates, seen));
+  if (failures.length) throw new Error(`Provider usage import failed validation:\n- ${failures.join("\n- ")}`);
+  if (!options.dryRun && entries.length) {
+    await appendFile(ledgerPath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+    await renderReport();
+  }
+  if (!options.quiet) {
+    const action = options.dryRun ? "would import" : "imported";
+    console.log(`Provider usage ${action} ${entries.length} aggregate entr${entries.length === 1 ? "y" : "ies"}; runtime request counters were subtracted first.`);
+    if (options.dryRun && entries.length) console.log(JSON.stringify(entries, null, 2));
+  }
+  return entries;
 }
 
 async function receipt(options = {}) {
@@ -725,17 +970,29 @@ async function receipt(options = {}) {
   const period = { start: new Date(periodStart).toISOString(), end: new Date(periodEnd).toISOString() };
   if (period.end < period.start) throw new Error("--period-end must not precede --period-start");
 
+  const evidenceKind = options.evidenceKind ?? "subscription_receipt";
+  const evidenceKinds = {
+    subscription_receipt: { receiptStatus: "evidenced_subscription_receipt", sourceKind: "provider_receipt" },
+    provider_usage_statement: { receiptStatus: "evidenced_provider_usage_statement", sourceKind: "provider_usage_statement" },
+  };
+  if (!evidenceKinds[evidenceKind]) throw new Error("--evidence-kind must be subscription_receipt or provider_usage_statement");
   const receiptFilePath = await requirePrivateEvidenceFile(expandLocalPath(options.file));
-  const [rawReceipt, entries, receipts] = await Promise.all([
+  const supportingPaths = options.supportingFiles
+    ? await Promise.all(options.supportingFiles.split(",").map((file) => requirePrivateEvidenceFile(expandLocalPath(file.trim()))))
+    : [];
+  const [rawReceipt, supportingFiles, entries, receipts] = await Promise.all([
     readFile(receiptFilePath),
+    Promise.all(supportingPaths.map((file) => readFile(file))),
     readLedger(),
     readReceipts(),
   ]);
   const alreadyCovered = new Set(receipts.flatMap((item) => item.coversEntryIds ?? []));
   const explicitIds = options.covers ? options.covers.split(",").map((id) => id.trim()).filter(Boolean) : null;
+  const sourceKinds = options.sourceKinds ? new Set(options.sourceKinds.split(",").map((kind) => kind.trim()).filter(Boolean)) : null;
   const coversEntryIds = explicitIds ?? entries
     .filter((entry) =>
       entry.provider === options.provider &&
+      (!sourceKinds || sourceKinds.has(entry.source?.kind)) &&
       entry.cost.actualBilledUsd === null &&
       entry.period.end >= period.start &&
       entry.period.start <= period.end &&
@@ -746,7 +1003,19 @@ async function receipt(options = {}) {
 
   const now = new Date().toISOString();
   const sha256 = sourceDigest(rawReceipt);
-  if (receipts.some((item) => item.source?.sha256 === sha256)) throw new Error("This receipt file is already recorded.");
+  const recordedEvidence = new Set(receipts
+    .filter((item) => item.receiptStatus !== "evidenced_allocation_extension")
+    .flatMap((item) => [item.source?.sha256, ...(item.supportingSources ?? []).map((source) => source.sha256)])
+    .filter(Boolean));
+  const supportingSources = supportingFiles.map((raw) => ({
+    kind: "provider_receipt",
+    sha256: sourceDigest(raw),
+    bytes: raw.length,
+    rawEvidence: "retained_privately",
+  }));
+  const incomingEvidence = [sha256, ...supportingSources.map((source) => source.sha256)];
+  if (incomingEvidence.some((digest) => recordedEvidence.has(digest))) throw new Error("A billing evidence file is already recorded.");
+  if (new Set(incomingEvidence).size !== incomingEvidence.length) throw new Error("The same billing evidence file was supplied more than once.");
   const idHash = createHash("sha256")
     .update(`${options.provider}:${period.start}:${period.end}:${amountUsd}:${sha256}`)
     .digest("hex")
@@ -759,15 +1028,19 @@ async function receipt(options = {}) {
     label: options.label,
     period,
     amountUsd,
-    receiptStatus: "evidenced_subscription_receipt",
+    receiptStatus: evidenceKinds[evidenceKind].receiptStatus,
     source: {
-      kind: "provider_receipt",
+      kind: evidenceKinds[evidenceKind].sourceKind,
       sha256,
       bytes: rawReceipt.length,
       rawEvidence: "retained_privately",
     },
+    ...(supportingSources.length ? { supportingSources } : {}),
     coversEntryIds,
-    notes: ["Raw receipt retained privately; only its digest, byte size, allocation, and billed amount are committed."],
+    notes: [
+      "Raw billing evidence is retained privately; only digests, byte sizes, allocation, and evidenced spend are committed.",
+      ...(options.note ? [options.note] : []),
+    ],
   };
   const errors = validateReceipt(record, entries, new Set(receipts.map((item) => item.id)), alreadyCovered);
   if (errors.length) throw new Error(`Receipt failed validation:\n- ${errors.join("\n- ")}`);
@@ -818,6 +1091,8 @@ function summaryTable({ totals, estimated }) {
 
 function buildReport(entries, digest, generatedAt, receipts = [], receiptDigest = sourceDigest("")) {
   const agg = aggregate(entries, receipts);
+  const primaryEvidenceCount = receipts.filter((receipt) => receipt.receiptStatus !== "evidenced_allocation_extension").length;
+  const extensionCount = receipts.length - primaryEvidenceCount;
 
   const inventory = entries.map((entry) => {
     const day = entry.period.end.slice(0, 10);
@@ -826,8 +1101,14 @@ function buildReport(entries, digest, generatedAt, receipts = [], receiptDigest 
     return `| ${day} | ${entry.actor.name} | ${entry.model} | ${entry.category.replaceAll("_", " ")} | ${entry.tokens.providerTotal.toLocaleString("en-US")} | $${entry.cost.estimatedUsd.toFixed(2)} | ${evidence} | ${refs.length ? refs.map((ref) => `\`${ref.slice(0, 9)}\``).join(" ") : "—"} |`;
   });
   const receiptInventory = receipts.map((receipt) => {
-    const evidence = `\`${receipt.source.sha256.slice(0, 12)}…\` (${receipt.source.bytes.toLocaleString("en-US")} bytes)`;
-    return `| ${receipt.period.start.slice(0, 10)}–${receipt.period.end.slice(0, 10)} | ${receipt.provider} | ${receipt.label} | $${receipt.amountUsd.toFixed(2)} | ${receipt.coversEntryIds.length} | ${evidence} |`;
+    const supportingCount = receipt.supportingSources?.length ?? 0;
+    const evidence = `\`${receipt.source.sha256.slice(0, 12)}…\` (${receipt.source.bytes.toLocaleString("en-US")} bytes${supportingCount ? ` + ${supportingCount} supporting receipt${supportingCount === 1 ? "" : "s"}` : ""})`;
+    const evidenceClass = receipt.receiptStatus === "evidenced_provider_usage_statement"
+      ? "API usage statement"
+      : receipt.receiptStatus === "evidenced_allocation_extension"
+        ? "coverage extension"
+        : "subscription receipt";
+    return `| ${receipt.period.start.slice(0, 10)}–${receipt.period.end.slice(0, 10)} | ${receipt.provider} | ${receipt.label} | ${evidenceClass} | $${receipt.amountUsd.toFixed(2)} | ${receipt.coversEntryIds.length} | ${evidence} |`;
   });
 
   const md = `# AI usage reimbursement audit
@@ -841,7 +1122,7 @@ Receipt-allocation digest: \`${receiptDigest}\` (${receipts.length} records). Ra
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
 2. **API-equivalent estimate — $${agg.estimated.toFixed(2)}** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $${agg.actual.toFixed(2)} evidenced so far** — the number a reimbursement claim uses. ${agg.pending} usage entr${agg.pending === 1 ? "y" : "ies"} remain uncovered by a recorded receipt.
+3. **Actual billed spend — $${agg.actual.toFixed(2)} evidenced so far** — the number a reimbursement claim uses, backed by ${primaryEvidenceCount} primary billing record${primaryEvidenceCount === 1 ? "" : "s"}${extensionCount ? ` plus ${extensionCount} zero-dollar coverage extension${extensionCount === 1 ? "" : "s"}` : ""}. ${agg.pending} usage entr${agg.pending === 1 ? "y" : "ies"} remain uncovered by recorded evidence.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -859,18 +1140,18 @@ ${inventory.join("\n")}
 
 ## Receipt allocations
 
-Receipt files stay in \`usage/private/\`. The tracked allocation ledger stores only a SHA-256, byte size, billing period, amount, and the usage-entry ids covered, preventing the same work or receipt from being claimed twice.
+Billing evidence stays in \`usage/private/\`. The tracked allocation ledger stores only SHA-256 digests, byte sizes, billing period, evidenced amount, and the usage-entry ids covered, preventing the same work or evidence from being claimed twice.
 
-| Billing period | Provider | Receipt label | Actual USD | Usage entries covered | Private receipt evidence |
-| --- | --- | --- | ---: | ---: | --- |
-${receiptInventory.length ? receiptInventory.join("\n") : "| — | — | No receipt recorded yet | $0.00 | 0 | — |"}
+| Billing period | Provider | Evidence label | Evidence class | Actual USD | Usage entries covered | Private evidence |
+| --- | --- | --- | --- | ---: | ---: | --- |
+${receiptInventory.length ? receiptInventory.join("\n") : "| — | — | No billing evidence recorded yet | — | $0.00 | 0 | — |"}
 
 ## How to audit this
 
 1. \`pnpm usage:check\` — validates every entry against the schema, recomputes each cost from [pricing.json](pricing.json), rejects duplicate evidence, and confirms this report matches the ledger digest above.
 2. \`git log --follow usage/ledger.jsonl\` — the ledger is append-only; history shows every addition in context.
 3. Compare any entry's \`sha256\` against the raw session log we provide on request; the line count must match.
-4. \`pnpm usage:receipt -- ...\` hashes a private receipt and appends an immutable allocation record; validation rejects duplicate receipt files and overlapping usage-entry coverage.
+4. \`pnpm usage:receipt -- ...\` hashes private subscription or API billing evidence and appends an immutable allocation record; validation rejects duplicate files and overlapping usage-entry coverage.
 `;
 
   return { md, estimated: agg.estimated };
@@ -903,6 +1184,21 @@ async function check() {
   const seenReceipts = new Set();
   const covered = new Set();
   failures.push(...receipts.flatMap((receipt, index) => validateReceipt(receipt, entries, seenReceipts, covered).map((message) => `receipt line ${index + 1}: ${message}`)));
+  const evidenceHashes = new Set();
+  for (const [index, receipt] of receipts.entries()) {
+    if (receipt.receiptStatus === "evidenced_allocation_extension") {
+      const target = receipts.find((candidate) => candidate.id === receipt.extendsReceiptId);
+      if (!target) failures.push(`receipt line ${index + 1}: allocation extension target is missing`);
+      else if (target.provider !== receipt.provider || target.source?.sha256 !== receipt.source?.sha256) {
+        failures.push(`receipt line ${index + 1}: allocation extension does not match its primary evidence record`);
+      }
+      continue;
+    }
+    for (const source of [receipt.source, ...(receipt.supportingSources ?? [])]) {
+      if (evidenceHashes.has(source?.sha256)) failures.push(`receipt line ${index + 1}: billing evidence digest is recorded more than once`);
+      evidenceHashes.add(source?.sha256);
+    }
+  }
   failures.push(...unexpectedTrackedPrivatePaths(trackedPrivatePaths()).map((path) => `${path} is private reimbursement evidence and must not be tracked`));
   if (failures.length) throw new Error(`Usage ledger failed validation:\n- ${failures.join("\n- ")}`);
   const [rawLedger, rawReceipts] = await Promise.all([
@@ -923,6 +1219,8 @@ async function check() {
 async function summary() {
   const [entries, receipts] = await Promise.all([readLedger(), readReceipts()]);
   const { totals, estimated, actual, pending } = aggregate(entries, receipts);
+  const primaryEvidenceCount = receipts.filter((receipt) => receipt.receiptStatus !== "evidenced_allocation_extension").length;
+  const extensionCount = receipts.length - primaryEvidenceCount;
   console.log("# AI usage reimbursement summary\n");
   console.log("| Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |");
   console.log("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
@@ -931,7 +1229,7 @@ async function summary() {
     console.log(`| ${key} | ${row.entries} | ${row.calls || "—"} | ${row.tokens.uncachedInput.toLocaleString()} | ${row.tokens.cacheRead.toLocaleString()} | ${writes.toLocaleString()} | ${row.tokens.output.toLocaleString()} | $${row.estimated.toFixed(2)} |`);
   }
   console.log(`\nAPI-equivalent estimate: **$${estimated.toFixed(2)}**.`);
-  console.log(`Actual billed spend evidenced so far: **$${actual.toFixed(2)}** across ${receipts.length} receipt allocation(s). Receipt/subscription proof pending on ${pending} entries.`);
+  console.log(`Actual billed spend evidenced so far: **$${actual.toFixed(2)}** across ${primaryEvidenceCount} primary billing record(s) and ${extensionCount} zero-dollar coverage extension(s). Billing proof pending on ${pending} entries.`);
   console.log("\nThe estimate is a workload gauge, not a reimbursement claim. Use invoices or subscription receipts for the actual claim.");
 }
 
@@ -942,9 +1240,11 @@ async function main() {
   if (command === "snapshot") return snapshot(cliArgs(rest));
   if (command === "sync") return sync(cliArgs(rest));
   if (command === "runtime") return runtime(cliArgs(rest));
+  if (command === "provider-import") return providerImport(cliArgs(rest));
+  if (command === "allocation") return allocation(cliArgs(rest));
   if (command === "receipt") return receipt(cliArgs(rest));
   if (command === "report") return report();
-  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|runtime|receipt|report>");
+  throw new Error("Usage: usage-ledger.mjs <check|summary|snapshot|sync|runtime|provider-import|allocation|receipt|report>");
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;

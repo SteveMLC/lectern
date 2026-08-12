@@ -15,7 +15,6 @@ SpeakerOps exposes the same public program data as JSON and iframe-ready HTML. P
 | GET | `/api/public/events/:slug/sessions/:sessionId/calendar.ics` | Download a scheduled session calendar file |
 | GET | `/api/public/events/:slug/agenda.ics` | Download the whole published agenda as iCal |
 | GET | `/api/public/events/:slug/{schedule,sessions,speakers,itinerary,gallery}.xml` | Public XML widget feeds |
-| GET | `/api/public/walkthrough.mp4` | Stream the narrated three-minute submission walkthrough from R2 |
 | POST | `/api/events/:slug/submissions` | Public CFP proposal intake |
 | GET | `/api/speaker-portal/:token` | Magic-link speaker portal bundle |
 | PATCH | `/api/speaker-portal/:token/profile` | Update the linked speaker profile |

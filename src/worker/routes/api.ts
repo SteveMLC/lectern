@@ -867,7 +867,6 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/assets/:assetId/comments", auth: "organizer", purpose: "Add a durable organizer comment to a speaker file." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "GET", path: "/public/events/:slug/itinerary.ics?sessions=id,id", auth: "public", purpose: "Export an attendee's selected scheduled sessions as one RFC 5545 calendar." },
-      { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
       { method: "GET", path: "/assets/:assetId", auth: "asset link", purpose: "Stream a stored asset." },
     ],

@@ -52,6 +52,18 @@
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "assumption": "Standard global API list price, verified against the published model-pricing table on 2026-08-11: Claude Opus 4.8 is $5 base input, $6.25 5m cache write, $10 1h cache write, $0.50 cache hit, $25 output per MTok \u2014 identical to Claude Opus 5. Fast-mode premium pricing is not claimed here; this ledger records standard-speed usage."
     },
+    "anthropic-claude-haiku-4-5-20251001-2026-08-10": {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effectiveAt": "2026-08-10",
+      "uncachedInput": 1,
+      "cacheRead": 0.1,
+      "cacheWrite5m": 1.25,
+      "cacheWrite1h": 2,
+      "output": 5,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "assumption": "Standard Claude Haiku 4.5 API list price. The provider usage export reports the dated model identifier used by the evaluation run."
+    },
     "openai-gpt-5.6-sol-2026-08-10": {
       "provider": "openai",
       "model": "gpt-5.6-sol",

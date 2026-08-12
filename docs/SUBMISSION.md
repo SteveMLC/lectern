@@ -12,21 +12,9 @@
 
 **Demo URL:** https://speakerops.speakerops-go7.workers.dev
 
-**Walkthrough URL:** https://speakerops.speakerops-go7.workers.dev/api/public/walkthrough.mp4
-
 ## What to Lead With
 
 SpeakerOps is an open-source, cloneable replacement for the core conference-program job. It treats submissions and sessions as different objects, supports direct sponsor/invited sessions, catches schedule conflicts, gives speakers a working portal, and publishes the resulting program. AI is optional seasoning, not the product claim.
-
-## Three-Minute Walkthrough
-
-1. **0:00–0:20 — Frame the replacement.** Open the Groundwork organizer dashboard. Say: “This is the program side of Sessionboard, open source and deployable on one Cloudflare Worker.”
-2. **0:20–0:55 — Decide a proposal.** Open Reviews, choose a submitted proposal, click Approve, and point out that it becomes one session. Re-approval reuses the same session rather than duplicating it.
-3. **0:55–1:15 — Prove sessions are not submissions.** Open Agenda and add a sponsor keynote directly. Point to the Direct badge and explain that it has no source submission.
-4. **1:15–1:45 — Schedule with guardrails.** Place or move the session into an occupied room/time. Show the immediate room/speaker conflict language, then move it clear.
-5. **1:45–2:15 — Speaker workflow.** Open Speakers, choose a confirmed speaker, and enter their portal. Edit the bio, complete a task, and upload a small headshot or slide file. Show the file immediately on record.
-6. **2:15–2:40 — Communications.** Preview the session update, download its `.ics`, and click Send simulated. Point out the persisted delivery receipt.
-7. **2:40–3:00 — Open-source/adoption close.** Show public embeds, the repository README, and Integrations. Mention the tested Airtable read/write proof and that D1 is the reliable fallback.
 
 ## Judge-Proof Claims
 
