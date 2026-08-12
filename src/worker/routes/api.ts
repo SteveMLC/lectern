@@ -81,19 +81,6 @@ import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/de
 import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-const WALKTHROUGH_R2_KEY = "submission/lectern-walkthrough-final.mp4";
-const WALKTHROUGH_FILENAME = "lectern-walkthrough-final.mp4";
-
-function walkthroughHeaders(object: R2Object): Headers {
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("content-type", "video/mp4");
-  headers.set("content-length", String(object.size));
-  headers.set("content-disposition", `inline; filename="${WALKTHROUGH_FILENAME}"`);
-  headers.set("cache-control", "public, max-age=3600");
-  headers.set("etag", object.httpEtag);
-  return headers;
-}
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -2052,21 +2039,6 @@ api.get("/public/events/:slug/itinerary.ics", async (c) => {
       "cache-control": "private, no-store",
     },
   });
-});
-
-// The submission walkthrough lives in R2 rather than the git repository. This
-// stable public URL keeps the handoff tied to the deployed open-source project
-// without committing a multi-megabyte binary to source control.
-api.on(["GET", "HEAD"], "/public/walkthrough.mp4", async (c) => {
-  if (c.req.method === "HEAD") {
-    const object = await c.env.BUCKET.head(WALKTHROUGH_R2_KEY);
-    if (!object) return errorResponse(404, "walkthrough_missing", "The submission walkthrough has not been published.");
-    return new Response(null, { headers: walkthroughHeaders(object) });
-  }
-
-  const object = await c.env.BUCKET.get(WALKTHROUGH_R2_KEY);
-  if (!object) return errorResponse(404, "walkthrough_missing", "The submission walkthrough has not been published.");
-  return new Response(object.body, { headers: walkthroughHeaders(object) });
 });
 
 // ---------------------------------------------------------------------------
