@@ -14,3 +14,4 @@ output/playwright/
 usage/private/*
 !usage/private/README.md
 tmp/
+*.bin
