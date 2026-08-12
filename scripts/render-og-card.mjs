@@ -19,6 +19,6 @@ const html = `<!doctype html><html><head><style>
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
 await page.setContent(html);
-await page.screenshot({ path: new URL("../public/og.png", import.meta.url).pathname });
+await page.screenshot({ path: new URL("../public/og-lectern.png", import.meta.url).pathname });
 await browser.close();
 console.log("og card rendered");
