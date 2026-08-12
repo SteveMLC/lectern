@@ -60,3 +60,54 @@ describe("canEditSpeakerProposal", () => {
     expect(canEditSpeakerProposal(form, "waitlisted", "2026-08-24T12:00:00.000Z")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Post-submission co-presenter editing contract
+// ---------------------------------------------------------------------------
+
+import { UpdateSpeakerProposalRequest } from "../contracts";
+
+describe("UpdateSpeakerProposalRequest co-presenters", () => {
+  const base = {
+    title: "A sufficiently long proposal title",
+    abstract: "An abstract comfortably longer than the twenty character minimum.",
+    answers: {},
+  };
+
+  it("treats an omitted coSpeakers field as leave-unchanged", () => {
+    const parsed = UpdateSpeakerProposalRequest.parse(base);
+    expect(parsed.coSpeakers).toBeUndefined();
+  });
+
+  it("accepts an explicit empty array as remove-all", () => {
+    const parsed = UpdateSpeakerProposalRequest.parse({ ...base, coSpeakers: [] });
+    expect(parsed.coSpeakers).toEqual([]);
+  });
+
+  it("accepts up to two co-presenters with a free-text role label", () => {
+    const parsed = UpdateSpeakerProposalRequest.parse({
+      ...base,
+      coSpeakers: [
+        { name: "Marcus Okafor", email: "marcus@example.com", company: "Cloudreach Labs", title: "Co-author" },
+        { name: "Lin Zhao", email: "lin@example.com" },
+      ],
+    });
+    expect(parsed.coSpeakers).toHaveLength(2);
+    expect(parsed.coSpeakers?.[0]?.title).toBe("Co-author");
+  });
+
+  it("rejects a third co-presenter and a missing email", () => {
+    expect(UpdateSpeakerProposalRequest.safeParse({
+      ...base,
+      coSpeakers: [
+        { name: "A B", email: "a@example.com" },
+        { name: "C D", email: "c@example.com" },
+        { name: "E F", email: "e@example.com" },
+      ],
+    }).success).toBe(false);
+    expect(UpdateSpeakerProposalRequest.safeParse({
+      ...base,
+      coSpeakers: [{ name: "A B" }],
+    }).success).toBe(false);
+  });
+});

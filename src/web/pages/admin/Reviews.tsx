@@ -243,7 +243,7 @@ function ReviewCard({
                   ) : null}
                   {speaker.role === "co_speaker" ? (
                     <span className="ml-1.5 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600">
-                      co-speaker
+                      {speaker.roleLabel?.trim() || "co-speaker"}
                     </span>
                   ) : null}
                 </p>

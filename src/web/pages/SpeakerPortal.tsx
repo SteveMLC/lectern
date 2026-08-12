@@ -294,6 +294,14 @@ function ProposalCard({
   const [title, setTitle] = useState(proposal.title);
   const [abstract, setAbstract] = useState(proposal.abstract);
   const [answers, setAnswers] = useState<Record<string, unknown>>(proposal.answers);
+  const [coSpeakers, setCoSpeakers] = useState(
+    proposal.coSpeakers.map((speaker) => ({
+      name: speaker.name,
+      email: speaker.email,
+      company: speaker.company ?? "",
+      role: speaker.roleLabel ?? "",
+    })),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -320,6 +328,12 @@ function ProposalCard({
         title,
         abstract,
         answers,
+        coSpeakers: coSpeakers.map((speaker) => ({
+          name: speaker.name.trim(),
+          email: speaker.email.trim(),
+          company: speaker.company.trim() || undefined,
+          title: speaker.role.trim() || undefined,
+        })),
       });
       onUpdated(updated);
       setSaved(true);
@@ -344,6 +358,13 @@ function ProposalCard({
             </span>
           </div>
           <h3 className="mt-2 text-sm font-semibold text-zinc-900">{proposal.title}</h3>
+          {proposal.coSpeakers.length > 0 ? (
+            <p className="mt-1 text-xs text-zinc-500">
+              With {proposal.coSpeakers
+                .map((speaker) => [speaker.name, speaker.company, speaker.roleLabel].filter(Boolean).join(" · "))
+                .join("; ")}
+            </p>
+          ) : null}
         </div>
         {editable ? (
           <Button type="button" variant="secondary" onClick={() => setEditing((value) => !value)}>
@@ -391,6 +412,63 @@ function ProposalCard({
               )}
             </Field>
           ))}
+          <div className="rounded-lg border border-zinc-200 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Co-presenters</p>
+                <p className="mt-1 text-xs text-zinc-500">Add or update co-presenters and their role labels at any time while editing is open.</p>
+              </div>
+              {coSpeakers.length < 2 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCoSpeakers((current) => [...current, { name: "", email: "", company: "", role: "Co-presenter" }])}
+                >
+                  Add co-presenter
+                </Button>
+              ) : null}
+            </div>
+            {coSpeakers.map((speaker, index) => (
+              <div key={index} className="mt-3 grid gap-3 border-t border-zinc-100 pt-3 sm:grid-cols-2">
+                <Field label="Full name" required>
+                  <Input
+                    value={speaker.name}
+                    required
+                    onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))}
+                  />
+                </Field>
+                <Field label="Email" required>
+                  <Input
+                    type="email"
+                    value={speaker.email}
+                    required
+                    onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, email: event.target.value } : item))}
+                  />
+                </Field>
+                <Field label="Company">
+                  <Input
+                    value={speaker.company}
+                    onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, company: event.target.value } : item))}
+                  />
+                </Field>
+                <Field label="Role label">
+                  <Input
+                    value={speaker.role}
+                    onChange={(event) => setCoSpeakers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, role: event.target.value } : item))}
+                  />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setCoSpeakers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  >
+                    Remove co-presenter
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
           {error ? <ErrorBanner message={error} /> : null}
           <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save proposal"}</Button>
         </form>

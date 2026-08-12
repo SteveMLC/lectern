@@ -338,6 +338,14 @@ export interface UpdateSpeakerProposalInput {
   title: string;
   abstract: string;
   answers: Record<string, unknown>;
+  /** undefined = leave co-presenters unchanged; [] = remove them all. */
+  coSpeakers?: Array<{
+    name: string;
+    email: string;
+    company?: string;
+    title?: string;
+    bio?: string;
+  }>;
   now: string;
 }
 

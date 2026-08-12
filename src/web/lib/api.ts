@@ -16,6 +16,7 @@ import {
   CreateDirectSessionRequest,
   CreateDirectSessionResponse,
   CreateSubmissionResponse,
+  SpeakerLinksRecoveryResponse,
   EventBundle,
   EventCounts,
   EvaluationWorkspaceResponse,
@@ -239,6 +240,12 @@ export const apiClient = {
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  recoverSpeakerLinks: (slug: string, email: string) =>
+    request(SpeakerLinksRecoveryResponse, `/api/events/${encodeURIComponent(slug)}/speaker-links`, {
+      method: "POST",
+      body: JSON.stringify({ email }),
     }),
 
   saveCfpDraft: (slug: string, token: string | null, body: CfpDraftRequest) =>

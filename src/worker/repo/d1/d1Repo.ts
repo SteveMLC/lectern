@@ -71,6 +71,7 @@ import type {
   BulkTaskReminderInput,
   CreateAssetCommentInput,
 } from "../types";
+import { randomId } from "../../../shared/ids";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
@@ -191,6 +192,7 @@ interface SubmissionSpeakerLinkRow {
   name: string;
   email: string;
   company: string | null;
+  role_label: string | null;
   bio: string | null;
 }
 
@@ -1202,7 +1204,7 @@ export class D1Repo implements LecternRepo {
         .bind(eventId),
       this.db
         .prepare(
-          `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.bio
+          `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.title AS role_label, sp.bio
            FROM submission_speakers ss
            JOIN speakers sp ON sp.id = ss.speaker_id
            JOIN submissions s ON s.id = ss.submission_id
@@ -1237,6 +1239,7 @@ export class D1Repo implements LecternRepo {
         name: link.name,
         email: link.email,
         company: link.company,
+        roleLabel: link.role_label ?? null,
         bio: link.bio,
       });
       speakersBySubmission.set(link.submission_id, list);
@@ -1272,7 +1275,7 @@ export class D1Repo implements LecternRepo {
 
     const { results } = await this.db
       .prepare(
-        `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.bio
+        `SELECT ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id, sp.name, sp.email, sp.company, sp.title AS role_label, sp.bio
          FROM submission_speakers ss
          JOIN speakers sp ON sp.id = ss.speaker_id
          WHERE ss.submission_id = ?
@@ -1288,6 +1291,7 @@ export class D1Repo implements LecternRepo {
       name: link.name,
       email: link.email,
       company: link.company,
+      roleLabel: link.role_label ?? null,
       bio: link.bio,
     }));
 
@@ -1813,7 +1817,7 @@ export class D1Repo implements LecternRepo {
       .first<SpeakerRow>();
     if (!speaker) return null;
 
-    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes, commentsRes] = await this.db.batch([
+    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes, commentsRes, coSpeakersRes] = await this.db.batch([
       this.db
         .prepare(
           "SELECT id, slug, name, tagline, starts_on, ends_on, timezone FROM events WHERE id = ?",
@@ -1864,6 +1868,17 @@ export class D1Repo implements LecternRepo {
          JOIN speaker_assets sa ON sa.id = ac.asset_id
          WHERE sa.speaker_id = ? ORDER BY ac.created_at, ac.id`,
       ).bind(speaker.id),
+      this.db.prepare(
+        `SELECT ss.submission_id, ss.sort_order, sp.name, sp.email, sp.company,
+                sp.title AS role_label, sp.bio
+         FROM submission_speakers ss
+         JOIN speakers sp ON sp.id = ss.speaker_id
+         WHERE ss.role = 'co_speaker'
+           AND ss.submission_id IN (
+             SELECT submission_id FROM submission_speakers WHERE speaker_id = ?
+           )
+         ORDER BY ss.submission_id, ss.sort_order`,
+      ).bind(speaker.id),
     ]);
 
     const event = ((eventRes?.results ?? []) as unknown as EventRow[])[0];
@@ -1907,19 +1922,41 @@ export class D1Repo implements LecternRepo {
       sessions: ((sessionsRes?.results ?? []) as unknown as SpeakerPortalSessionRow[]).map(
         mapPortalSession,
       ),
-      proposals: ((proposalsRes?.results ?? []) as unknown as (SubmissionRow & {
-        track_name: string | null;
-      })[]).map((row): SpeakerPortalProposal => ({
-        id: row.id,
-        title: row.title,
-        abstract: row.abstract,
-        format: row.format as SpeakerPortalProposal["format"],
-        status: row.status as SpeakerPortalProposal["status"],
-        answers: parseJson<Record<string, unknown>>(row.answers_json, {}),
-        submittedAt: row.submitted_at,
-        updatedAt: row.updated_at,
-        trackName: row.track_name,
-      })),
+      proposals: (() => {
+        const coSpeakersBySubmission = new Map<string, SpeakerPortalProposal["coSpeakers"]>();
+        for (const row of (coSpeakersRes?.results ?? []) as unknown as {
+          submission_id: string;
+          name: string;
+          email: string;
+          company: string | null;
+          role_label: string | null;
+          bio: string | null;
+        }[]) {
+          const list = coSpeakersBySubmission.get(row.submission_id) ?? [];
+          list.push({
+            name: row.name,
+            email: row.email,
+            company: row.company,
+            roleLabel: row.role_label,
+            bio: row.bio,
+          });
+          coSpeakersBySubmission.set(row.submission_id, list);
+        }
+        return ((proposalsRes?.results ?? []) as unknown as (SubmissionRow & {
+          track_name: string | null;
+        })[]).map((row): SpeakerPortalProposal => ({
+          id: row.id,
+          title: row.title,
+          abstract: row.abstract,
+          format: row.format as SpeakerPortalProposal["format"],
+          status: row.status as SpeakerPortalProposal["status"],
+          answers: parseJson<Record<string, unknown>>(row.answers_json, {}),
+          submittedAt: row.submitted_at,
+          updatedAt: row.updated_at,
+          trackName: row.track_name,
+          coSpeakers: coSpeakersBySubmission.get(row.id) ?? [],
+        }));
+      })(),
       cfp: eventBundle?.cfp ?? null,
       tasks,
       assets: ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset),
@@ -1975,6 +2012,52 @@ export class D1Repo implements LecternRepo {
       )
       .run();
     if ((result.meta.changes ?? 0) === 0) throw new Error("submission_not_found");
+
+    if (input.coSpeakers) {
+      // Replace the co-presenter set; the primary row is never touched. Each
+      // co-presenter upserts into speakers by (event_id, email) exactly like
+      // the public submit path, so an existing person is reused, not duplicated.
+      const eventRow = await this.db
+        .prepare("SELECT event_id FROM submissions WHERE id = ?")
+        .bind(input.submissionId)
+        .first<{ event_id: string }>();
+      if (!eventRow) throw new Error("submission_not_found");
+      const coSpeakerIds: string[] = [];
+      for (const coSpeaker of input.coSpeakers) {
+        const row = await this.db.prepare(
+          `INSERT INTO speakers (id, event_id, email, name, company, title, bio, location, socials_json, created_at, updated_at)
+           VALUES (?1, ?2, lower(?3), ?4, ?5, ?6, ?7, NULL, NULL, ?8, ?8)
+           ON CONFLICT(event_id, email) DO UPDATE SET
+             name = excluded.name,
+             company = COALESCE(excluded.company, speakers.company),
+             title = COALESCE(excluded.title, speakers.title),
+             bio = COALESCE(excluded.bio, speakers.bio),
+             updated_at = excluded.updated_at
+           RETURNING id`,
+        ).bind(
+          randomId("spk"),
+          eventRow.event_id,
+          coSpeaker.email,
+          coSpeaker.name,
+          coSpeaker.company ?? null,
+          coSpeaker.title ?? null,
+          coSpeaker.bio ?? null,
+          input.now,
+        ).first<{ id: string }>();
+        if (!row) throw new Error("Speaker upsert returned no row.");
+        coSpeakerIds.push(row.id);
+      }
+      await this.db.batch([
+        this.db.prepare(
+          "DELETE FROM submission_speakers WHERE submission_id = ? AND role = 'co_speaker'",
+        ).bind(input.submissionId),
+        ...coSpeakerIds.map((speakerId, index) => this.db.prepare(
+          `INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order)
+           VALUES (?, ?, 'co_speaker', ?)`,
+        ).bind(input.submissionId, speakerId, index + 1)),
+      ]);
+    }
+
     const portal = await this.getSpeakerPortalByToken(input.speakerId);
     if (!portal) throw new Error("Speaker portal disappeared after update.");
     return portal;
@@ -2209,7 +2292,7 @@ export class D1Repo implements LecternRepo {
       ).bind(reviewer.reviewer_email, token),
       this.db.prepare(
         `SELECT ra.round_id, ss.submission_id, ss.role, ss.sort_order, sp.id AS speaker_id,
-                sp.name, sp.email, sp.company, sp.bio
+                sp.name, sp.email, sp.company, sp.title AS role_label, sp.bio
          FROM review_assignments ra
          JOIN submission_speakers ss ON ss.submission_id = ra.submission_id
          JOIN speakers sp ON sp.id = ss.speaker_id
@@ -2227,7 +2310,7 @@ export class D1Repo implements LecternRepo {
     const criteria = (criteriaRes?.results ?? []) as unknown as Array<{
       id: string; round_id: string; key: string; label: string; max_score: number; weight: number; sort_order: number;
     }>;
-    const speakerRows = (speakersRes?.results ?? []) as unknown as Array<SubmissionSpeakerLinkRow & { round_id: string }>;
+    const speakerRows = (speakersRes?.results ?? []) as unknown as Array<SubmissionSpeakerLinkRow & { round_id: string; role_label: string | null }>;
     return {
       reviewer: { name: reviewer.reviewer_name, email: reviewer.reviewer_email, token },
       assignments: assignments.map((row) => ({
@@ -2248,7 +2331,7 @@ export class D1Repo implements LecternRepo {
           .map((speaker) => ({
             speakerId: speaker.speaker_id, role: speaker.role as SubmissionSpeakerView["role"],
             sortOrder: speaker.sort_order, name: speaker.name, email: speaker.email,
-            company: speaker.company, bio: speaker.bio,
+            company: speaker.company, roleLabel: speaker.role_label ?? null, bio: speaker.bio,
           })) }),
         criteria: criteria.filter((criterion) => criterion.round_id === row.round_id).map((criterion) => ({
           id: criterion.id, roundId: row.round_id, key: criterion.key, label: criterion.label,

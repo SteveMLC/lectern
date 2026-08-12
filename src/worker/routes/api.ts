@@ -56,6 +56,8 @@ import {
   type UploadAssetResponse,
   UpdateSpeakerProfileRequest,
   UpdateSpeakerTaskRequest,
+  SpeakerLinksRecoveryRequest,
+  type SpeakerLinksRecoveryResponse,
   UpdateSpeakerProposalRequest,
   SaveEvaluationRoundRequest,
   SaveRoundReviewerRequest,
@@ -718,6 +720,49 @@ api.post("/events/:slug/communications/bulk", organizerAuth, async (c) => {
   return c.json(body);
 });
 
+// Public capability-link recovery. Deliberately account-free: the email is the
+// identity proof, the response is uniform whether or not the address matched
+// (no enumeration), and the send itself is receipted like every other email.
+api.post("/events/:slug/speaker-links", async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SpeakerLinksRecoveryRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Email is invalid.", parsed.error.issues);
+  const requested = parsed.data.email.trim().toLowerCase();
+  const speaker = (await repo.getOrganizerSpeakers(bundle.event.id))
+    .find((candidate) => candidate.email.toLowerCase() === requested);
+  if (speaker) {
+    const origin = new URL(c.req.url).origin;
+    const portalUrl = `${origin}/speaker/${speaker.id}`;
+    await repo.simulateCommunication({
+      messageId: randomId("msg"),
+      attemptId: randomId("del"),
+      eventId: bundle.event.id,
+      speakerId: speaker.id,
+      toEmail: speaker.email,
+      subject: `Your speaker links — ${bundle.event.name}`,
+      bodyMd: [
+        `Hi ${speaker.name},`,
+        "",
+        `Here is your personal speaker portal for ${bundle.event.name}:`,
+        "",
+        portalUrl,
+        "",
+        "Your proposals, tasks, uploads, and schedule all live there. The link is yours alone — treat it like a password.",
+      ].join("\n"),
+      now: new Date().toISOString(),
+    });
+  }
+  const body: SpeakerLinksRecoveryResponse = {
+    status: "ok",
+    message: "If that address has speaker records for this event, an email with the links is on its way.",
+  };
+  return c.json(body);
+});
+
 api.patch("/events/:slug/speakers/:speakerId", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -809,7 +854,7 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
-      { method: "PATCH", path: "/speaker-portal/:token/proposals/:submissionId", auth: "speaker link", purpose: "Edit the linked speaker's undecided proposal while its CFP is open." },
+      { method: "PATCH", path: "/speaker-portal/:token/proposals/:submissionId", auth: "speaker link", purpose: "Edit the linked speaker's undecided proposal while its CFP is open, including adding or updating co-presenters with role labels." },
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
@@ -818,6 +863,7 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/speaker-tasks", auth: "organizer", purpose: "Create and assign a custom speaker deliverable." },
       { method: "POST", path: "/events/:slug/speaker-tasks/remind", auth: "organizer", purpose: "Record bulk reminders for selected incomplete speakers." },
       { method: "POST", path: "/events/:slug/communications/bulk", auth: "organizer", purpose: "Record a free-form bulk communication and per-recipient receipts." },
+      { method: "POST", path: "/events/:slug/speaker-links", auth: "public", purpose: "Email a submitter their capability links again; the response never reveals whether the address matched." },
       { method: "GET", path: "/events/:slug/evaluations", auth: "organizer", purpose: "Round setup, reviewer progress, assignments, and weighted results." },
       { method: "POST", path: "/events/:slug/evaluations/rounds", auth: "organizer", purpose: "Create an evaluation round and its weighted scorecard." },
       { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId", auth: "organizer", purpose: "Update an evaluation round and its weighted scorecard." },
@@ -1057,6 +1103,7 @@ api.patch("/speaker-portal/:token/proposals/:submissionId", async (c) => {
     title: parsed.data.title,
     abstract: parsed.data.abstract,
     answers: pruneAnswers(portal.cfp.fields, portal.cfp.rules, ctx),
+    coSpeakers: parsed.data.coSpeakers,
     now: new Date().toISOString(),
   });
   return c.json(body);

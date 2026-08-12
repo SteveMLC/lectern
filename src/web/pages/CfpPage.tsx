@@ -291,6 +291,8 @@ export function CfpPage() {
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">{cfp.form.welcomeText}</p>
         ) : null}
 
+        <LinkRecoveryCard slug={event.slug} />
+
         {draftLoadError ? <div className="mt-4"><ErrorBanner message={draftLoadError} /></div> : null}
         {draftSavedAt ? (
           <div role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
@@ -558,5 +560,61 @@ function CustomField({
         }
       />
     </Field>
+  );
+}
+
+function LinkRecoveryCard({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
+    setSending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await apiClient.recoverSpeakerLinks(slug, email.trim());
+      setNotice(response.message);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "The request could not be sent.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-zinc-700">
+          <span className="font-medium">Already submitted?</span> There are no accounts — your private
+          links are your access. Lost them?
+        </p>
+        <Button type="button" variant="secondary" onClick={() => setOpen((value) => !value)}>
+          {open ? "Close" : "Email me my links"}
+        </Button>
+      </div>
+      {open ? (
+        <form onSubmit={send} className="mt-3 flex flex-wrap items-end gap-3 border-t border-zinc-100 pt-3">
+          <div className="min-w-56 flex-1">
+            <Field label="The email you submitted with" htmlFor="recovery-email" required>
+              <Input
+                id="recovery-email"
+                type="email"
+                value={email}
+                required
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@company.com"
+              />
+            </Field>
+          </div>
+          <Button type="submit" disabled={sending}>{sending ? "Sending…" : "Send my links"}</Button>
+          {notice ? <p role="status" className="w-full text-sm font-medium text-emerald-700">{notice}</p> : null}
+          {error ? <div className="w-full"><ErrorBanner message={error} /></div> : null}
+        </form>
+      ) : null}
+    </div>
   );
 }

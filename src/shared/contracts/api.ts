@@ -360,6 +360,9 @@ export const SubmissionSpeakerView = z.object({
   name: z.string(),
   email: z.email(),
   company: z.string().nullable(),
+  /** Free-text role label for co-presenters (e.g. "Co-author"), stored on the
+   * speaker's title field at entry time. Null falls back to the role enum. */
+  roleLabel: z.string().nullable().optional(),
   /** Present so reviewers can judge the speaker without leaving the queue. */
   bio: z.string().nullable(),
 });
@@ -613,6 +616,15 @@ export const SpeakerPortalProposal = Submission.pick({
   updatedAt: true,
 }).extend({
   trackName: z.string().nullable(),
+  /** Co-presenters attached to this proposal, editable while the proposal is
+   * editable. `roleLabel` is the free-text label captured at entry time. */
+  coSpeakers: z.array(z.object({
+    name: z.string(),
+    email: z.string(),
+    company: z.string().nullable(),
+    roleLabel: z.string().nullable(),
+    bio: z.string().nullable(),
+  })).default([]),
 });
 export type SpeakerPortalProposal = z.infer<typeof SpeakerPortalProposal>;
 
@@ -659,10 +671,34 @@ export const UpdateSpeakerTaskRequest = z.object({
 });
 export type UpdateSpeakerTaskRequest = z.infer<typeof UpdateSpeakerTaskRequest>;
 
+/** Capability-link recovery: no accounts exist on purpose, so a submitter who
+ * lost their portal link asks for it by email. The response never reveals
+ * whether the address matched — the email itself is the only signal. */
+export const SpeakerLinksRecoveryRequest = z.object({
+  email: z.email().max(254),
+});
+export type SpeakerLinksRecoveryRequest = z.infer<typeof SpeakerLinksRecoveryRequest>;
+
+export const SpeakerLinksRecoveryResponse = z.object({
+  status: z.literal("ok"),
+  message: z.string(),
+});
+export type SpeakerLinksRecoveryResponse = z.infer<typeof SpeakerLinksRecoveryResponse>;
+
 export const UpdateSpeakerProposalRequest = z.object({
   title: z.string().trim().min(4).max(200),
   abstract: z.string().trim().min(20).max(5000),
   answers: z.record(z.string(), z.unknown()),
+  /** Omitted = leave co-presenters unchanged; [] = remove them all. The
+   * primary speaker is never touched by this field. */
+  coSpeakers: z.array(z.object({
+    name: z.string().min(2).max(120),
+    email: z.email().max(254),
+    company: z.string().max(120).optional(),
+    /** Free-text role label shown next to the name (e.g. "Co-author"). */
+    title: z.string().max(120).optional(),
+    bio: z.string().max(2000).optional(),
+  })).max(2).optional(),
 });
 export type UpdateSpeakerProposalRequest = z.infer<typeof UpdateSpeakerProposalRequest>;
 
@@ -754,7 +790,9 @@ export const SaveAssignmentsRequest = z.object({
 });
 export type SaveAssignmentsRequest = z.infer<typeof SaveAssignmentsRequest>;
 
-export const ReviewerQueueSubmission = SpeakerPortalProposal.extend({
+// Reviewer queues carry their own role-tagged `speakers` array, so the portal's
+// coSpeakers projection is omitted rather than duplicated.
+export const ReviewerQueueSubmission = SpeakerPortalProposal.omit({ coSpeakers: true }).extend({
   speakers: z.array(SubmissionSpeakerView).optional(),
   criteria: z.array(ReviewCriterion),
   roundId: z.string(),

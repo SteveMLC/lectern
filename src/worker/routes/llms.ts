@@ -31,6 +31,8 @@ Everything is walkable right now:
   Passcode: lectern-judge-2026 (deliberately public for judging)
 - Public CFP (submit for real): https://lectern.lectern-go7.workers.dev/e/horizon-2026/cfp
 - Speaker portal example: https://lectern.lectern-go7.workers.dev/speaker/spk_ada
+  (No accounts by design; a submitter who lost their private link asks for it
+  by email — "Email me my links" on the CFP page, or POST /api/events/:slug/speaker-links.)
 - Embeds preview: https://lectern.lectern-go7.workers.dev/embed-preview
 - Load a second, resettable conference: https://lectern.lectern-go7.workers.dev/demo
 
