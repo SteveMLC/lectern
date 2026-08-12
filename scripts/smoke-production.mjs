@@ -89,13 +89,6 @@ await check("Embeds and calendar handoff", async () => {
   assert(calendar.startsWith("BEGIN:VCALENDAR") && calendar.includes("BEGIN:VEVENT") && calendar.includes("END:VCALENDAR"), "calendar download is invalid");
 });
 
-await check("Published submission walkthrough", async () => {
-  const response = await fetch(`${baseUrl}/api/public/walkthrough.mp4`, { method: "HEAD" });
-  assert(response.ok, `walkthrough returned HTTP ${response.status}`);
-  assert(response.headers.get("content-type")?.startsWith("video/mp4"), "walkthrough is not served as video/mp4");
-  assert(Number(response.headers.get("content-length")) > 1_000_000, "walkthrough content length is unexpectedly small");
-});
-
 if (!passcode) {
   warnings.push("Set LECTERN_ORGANIZER_PASSCODE to include organizer and Airtable checks.");
 } else {

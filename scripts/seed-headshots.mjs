@@ -22,8 +22,8 @@ import { join, extname, basename } from "node:path";
 const remote = process.argv.includes("--remote");
 const scope = remote ? "--remote" : "--local";
 const headshotDir = new URL("../seed/headshots/", import.meta.url).pathname;
-const bucket = "lectern-assets";
-const database = "lectern-db";
+const bucket = "speakerops-assets";
+const database = "speakerops-db";
 
 const CONTENT_TYPES = {
   ".jpg": "image/jpeg",

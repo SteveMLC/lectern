@@ -613,7 +613,7 @@ export function runtimePayloadFromD1Results(results, generatedAt = new Date().to
 async function loadRuntimePayload(options, baseUrl) {
   if (options.d1 && options.file) throw new Error("runtime accepts either --d1 or --file, not both");
   if (options.d1) {
-    const database = options.database ?? "lectern-db";
+    const database = options.database ?? "speakerops-db";
     const sql = `SELECT ${runtimeColumns.join(", ")} FROM ai_usage_events ORDER BY occurred_at ASC, provider_request_id ASC`;
     const result = spawnSync("pnpm", ["exec", "wrangler", "d1", "execute", database, "--remote", "--json", "--command", sql], {
       cwd: root,

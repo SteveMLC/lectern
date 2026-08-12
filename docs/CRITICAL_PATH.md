@@ -36,8 +36,9 @@ Wrangler is authenticated as `sgovoni@gmail.com` against Cloudflare account `Sgo
 
 - Worker: `lectern`
 - workers.dev subdomain: `lectern-go7.workers.dev`
-- D1 database: `lectern-db`
-- R2 bucket: `lectern-assets`
+- D1 database: `speakerops-db`
+- R2 bucket: `speakerops-assets`
+  (Both resource names predate the Lectern rename; Cloudflare cannot rename provisioned D1/R2 resources.)
 
 This keeps the hackathon deployment isolated from Nealac/Qualora infrastructure. If Lectern becomes a long-term product, it can be migrated into a consolidated Cloudflare account by exporting/importing D1 data and copying R2 objects.
 
