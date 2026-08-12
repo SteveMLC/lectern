@@ -17,6 +17,10 @@ import {
   CreateDirectSessionResponse,
   CreateSubmissionResponse,
   SpeakerLinksRecoveryResponse,
+  SubmitterAccountSignupRequest,
+  SubmitterAccountLoginRequest,
+  SubmitterAccountSessionResponse,
+  SubmitterAccountDashboardResponse,
   EventBundle,
   EventCounts,
   EvaluationWorkspaceResponse,
@@ -113,6 +117,7 @@ async function request<S extends z.ZodType>(
   opts?: { auth?: boolean },
 ): Promise<z.infer<S>> {
   const headers: Record<string, string> = {};
+  new Headers(init?.headers).forEach((value, key) => { headers[key] = value; });
   if (init?.body !== undefined && !(init.body instanceof FormData)) {
     headers["content-type"] = "application/json";
   }
@@ -263,10 +268,28 @@ export const apiClient = {
       { auth: true },
     ),
 
-  submitCfp: (slug: string, body: CfpSubmissionRequest) =>
+  submitCfp: (slug: string, body: CfpSubmissionRequest, submitterToken?: string | null) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {
       method: "POST",
+      headers: submitterToken ? { "x-lectern-submitter": submitterToken } : undefined,
       body: JSON.stringify(body),
+    }),
+
+  createSubmitterAccount: (slug: string, body: SubmitterAccountSignupRequest) =>
+    request(SubmitterAccountSessionResponse, `/api/events/${encodeURIComponent(slug)}/submitter-accounts`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  signInSubmitterAccount: (slug: string, body: SubmitterAccountLoginRequest) =>
+    request(SubmitterAccountSessionResponse, `/api/events/${encodeURIComponent(slug)}/submitter-sessions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  submitterDashboard: (slug: string, sessionToken: string) =>
+    request(SubmitterAccountDashboardResponse, `/api/events/${encodeURIComponent(slug)}/submitter-dashboard`, {
+      headers: { "x-lectern-submitter": sessionToken },
     }),
 
   recoverSpeakerLinks: (slug: string, email: string) =>

@@ -29,17 +29,19 @@ Everything is walkable right now:
 - Live app: https://lectern.lectern-go7.workers.dev
 - Organizer console: https://lectern.lectern-go7.workers.dev/admin
   Passcode: lectern-judge-2026 (deliberately public for judging)
-- Public CFP (submit for real): https://lectern.lectern-go7.workers.dev/e/horizon-2026/cfp
+- Public CFP (create an optional submitter account, then submit for real): https://lectern.lectern-go7.workers.dev/e/horizon-2026/cfp
 - Speaker portal example: https://lectern.lectern-go7.workers.dev/speaker/spk_ada
-  (No accounts by design; a submitter who lost their private link asks for it
-  by email — "Email me my links" on the CFP page, or POST /api/events/:slug/speaker-links.)
+  (Submitter accounts provide a proposal/status dashboard; capability links
+  remain available, with "Email me my links" recovery on the CFP page.)
 - Embeds preview: https://lectern.lectern-go7.workers.dev/embed-preview
 - Load a second, resettable conference: https://lectern.lectern-go7.workers.dev/demo
 
 ## The chain to judge
 
-1. Submit a proposal at /e/horizon-2026/cfp — pick Workshop as format and a
-   conditionally required field appears; the API enforces the same rule.
+1. At /e/horizon-2026/cfp, create a submitter account (or sign in), then submit
+   a proposal. Pick Workshop as format and a conditionally required field
+   appears; the API enforces the same rule. The signed-in dashboard lists the
+   proposal and status after submission.
 2. Open /admin -> Reviews: your proposal is there with the speaker's bio,
    form answers, and the committee's prior notes. Every decision runs the
    same loop: write your internal note, and Claude (claude-sonnet-5) drafts

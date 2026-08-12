@@ -36,9 +36,10 @@ The day's trajectory on the same harness: **37% → 82.3% → 90.4% → 93.5%.**
   recorded in the manual-results files. We report the number as judged
   and leave the counter-evidence beside it rather than re-rolling for a
   better draw.
-- Two items are limited by deliberate design stances, documented in the
-  README: no submitter accounts (capability links plus the "email me my
-  links" recovery flow) and no claimed AI-assisted review scoring.
+- The score-closeout branch subsequently added optional submitter accounts and
+  human-approved AI review-score drafts, closing the two deliberate design
+  stances that remained in this recorded run. This file preserves the actual
+  93.5% result rather than retroactively changing a paid-run artifact.
 
 ## Reproduce it
 

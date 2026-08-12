@@ -60,6 +60,10 @@ import {
   UpdateSpeakerTaskRequest,
   SpeakerLinksRecoveryRequest,
   type SpeakerLinksRecoveryResponse,
+  SubmitterAccountSignupRequest,
+  SubmitterAccountLoginRequest,
+  type SubmitterAccountDashboardResponse,
+  type SubmitterAccountSessionResponse,
   UpdateSpeakerProposalRequest,
   SaveEvaluationRoundRequest,
   SaveRoundReviewerRequest,
@@ -83,6 +87,7 @@ import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
 import { errorResponse } from "../lib/http";
+import { createPasswordRecord, submitterTokenHash, verifyPassword } from "../lib/submitterAuth";
 import { createRepo } from "../repo/factory";
 import { draftDecisionFeedback, type ProviderEvidence } from "../integrations/decisionFeedback";
 import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleNotice";
@@ -90,6 +95,50 @@ import { draftScheduleNotice, formatSlotWindow } from "../integrations/scheduleN
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const WALKTHROUGH_R2_KEY = "submission/lectern-walkthrough-final.mp4";
 const WALKTHROUGH_FILENAME = "lectern-walkthrough-final.mp4";
+const SUBMITTER_SESSION_DAYS = 7;
+
+interface SubmitterAccountRow {
+  id: string;
+  event_id: string;
+  speaker_id: string | null;
+  email: string;
+  name: string;
+  password_salt: string;
+  password_hash: string;
+}
+
+async function createSubmitterSession(env: Env, accountId: string, now: string): Promise<string> {
+  const token = `${randomId("subsess")}${randomId("")}`;
+  const expiresAt = new Date(new Date(now).getTime() + SUBMITTER_SESSION_DAYS * 24 * 60 * 60_000).toISOString();
+  await env.DB.prepare(
+    "INSERT INTO submitter_sessions (token_sha256, account_id, created_at, expires_at) VALUES (?1, ?2, ?3, ?4)",
+  ).bind(await submitterTokenHash(token), accountId, now, expiresAt).run();
+  return token;
+}
+
+async function submitterAccountForToken(env: Env, eventId: string, token: string): Promise<SubmitterAccountRow | null> {
+  if (!token) return null;
+  return env.DB.prepare(
+    `SELECT a.id, a.event_id, a.speaker_id, a.email, a.name, a.password_salt, a.password_hash
+       FROM submitter_sessions s
+       JOIN submitter_accounts a ON a.id = s.account_id
+      WHERE s.token_sha256 = ?1 AND a.event_id = ?2 AND s.expires_at > ?3`,
+  ).bind(await submitterTokenHash(token), eventId, new Date().toISOString()).first<SubmitterAccountRow>();
+}
+
+async function submitterDashboardResponse(
+  env: Env,
+  account: SubmitterAccountRow,
+): Promise<SubmitterAccountDashboardResponse> {
+  const portal = account.speaker_id
+    ? await createRepo(env).getSpeakerPortalByToken(account.speaker_id)
+    : null;
+  return {
+    account: { name: account.name, email: account.email },
+    proposals: portal?.proposals ?? [],
+    portalPath: account.speaker_id ? `/speaker/${encodeURIComponent(account.speaker_id)}` : null,
+  };
+}
 
 function walkthroughHeaders(object: R2Object): Headers {
   const headers = new Headers();
@@ -783,9 +832,84 @@ api.post("/events/:slug/communications/bulk", organizerAuth, async (c) => {
   return c.json(body);
 });
 
-// Public capability-link recovery. Deliberately account-free: the email is the
-// identity proof, the response is uniform whether or not the address matched
-// (no enumeration), and the send itself is receipted like every other email.
+// Optional submitter accounts make the signup -> submission -> dashboard chain
+// explicit while preserving capability links for speakers who prefer them.
+api.post("/events/:slug/submitter-accounts", async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SubmitterAccountSignupRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Account details are invalid.", parsed.error.issues);
+  const existing = await c.env.DB.prepare(
+    "SELECT id FROM submitter_accounts WHERE event_id = ?1 AND email = ?2",
+  ).bind(bundle.event.id, parsed.data.email).first<{ id: string }>();
+  if (existing) return errorResponse(409, "account_exists", "An account already exists for that email. Sign in instead.");
+  const existingSpeaker = (await repo.getOrganizerSpeakers(bundle.event.id))
+    .some((speaker) => speaker.email.toLowerCase() === parsed.data.email);
+  if (existingSpeaker) {
+    return errorResponse(409, "speaker_exists", "That email already has a speaker record. Use Email me my links instead.");
+  }
+  const now = new Date().toISOString();
+  const accountId = randomId("submitter");
+  const password = await createPasswordRecord(parsed.data.password);
+  await c.env.DB.prepare(
+    `INSERT INTO submitter_accounts
+       (id, event_id, speaker_id, email, name, password_salt, password_hash, created_at, updated_at)
+     VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?7)`,
+  ).bind(accountId, bundle.event.id, parsed.data.email, parsed.data.name, password.salt, password.hash, now).run();
+  const account: SubmitterAccountRow = {
+    id: accountId, event_id: bundle.event.id, speaker_id: null,
+    email: parsed.data.email, name: parsed.data.name,
+    password_salt: password.salt, password_hash: password.hash,
+  };
+  const body: SubmitterAccountSessionResponse = {
+    ...(await submitterDashboardResponse(c.env, account)),
+    sessionToken: await createSubmitterSession(c.env, accountId, now),
+  };
+  return c.json(body, 201);
+});
+
+api.post("/events/:slug/submitter-sessions", async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SubmitterAccountLoginRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Sign-in details are invalid.", parsed.error.issues);
+  const account = await c.env.DB.prepare(
+    `SELECT id, event_id, speaker_id, email, name, password_salt, password_hash
+       FROM submitter_accounts WHERE event_id = ?1 AND email = ?2`,
+  ).bind(bundle.event.id, parsed.data.email).first<SubmitterAccountRow>();
+  if (!account || !(await verifyPassword(parsed.data.password, account.password_salt, account.password_hash))) {
+    return errorResponse(401, "invalid_credentials", "Email or password is incorrect.");
+  }
+  const now = new Date().toISOString();
+  await c.env.DB.prepare("UPDATE submitter_accounts SET updated_at = ?1 WHERE id = ?2").bind(now, account.id).run();
+  const body: SubmitterAccountSessionResponse = {
+    ...(await submitterDashboardResponse(c.env, account)),
+    sessionToken: await createSubmitterSession(c.env, account.id, now),
+  };
+  return c.json(body);
+});
+
+api.get("/events/:slug/submitter-dashboard", async (c) => {
+  const bundle = await createRepo(c.env).getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const account = await submitterAccountForToken(
+    c.env,
+    bundle.event.id,
+    c.req.header("x-lectern-submitter") ?? "",
+  );
+  if (!account) return errorResponse(401, "submitter_session_required", "Create an account or sign in again.");
+  return c.json(await submitterDashboardResponse(c.env, account));
+});
+
+// Public capability-link recovery. The email is the identity proof, the
+// response is uniform whether or not the address matched (no enumeration),
+// and the send itself is receipted like every other email.
 api.post("/events/:slug/speaker-links", async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -914,6 +1038,9 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/gallery", auth: "public", purpose: "Searchable photo-grid speaker gallery with session drill-down." },
       { method: "GET", path: "/embeds/events/:slug/itinerary", auth: "public", purpose: "Anonymous personal itinerary iframe with persistence and calendar export." },
+      { method: "POST", path: "/events/:slug/submitter-accounts", auth: "public", purpose: "Create an optional password-based submitter account and session." },
+      { method: "POST", path: "/events/:slug/submitter-sessions", auth: "public", purpose: "Sign in to an existing submitter account." },
+      { method: "GET", path: "/events/:slug/submitter-dashboard", auth: "submitter session", purpose: "List the signed-in submitter's proposals and statuses." },
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
@@ -1034,6 +1161,16 @@ api.post("/events/:slug/submissions", async (c) => {
     return errorResponse(422, "validation_error", "Submission is invalid.", parsed.error.issues);
   }
   const data = parsed.data;
+  const submitterToken = c.req.header("x-lectern-submitter") ?? "";
+  const submitterAccount = submitterToken
+    ? await submitterAccountForToken(c.env, bundle.event.id, submitterToken)
+    : null;
+  if (submitterToken && !submitterAccount) {
+    return errorResponse(401, "submitter_session_required", "Your submitter session expired. Sign in again before submitting.");
+  }
+  if (submitterAccount && submitterAccount.email !== data.speaker.email.trim().toLowerCase()) {
+    return errorResponse(422, "account_email_mismatch", "Use the email attached to your signed-in submitter account.");
+  }
 
   if (!bundle.tracks.some((t) => t.id === data.trackId)) {
     return errorResponse(422, "validation_error", "Unknown track for this event.");
@@ -1067,6 +1204,11 @@ api.post("/events/:slug/submissions", async (c) => {
 
   const primary = submission.speakers[0];
   if (primary) {
+    if (submitterAccount) {
+      await c.env.DB.prepare(
+        "UPDATE submitter_accounts SET speaker_id = ?1, name = ?2, updated_at = ?3 WHERE id = ?4",
+      ).bind(primary.speakerId, primary.name, now, submitterAccount.id).run();
+    }
     await repo.simulateCommunication({
       messageId: randomId("msg"),
       attemptId: randomId("del"),

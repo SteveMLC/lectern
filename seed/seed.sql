@@ -19,6 +19,8 @@
 DELETE FROM delivery_attempts;
 DELETE FROM messages;
 DELETE FROM message_templates;
+DELETE FROM submitter_sessions;
+DELETE FROM submitter_accounts;
 DELETE FROM speaker_tasks;
 DELETE FROM task_definitions;
 DELETE FROM external_id_map;

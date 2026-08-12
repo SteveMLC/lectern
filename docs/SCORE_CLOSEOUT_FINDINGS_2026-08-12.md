@@ -9,6 +9,7 @@ Source: the live full-fidelity run at `2026-08-12T18-34-25`, read while it was s
 | ABS-13 | Review CSV used a plain anchor, so organizer bearer auth was absent and the control returned 401. | Authenticated blob download with a visible success/error receipt. |
 | ABS-14 | No AI-assisted numeric scoring surface existed. | Explicit Haiku-only score draft, fully editable, never auto-saved, one paid call per assignment per 15 minutes, provider usage logged. |
 | CFP-06 | Custom-field answers were stored but difficult to find on the submissions surface. | Labeled answer block on desktop and mobile organizer submission views. |
+| CFP-05 | The CFP had confirmation and a status dashboard but no account-creation step, so the judge could only award partial credit. | Optional password-based signup/sign-in, hashed seven-day sessions, account-bound submission email, and an own-proposals dashboard with status labels; capability links remain available. |
 | SPK-05 | Custom tasks were file requests only and their due date could not be edited. | General-action vs file-upload task types plus post-assignment due-date editing. |
 | SPK-06 | Bulk mail left `{{portal_link}}` as literal text. | First-class portal invitation template with per-recipient speaker/event/portal token rendering. |
 | SPK-11 | Agenda loaded only public speakers; direct-session links could not be repaired after creation. | Full organizer roster plus add/replace/remove direct-session speakers in Edit details. |
@@ -26,7 +27,8 @@ Source: the live full-fidelity run at `2026-08-12T18-34-25`, read while it was s
 
 ## Verification and spend posture
 
-- `pnpm verify`: passed, including 225 tests, production build, usage-ledger integrity, evaluation-ledger integrity, and Cloudflare dry-run.
+- `pnpm verify`: passed, including 228 tests, production build, usage-ledger integrity, evaluation-ledger integrity, and Cloudflare dry-run.
+- The submitter account flow was exercised locally from signup through submit, reload, status row, sign-out/sign-in, and portal recovery without any model call.
 - No sbek/evaluator command was run in this branch.
 - Reviewer score drafting uses `claude-haiku-4-5-20251001`, caps output at 350 tokens, requires an explicit click, never auto-saves, and writes provider-reported counters to `ai_usage_events`.
 - The local historical usage ledger validates, but automatic session sync is not configured in this isolated worktree; it safely no-ops rather than guessing attribution.

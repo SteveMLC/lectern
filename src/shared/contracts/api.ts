@@ -681,9 +681,9 @@ export const UpdateSpeakerTaskRequest = z.object({
 });
 export type UpdateSpeakerTaskRequest = z.infer<typeof UpdateSpeakerTaskRequest>;
 
-/** Capability-link recovery: no accounts exist on purpose, so a submitter who
- * lost their portal link asks for it by email. The response never reveals
- * whether the address matched — the email itself is the only signal. */
+/** Capability-link recovery remains available for speakers who submitted
+ * without creating an optional account. The response never reveals whether
+ * the address matched — the email itself is the only signal. */
 export const SpeakerLinksRecoveryRequest = z.object({
   email: z.email().max(254),
 });
@@ -694,6 +694,31 @@ export const SpeakerLinksRecoveryResponse = z.object({
   message: z.string(),
 });
 export type SpeakerLinksRecoveryResponse = z.infer<typeof SpeakerLinksRecoveryResponse>;
+
+export const SubmitterAccountSignupRequest = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+});
+export type SubmitterAccountSignupRequest = z.infer<typeof SubmitterAccountSignupRequest>;
+
+export const SubmitterAccountLoginRequest = z.object({
+  email: z.email().max(254).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+});
+export type SubmitterAccountLoginRequest = z.infer<typeof SubmitterAccountLoginRequest>;
+
+export const SubmitterAccountDashboardResponse = z.object({
+  account: z.object({ name: z.string(), email: z.email() }),
+  proposals: z.array(SpeakerPortalProposal),
+  portalPath: z.string().nullable(),
+});
+export type SubmitterAccountDashboardResponse = z.infer<typeof SubmitterAccountDashboardResponse>;
+
+export const SubmitterAccountSessionResponse = SubmitterAccountDashboardResponse.extend({
+  sessionToken: z.string().min(20),
+});
+export type SubmitterAccountSessionResponse = z.infer<typeof SubmitterAccountSessionResponse>;
 
 export const UpdateSpeakerProposalRequest = z.object({
   title: z.string().trim().min(4).max(200),
