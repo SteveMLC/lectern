@@ -30,6 +30,7 @@ import {
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
+  OrganizerSpeakersResponse,
   SpeakerPortalResponse,
   SimulateCommunicationRequest,
   SimulateCommunicationResponse,
@@ -144,6 +145,9 @@ export const apiClient = {
 
   publicSpeakers: (slug: string) =>
     request(PublicSpeakersResponse, `/api/public/events/${encodeURIComponent(slug)}/speakers`),
+
+  organizerSpeakers: (slug: string) =>
+    request(OrganizerSpeakersResponse, `/api/events/${encodeURIComponent(slug)}/speakers`, undefined, { auth: true }),
 
   submitCfp: (slug: string, body: CfpSubmissionRequest) =>
     request(CreateSubmissionResponse, `/api/events/${encodeURIComponent(slug)}/submissions`, {

@@ -20,6 +20,7 @@ import {
   CreateFormFieldRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
+  type OrganizerSpeakersResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
@@ -181,6 +182,16 @@ function embedDocument(title: string, body: string, interactive = false): Respon
     .controls { display: grid; gap: 8px; grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(110px, auto)); margin: 0 0 14px; }
     .control { border: 1px solid #d4d4d8; border-radius: 8px; color: #18181b; font: inherit; min-width: 0; padding: 8px 10px; }
     .count { color: #71717a; font-size: 12px; margin: -5px 0 12px; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .tab { background: #fff; border: 1px solid #d4d4d8; border-radius: 999px; color: #3f3f46; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; }
+    .tab[aria-selected="true"] { background: #4338ca; border-color: #4338ca; color: #fff; }
+    .gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+    .gallery .speaker { min-height: 150px; }
+    .gallery .avatar { height: 64px; width: 64px; }
+    .action { background: #fff; border: 1px solid #d4d4d8; border-radius: 999px; color: #3f3f46; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 5px 10px; }
+    .action[aria-pressed="true"] { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+    .detail { border-top: 1px solid #e4e4e7; margin-top: 10px; padding-top: 10px; }
+    .session-link { border-left: 2px solid #c7d2fe; margin-top: 8px; padding-left: 9px; }
     details summary { color: #4338ca; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 8px; }
     @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
   </style>
@@ -198,6 +209,17 @@ function filter(){
  if(count) count.textContent=visible+' result'+(visible===1?'':'s');
 }
 document.querySelectorAll('[data-filter]').forEach((node)=>node.addEventListener('input',filter));filter();
+const dayButtons=[...document.querySelectorAll('[data-day-button]')];
+const dayPanels=[...document.querySelectorAll('[data-day-panel]')];
+for(const button of dayButtons)button.addEventListener('click',()=>{for(const candidate of dayButtons)candidate.setAttribute('aria-selected',String(candidate===button));for(const panel of dayPanels)panel.hidden=panel.dataset.dayPanel!==button.dataset.dayButton;});
+const itinerary=document.querySelector('[data-itinerary]');
+if(itinerary){
+ const key='speakerops.itinerary.'+itinerary.dataset.itinerary;
+ let saved=[];try{saved=JSON.parse(localStorage.getItem(key)||'[]')}catch{}
+ const buttons=[...document.querySelectorAll('[data-save-id]')];const personal=document.querySelector('[data-personal]');const exportLink=document.querySelector('[data-export]');
+ function draw(){for(const button of buttons){const on=saved.includes(button.dataset.saveId);button.setAttribute('aria-pressed',String(on));button.textContent=on?'★ Saved':'☆ Save';button.closest('[data-session-card]').hidden=Boolean(personal?.checked&&!on)}if(count)count.textContent=saved.length+' saved';if(exportLink){exportLink.hidden=saved.length===0;exportLink.href='/api/public/events/'+encodeURIComponent(itinerary.dataset.itinerary)+'/itinerary.ics?sessions='+encodeURIComponent(saved.join(','));}}
+ for(const button of buttons)button.addEventListener('click',()=>{const id=button.dataset.saveId;saved=saved.includes(id)?saved.filter((value)=>value!==id):[...saved,id];localStorage.setItem(key,JSON.stringify(saved));draw()});personal?.addEventListener('change',draw);document.querySelector('[data-clear]')?.addEventListener('click',()=>{saved=[];localStorage.setItem(key,'[]');draw()});draw();
+}
 </script>` : ""}</body>
 </html>`,
     {
@@ -250,7 +272,7 @@ function sessionSpeakers(speakers: PublicSessionsResponse["sessions"][number]["s
  * time, showing only what is actually placed. Distinct on purpose from the
  * sessions embed, which is the catalogue.
  */
-function renderScheduleEmbed(data: PublicScheduleResponse): Response {
+export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
   let body: string;
   if (data.slots.length === 0) {
     body = `<div class="empty">Schedule coming soon.</div>`;
@@ -260,24 +282,29 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
       const day = formatEmbedDay(slot.startsAt, data.timezone);
       byDay.set(day, [...(byDay.get(day) ?? []), slot]);
     }
-    body = [...byDay.entries()]
-      .map(([day, slots]) => {
+    const days = [...byDay.entries()];
+    const tabs = `<div class="tabs">${days.map(([day], index) => `<button type="button" class="tab" data-day-button="${escapeHtml(day)}" aria-selected="${index === 0}">${escapeHtml(day)}</button>`).join("")}</div>`;
+    body = tabs + days
+      .map(([day, slots], index) => {
         const items = slots
           .map((slot) => {
             const track = slot.session.track;
             const starts = formatEmbedTime(slot.startsAt, data.timezone);
             const ends = formatEmbedTime(slot.endsAt, data.timezone);
-            return `<article class="item">
+            return `<details class="item">
+  <summary><span class="time">${escapeHtml(starts)}</span> · ${escapeHtml(slot.session.title)}</summary>
+  <div class="detail">
   <div class="row">
     <p class="title">${escapeHtml(slot.session.title)}</p>
     ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
   </div>
-  <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${sessionSpeakers(slot.session.speakers)}</div>
+  <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${escapeHtml(slot.session.format)} · ${sessionSpeakers(slot.session.speakers)}</div>
   <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
-</article>`;
+  </div>
+</details>`;
           })
           .join("");
-        return `<h2 class="day">${escapeHtml(day)}</h2><section class="stack">${items}</section>`;
+        return `<section data-day-panel="${escapeHtml(day)}" ${index === 0 ? "" : "hidden"}><h2 class="day">${escapeHtml(day)}</h2><div class="stack">${items}</div></section>`;
       })
       .join("");
   }
@@ -285,6 +312,7 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
   return embedDocument(
     `${data.event.name} schedule`,
     `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">By day and time · ${escapeHtml(data.timezone)}</div></header>${body}`,
+    true,
   );
 }
 
@@ -293,25 +321,30 @@ function renderScheduleEmbed(data: PublicScheduleResponse): Response {
  * no slot yet. An attendee browsing topics wants this; an attendee planning
  * their day wants the schedule.
  */
-function renderSessionsEmbed(data: PublicSessionsResponse): Response {
+export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: PublicScheduleResponse): Response {
   let body: string;
   if (data.sessions.length === 0) {
     body = `<div class="empty">Sessions coming soon.</div>`;
   } else {
     const tracks = [...new Set(data.sessions.map((session) => session.track?.name ?? "Unassigned track"))].sort();
     const formats = [...new Set(data.sessions.map((session) => session.format))].sort();
+    const slotBySession = new Map(schedule.slots.map((slot) => [slot.session.id, slot]));
+    const rooms = [...new Set(schedule.slots.map((slot) => slot.room?.name).filter((room): room is string => Boolean(room)))].sort();
     const items = data.sessions
       .map((session) => {
         const track = session.track?.name ?? "Unassigned track";
+        const slot = slotBySession.get(session.id);
+        const room = slot?.room?.name ?? "Room pending";
+        const when = slot ? `${formatEmbedDay(slot.startsAt, schedule.timezone)} · ${formatEmbedTime(slot.startsAt, schedule.timezone)}-${formatEmbedTime(slot.endsAt, schedule.timezone)}` : "Time pending";
         const speakerSearch = session.speakers.map((speaker) => `${speaker.name} ${speaker.title ?? ""} ${speaker.company ?? ""}`).join(" ");
-        return `<article class="item" data-search="${escapeHtml(`${session.title} ${speakerSearch}`.toLowerCase())}" data-track="${escapeHtml(track)}" data-format="${escapeHtml(session.format)}" data-room="">
+        return `<article class="item" data-search="${escapeHtml(`${session.title} ${speakerSearch}`.toLowerCase())}" data-track="${escapeHtml(track)}" data-format="${escapeHtml(session.format)}" data-room="${escapeHtml(room)}">
   <p class="title">${escapeHtml(session.title)}</p>
-  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
+  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${escapeHtml(when)} · ${escapeHtml(room)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
   <p class="abstract">${escapeHtml(session.abstract.slice(0, 180))}${session.abstract.length > 180 ? "…" : ""}</p>
   ${session.abstract.length > 180 ? `<details><summary>Show more</summary><p class="abstract">${escapeHtml(session.abstract)}</p></details>` : ""}
 </article>`;
       }).join("");
-    body = `<div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search titles or speakers" aria-label="Search sessions" /><select class="control" data-filter data-track aria-label="Filter by track"><option value="">All tracks</option>${tracks.map((track) => `<option>${escapeHtml(track)}</option>`).join("")}</select><select class="control" data-filter data-format aria-label="Filter by format"><option value="">All formats</option>${formats.map((format) => `<option>${escapeHtml(format)}</option>`).join("")}</select></div><div class="count" data-count></div><section class="stack">${items}</section>`;
+    body = `<div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search titles or speakers" aria-label="Search sessions" /><select class="control" data-filter data-track aria-label="Filter by track"><option value="">All tracks</option>${tracks.map((track) => `<option>${escapeHtml(track)}</option>`).join("")}</select><select class="control" data-filter data-format aria-label="Filter by format"><option value="">All formats</option>${formats.map((format) => `<option>${escapeHtml(format)}</option>`).join("")}</select><select class="control" data-filter data-room aria-label="Filter by room"><option value="">All rooms</option>${rooms.map((room) => `<option>${escapeHtml(room)}</option>`).join("")}</select></div><div class="count" data-count></div><section class="stack">${items}</section>`;
   }
 
   return embedDocument(
@@ -321,7 +354,7 @@ function renderSessionsEmbed(data: PublicSessionsResponse): Response {
   );
 }
 
-function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
+export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: PublicScheduleResponse, gallery = false): Response {
   const surname = (name: string) => name.trim().split(/\s+/).at(-1) ?? name;
   const speakers = [...data.speakers].sort((a, b) => surname(a.name).localeCompare(surname(b.name)) || a.name.localeCompare(b.name));
   const items =
@@ -329,7 +362,10 @@ function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
       ? `<div class="empty">Speakers coming soon.</div>`
       : speakers
           .map(
-            (speaker) => `<article class="item speaker" data-search="${escapeHtml(speaker.name.toLowerCase())}" data-track="" data-format="" data-room="">
+            (speaker) => {
+              const sessions = schedule.slots.filter((slot) => slot.session.speakers.some((candidate) => candidate.id === speaker.id));
+              return `<details class="item speaker" data-search="${escapeHtml(speaker.name.toLowerCase())}" data-track="" data-format="" data-room="">
+  <summary class="speaker">
   ${
     speaker.headshotUrl
       ? `<img class="avatar" src="${escapeHtml(speaker.headshotUrl)}" alt="${escapeHtml(speaker.name)} headshot" loading="lazy" />`
@@ -338,17 +374,30 @@ function renderSpeakersEmbed(data: PublicSpeakersResponse): Response {
   <div class="speaker-body">
     <div class="speaker-name">${escapeHtml(speaker.name)}</div>
     <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
-    ${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : ""}
   </div>
-</article>`,
+  </summary>
+  <div class="detail">${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : `<p class="abstract">Bio coming soon.</p>`}<div class="group">Sessions (${sessions.length})</div>${sessions.length ? sessions.map((slot) => `<div class="session-link"><div class="title">${escapeHtml(slot.session.title)}</div><div class="meta">${escapeHtml(formatEmbedDay(slot.startsAt, schedule.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, schedule.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, schedule.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")}</div></div>`).join("") : `<div class="subtle">No scheduled sessions.</div>`}</div>
+</details>`;
+            },
           )
           .join("");
 
   return embedDocument(
-    `${data.event.name} speakers`,
-    `<header class="header"><div class="eyebrow">Speakers</div><h1>${escapeHtml(data.event.name)}</h1></header><div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search speakers" aria-label="Search speakers" /></div><div class="count" data-count></div><section class="stack">${items}</section>`,
+    `${data.event.name} ${gallery ? "speaker gallery" : "speakers"}`,
+    `<header class="header"><div class="eyebrow">${gallery ? "Speaker gallery" : "Speakers"}</div><h1>${escapeHtml(data.event.name)}</h1></header><div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search speakers" aria-label="Search speakers" /></div><div class="count" data-count></div><section class="${gallery ? "gallery" : "stack"}">${items}</section>`,
     true,
   );
+}
+
+export function renderItineraryEmbed(data: PublicScheduleResponse): Response {
+  const days = [...new Set(data.slots.map((slot) => formatEmbedDay(slot.startsAt, data.timezone)))];
+  const cards = data.slots.map((slot) => `<article class="item" data-session-card>
+    <div class="row"><p class="title">${escapeHtml(slot.session.title)}</p><button class="action" type="button" data-save-id="${escapeHtml(slot.session.id)}" aria-pressed="false">☆ Save</button></div>
+    <div class="meta">${slot.session.track ? `<span class="pill" style="background:${safeCssColor(slot.session.track.color)}">${escapeHtml(slot.session.track.name)}</span> · ` : ""}${escapeHtml(formatEmbedDay(slot.startsAt, data.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, data.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, data.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")} · ${slot.session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ")}</div>
+    <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
+  </article>`).join("");
+  const body = `<section data-itinerary="${escapeHtml(data.event.slug)}"><div class="controls"><label class="control"><input type="checkbox" data-personal /> My saved schedule only</label><a class="control" data-export hidden>Export saved .ics</a><button class="control" type="button" data-clear>Clear saved</button></div><div class="count" data-count></div><div class="subtle">${days.length} event day${days.length === 1 ? "" : "s"} · stored only in this browser</div><section class="stack" style="margin-top:12px">${cards}</section></section>`;
+  return embedDocument(`${data.event.name} itinerary`, `<header class="header"><div class="eyebrow">Schedule itinerary</div><h1>${escapeHtml(data.event.name)}</h1></header>${body}`, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +459,25 @@ api.get("/public/events/:slug/speakers", async (c) => {
   return c.json(body);
 });
 
+api.get("/events/:slug/speakers", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const roster = await repo.getPublicSpeakers(c.req.param("slug"));
+  if (!roster) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const portals = await Promise.all(roster.speakers.map((speaker) => repo.getSpeakerPortalByToken(speaker.id)));
+  const body: OrganizerSpeakersResponse = {
+    event: roster.event,
+    speakers: roster.speakers.map((speaker, index) => {
+      const tasks = portals[index]?.tasks ?? [];
+      return {
+        ...speaker,
+        totalTasks: tasks.length,
+        completedTasks: tasks.filter(({ task }) => task.status === "complete").length,
+      };
+    }),
+  };
+  return c.json(body);
+});
+
 api.get("/embeds/events/:slug/schedule", async (c) => {
   const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
@@ -417,15 +485,30 @@ api.get("/embeds/events/:slug/schedule", async (c) => {
 });
 
 api.get("/embeds/events/:slug/sessions", async (c) => {
-  const body = await createRepo(c.env).getPublicSessions(c.req.param("slug"));
-  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSessionsEmbed(body);
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSessions(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSessionsEmbed(body, schedule);
 });
 
 api.get("/embeds/events/:slug/speakers", async (c) => {
-  const body = await createRepo(c.env).getPublicSpeakers(c.req.param("slug"));
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSpeakersEmbed(body, schedule);
+});
+
+api.get("/embeds/events/:slug/gallery", async (c) => {
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return renderSpeakersEmbed(body, schedule, true);
+});
+
+api.get("/embeds/events/:slug/itinerary", async (c) => {
+  const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSpeakersEmbed(body);
+  return renderItineraryEmbed(body);
 });
 
 api.get("/docs", (c) =>
@@ -452,6 +535,8 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/embeds/events/:slug/schedule", auth: "public", purpose: "Drop-in schedule iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/sessions", auth: "public", purpose: "Drop-in sessions iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
+      { method: "GET", path: "/embeds/events/:slug/gallery", auth: "public", purpose: "Searchable photo-grid speaker gallery with session drill-down." },
+      { method: "GET", path: "/embeds/events/:slug/itinerary", auth: "public", purpose: "Anonymous personal itinerary iframe with persistence and calendar export." },
       { method: "POST", path: "/events/:slug/submissions", auth: "public", purpose: "Submit a CFP proposal." },
       { method: "GET", path: "/speaker-portal/:token", auth: "speaker link", purpose: "Speaker portal bundle; demo tokens currently map to seeded speaker ids." },
       { method: "PATCH", path: "/speaker-portal/:token/profile", auth: "speaker link", purpose: "Update the linked speaker's public profile." },
@@ -500,6 +585,10 @@ api.get("/docs", (c) =>
         '<iframe src="/api/embeds/events/horizon-2026/sessions" title="Horizon Dev Summit sessions" width="100%" height="640" loading="lazy"></iframe>',
       speakers:
         '<iframe src="/api/embeds/events/horizon-2026/speakers" title="Horizon Dev Summit speakers" width="100%" height="640" loading="lazy"></iframe>',
+      gallery:
+        '<iframe src="/api/embeds/events/horizon-2026/gallery" title="Horizon Dev Summit speaker gallery" width="100%" height="640" loading="lazy"></iframe>',
+      itinerary:
+        '<iframe src="/api/embeds/events/horizon-2026/itinerary" title="Horizon Dev Summit itinerary" width="100%" height="640" loading="lazy"></iframe>',
     },
   }),
 );

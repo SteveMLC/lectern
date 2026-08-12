@@ -8,6 +8,8 @@ const PREVIEWS = [
   { key: "schedule", title: "Schedule", height: 560 },
   { key: "sessions", title: "Sessions", height: 520 },
   { key: "speakers", title: "Speakers", height: 520 },
+  { key: "gallery", title: "Speaker gallery", height: 560 },
+  { key: "itinerary", title: "Schedule itinerary", height: 640 },
 ] as const;
 
 export function EmbedPreview() {

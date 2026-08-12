@@ -208,6 +208,18 @@ export const PublicSpeakersResponse = z.object({
 });
 export type PublicSpeakersResponse = z.infer<typeof PublicSpeakersResponse>;
 
+export const OrganizerSpeaker = PublicSpeaker.extend({
+  completedTasks: z.number().int().nonnegative(),
+  totalTasks: z.number().int().nonnegative(),
+});
+export type OrganizerSpeaker = z.infer<typeof OrganizerSpeaker>;
+
+export const OrganizerSpeakersResponse = z.object({
+  event: EventSummary,
+  speakers: z.array(OrganizerSpeaker),
+});
+export type OrganizerSpeakersResponse = z.infer<typeof OrganizerSpeakersResponse>;
+
 // ---------------------------------------------------------------------------
 // CFP submission (public)
 // ---------------------------------------------------------------------------

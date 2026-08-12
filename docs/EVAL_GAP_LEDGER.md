@@ -100,20 +100,20 @@ The baseline reason for every EMB item was “judge call failed because the eval
 
 | ID | Baseline | Judge reason (one line) | Decision / local verification |
 | --- | --- | --- | --- |
-| EMB-01 | CANNOT JUDGE | Evaluator credit exhausted before sessions-widget judging. | **PARTIAL** — populated cards include title, description expansion, speaker job metadata, Format, and Track; catalogue records still omit date/time and room. |
+| EMB-01 | CANNOT JUDGE | Evaluator credit exhausted before sessions-widget judging. | **FIXED** — populated cards include title, description expansion, scheduled date/time and room, speaker job metadata, Format, and Track. |
 | EMB-02 | CANNOT JUDGE | Evaluator credit exhausted before session-search judging. | **FIXED** — public sessions embed searches title and speaker identity metadata with a live result count. |
-| EMB-03 | CANNOT JUDGE | Evaluator credit exhausted before facet judging. | **PARTIAL** — working Track and Format facets narrow the public sessions embed; room facet awaits slot metadata in catalogue records. |
+| EMB-03 | CANNOT JUDGE | Evaluator credit exhausted before facet judging. | **FIXED** — working Track, Format, and Room facets narrow the public sessions embed. |
 | EMB-04 | CANNOT JUDGE | Evaluator credit exhausted before speaker-directory judging. | **FIXED** — headshot/name/title/company render with graceful initials and deterministic surname ordering. |
-| EMB-05 | CANNOT JUDGE | Evaluator credit exhausted before speaker-detail judging. | **PARKED** — public speaker detail/search remains absent. |
+| EMB-05 | CANNOT JUDGE | Evaluator credit exhausted before speaker-detail judging. | **FIXED** — searchable speaker directory expands each entry into bio and scheduled sessions with date/time/room. |
 | EMB-06 | CANNOT JUDGE | Evaluator credit exhausted before public-agenda judging. | **FIXED (preserved)** — schedule is grouped by day/time with room, title, track, and speakers. |
-| EMB-07 | CANNOT JUDGE | Evaluator credit exhausted before agenda-day navigation judging. | **PARTIAL** — itinerary has day tabs; legacy iframe agenda remains grouped sections without tabs. |
-| EMB-08 | CANNOT JUDGE | Evaluator credit exhausted before agenda-detail judging. | **PARKED** — no public agenda detail modal/back flow. |
+| EMB-07 | CANNOT JUDGE | Evaluator credit exhausted before agenda-day navigation judging. | **FIXED** — public agenda day tabs change both the selected day label and rendered session set; seed data includes populated sessions on both event days. |
+| EMB-08 | CANNOT JUDGE | Evaluator credit exhausted before agenda-detail judging. | **FIXED** — each agenda block expands in place to full range, room, description, Format, Track, and speakers, and collapses back to the agenda. |
 | EMB-09 | CANNOT JUDGE | Evaluator credit exhausted before itinerary-content judging. | **FIXED** — chronological day tabs plus track, format, title, description, time, room, and complete speaker job metadata. |
 | EMB-10 | CANNOT JUDGE | Evaluator credit exhausted before personal-schedule judging. | **FIXED** — anonymous star/save produces exactly the selected browser-local itinerary; V6. |
 | EMB-11 | CANNOT JUDGE | Evaluator credit exhausted before itinerary persistence/export judging. | **FIXED** — browser-local selection persists across reload and exports the exact chosen sessions as one multi-event `.ics`. |
-| EMB-12 | CANNOT JUDGE | Evaluator credit exhausted before gallery judging. | **PARTIAL** — photo cards, initials fallback, search, and surname sort exist; the list remains a single-column directory rather than a distinct gallery grid. |
-| EMB-13 | CANNOT JUDGE | Evaluator credit exhausted before gallery-detail judging. | **PARKED** — no gallery detail modal with sessions. |
-| EMB-14 | CANNOT JUDGE | Evaluator credit exhausted before distribution judging. | **PARTIAL** — schedule/sessions/speakers plus itinerary are public; itinerary is a page component rather than a standalone iframe. |
+| EMB-12 | CANNOT JUDGE | Evaluator credit exhausted before gallery judging. | **FIXED** — distinct searchable photo grid with initials fallback, job metadata, and surname sorting. |
+| EMB-13 | CANNOT JUDGE | Evaluator credit exhausted before gallery-detail judging. | **FIXED** — each gallery card expands to photo/profile/bio and scheduled-session details, then collapses to the intact grid. |
+| EMB-14 | CANNOT JUDGE | Evaluator credit exhausted before distribution judging. | **FIXED** — all five widget surfaces are anonymous, populated iframe endpoints: sessions, speakers, agenda, itinerary, and gallery. |
 | EMB-15 | CANNOT JUDGE | Evaluator credit exhausted before embed-generator judging. | **PARTIAL** — retrievable snippets/feed URLs exist in API docs/preview; no saved/configurable embed builder. |
 | EMB-16 | CANNOT JUDGE | Evaluator credit exhausted before consistency judging. | **FIXED (preserved)** — all public surfaces read the same schedule/session/speaker endpoints immediately. |
 
@@ -121,7 +121,7 @@ The baseline reason for every EMB item was “judge call failed because the eval
 
 | ID | Baseline | Judge reason (one line) | Decision / local verification |
 | --- | --- | --- | --- |
-| SPK-01 | PARTIAL | Roster showed identity/bio, but had no speaker search/filter. | **PARKED** — no roster filter added; not in ranked targets. |
+| SPK-01 | PARTIAL | Roster showed identity/bio, but had no speaker search/filter. | **FIXED** — admin roster searches name, title, and company with a live result count and deterministic filter tests. |
 | SPK-02 | PARTIAL | Speaker creation only happened through CFP; no organizer add-speaker flow. | **PARKED** — direct speaker creation requires invitation/capability issuance semantics. |
 | SPK-03 | NOT FOUND | No inbound CSV speaker import existed. | **PARKED** — import validation/deduplication was lower-ranked than review and CFP work. |
 | SPK-04 | NOT FOUND | No speaker-level workflow status/filter existed. | **PARKED** — proposal/task/session states remain authoritative; no duplicate speaker status added. |
@@ -132,7 +132,7 @@ The baseline reason for every EMB item was “judge call failed because the eval
 | SPK-09 | PASS | Task status/due dates and completion persisted across reload. | **FIXED (preserved)** — task update path unchanged. |
 | SPK-10 | PARTIAL | Organizer could download files, but timestamps/uploader/latest identity were missing. | **FIXED** — timestamps and per-kind Latest markers in portal and central organizer files; V8. |
 | SPK-11 | PASS | Session-speaker link appeared organizer-side and speaker-side. | **FIXED (preserved)** — co-presenters now follow the same acceptance lineage; V9. |
-| SPK-12 | NOT FOUND | Roster had no aggregate task progress/filter. | **PARKED** — per-speaker task details remain available; no roster aggregation. |
+| SPK-12 | NOT FOUND | Roster had no aggregate task progress/filter. | **FIXED** — every roster card shows completed/total tasks and a progress bar; organizer can filter incomplete, complete, or unassigned speakers. |
 | SPK-13 | PARTIAL | Send succeeded, but recipient selection and communications history were incomplete. | **PARTIAL** — history/outbox is fixed; multi-select/all-speaker broadcast remains absent; V5. |
 | SPK-14 | PASS | Templates resolved recipient-specific names, tasks, portal URLs, and slot facts. | **FIXED (preserved)** — drafting/template logic unchanged. |
 | SPK-15 | PARTIAL | Speaker profiles lacked logistics/custom fields; only submission travel support existed. | **PARKED** — CFP custom fields were added, not a second speaker-profile custom-field system. |
