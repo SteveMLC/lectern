@@ -146,10 +146,13 @@ await attempt("notify speakers", () => page.getByText(/Notify speakers/i).first(
 await dwell(2500);
 await until(136);
 
-// Scene 7 — public schedule with track/format pills (136-148s)
-await attempt("public schedule", () => page.goto(`${baseUrl}/e/horizon-2026/schedule`, { waitUntil: "networkidle" }));
-await dwell(4000);
-await attempt("scroll schedule", () => page.mouse.wheel(0, 700));
+// Scene 7 — public schedule with track/format pills (136-148s). The schedule
+// lives on the event page's program explorer; there is no /schedule route.
+await attempt("public schedule", () => page.goto(`${baseUrl}/e/horizon-2026`, { waitUntil: "networkidle" }));
+await dwell(2500);
+await attempt("scroll to program", () => page.mouse.wheel(0, 900));
+await dwell(2500);
+await attempt("scroll schedule rows", () => page.mouse.wheel(0, 500));
 await until(148);
 
 // Scene 8 — the speaker's own portal (148-162s)
