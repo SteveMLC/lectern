@@ -44,6 +44,8 @@ import {
   ImportOrganizerSpeakersResponse,
   CreateSpeakerTaskRequest,
   CreateSpeakerTaskResponse,
+  UpdateSpeakerTaskDueDateRequest,
+  UpdateSpeakerTaskDueDateResponse,
   BulkTaskReminderRequest,
   BulkTaskReminderResponse,
   BulkAssetDownloadRequest,
@@ -65,6 +67,7 @@ import {
   SaveAssignmentsRequest,
   SubmitReviewRequest,
   ReviewerQueueResponse,
+  ReviewScoreDraftResponse,
   OutboxResponse,
   UploadAssetResponse,
 } from "../../shared/contracts";
@@ -201,6 +204,14 @@ export const apiClient = {
       { auth: true },
     ),
 
+  updateSpeakerTaskDueDate: (slug: string, definitionId: string, body: UpdateSpeakerTaskDueDateRequest) =>
+    request(
+      UpdateSpeakerTaskDueDateResponse,
+      `/api/events/${encodeURIComponent(slug)}/speaker-tasks/${encodeURIComponent(definitionId)}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
   remindSpeakerTasks: (slug: string, body: BulkTaskReminderRequest) =>
     request(
       BulkTaskReminderResponse,
@@ -224,6 +235,22 @@ export const apiClient = {
         if (parsed.success) { code = parsed.data.error.code; message = parsed.data.error.message; }
       } catch { /* binary/non-JSON error; keep fallback */ }
       throw new ApiRequestError(res.status, code, message);
+    }
+    return res.blob();
+  },
+
+  downloadEvaluationCsv: async (slug: string): Promise<Blob> => {
+    const passcode = getPasscode();
+    const res = await fetch(`/api/events/${encodeURIComponent(slug)}/evaluations.csv`, {
+      headers: passcode ? { authorization: `Bearer ${passcode}` } : {},
+    });
+    if (!res.ok) {
+      let message = `Review export failed (${res.status}).`;
+      try {
+        const parsed = ApiError.safeParse(await res.json());
+        if (parsed.success) message = parsed.data.error.message;
+      } catch { /* non-JSON error; keep fallback */ }
+      throw new ApiRequestError(res.status, "evaluation_export_failed", message);
     }
     return res.blob();
   },
@@ -445,6 +472,11 @@ export const apiClient = {
 
   reviewerQueue: (token: string) =>
     request(ReviewerQueueResponse, `/api/reviewer/${encodeURIComponent(token)}`),
+
+  draftReviewScores: (token: string, roundId: string, submissionId: string) =>
+    request(ReviewScoreDraftResponse,
+      `/api/reviewer/${encodeURIComponent(token)}/rounds/${encodeURIComponent(roundId)}/submissions/${encodeURIComponent(submissionId)}/score-draft`,
+      { method: "POST" }),
 
   submitReview: (token: string, roundId: string, submissionId: string, body: SubmitReviewRequest) =>
     request(ReviewerQueueResponse,

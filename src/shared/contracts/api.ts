@@ -255,6 +255,7 @@ export const ImportOrganizerSpeakersResponse = z.object({
 export type ImportOrganizerSpeakersResponse = z.infer<typeof ImportOrganizerSpeakersResponse>;
 
 export const CreateSpeakerTaskRequest = z.object({
+  taskType: z.enum(["general", "file_upload"]).default("file_upload"),
   title: z.string().trim().min(2).max(160),
   instructions: z.string().trim().max(2000).nullable().default(null),
   dueAt: z.iso.datetime({ offset: true }).nullable(),
@@ -267,6 +268,13 @@ export const CreateSpeakerTaskResponse = z.object({
 });
 export type CreateSpeakerTaskResponse = z.infer<typeof CreateSpeakerTaskResponse>;
 
+export const UpdateSpeakerTaskDueDateRequest = z.object({
+  dueAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type UpdateSpeakerTaskDueDateRequest = z.infer<typeof UpdateSpeakerTaskDueDateRequest>;
+export const UpdateSpeakerTaskDueDateResponse = z.object({ definition: TaskDefinition });
+export type UpdateSpeakerTaskDueDateResponse = z.infer<typeof UpdateSpeakerTaskDueDateResponse>;
+
 export const BulkTaskReminderRequest = z.object({ speakerIds: z.array(z.string()).min(1).max(250) });
 export type BulkTaskReminderRequest = z.infer<typeof BulkTaskReminderRequest>;
 export const BulkTaskReminderResponse = z.object({
@@ -277,6 +285,7 @@ export type BulkTaskReminderResponse = z.infer<typeof BulkTaskReminderResponse>;
 
 export const BulkAssetDownloadRequest = z.object({
   assetIds: z.array(z.string()).min(1).max(50),
+  groupBy: z.enum(["speaker", "session", "flat"]).default("speaker"),
 });
 export type BulkAssetDownloadRequest = z.infer<typeof BulkAssetDownloadRequest>;
 
@@ -518,6 +527,7 @@ export type PublishAgendaResponse = z.infer<typeof PublishAgendaResponse>;
 export const UpdateSessionRequest = z.object({
   title: z.string().trim().min(3).max(200),
   abstract: z.string().trim().min(10).max(5000),
+  speakerIds: z.array(z.string()).max(8).optional(),
 });
 export type UpdateSessionRequest = z.infer<typeof UpdateSessionRequest>;
 
@@ -819,6 +829,16 @@ export const SubmitReviewRequest = z.object({
   comment: z.string().trim().max(5000),
 });
 export type SubmitReviewRequest = z.infer<typeof SubmitReviewRequest>;
+
+export const ReviewScoreDraftResponse = z.object({
+  scores: z.record(z.string(), z.number()),
+  recommendation: z.enum(["accept", "waitlist", "reject"]),
+  comment: z.string(),
+  aiUsed: z.boolean(),
+  model: z.string().optional(),
+  note: z.string(),
+});
+export type ReviewScoreDraftResponse = z.infer<typeof ReviewScoreDraftResponse>;
 
 // ---------------------------------------------------------------------------
 // Communications

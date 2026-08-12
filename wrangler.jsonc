@@ -39,6 +39,9 @@
     "DATA_BACKEND": "d1",
     // Cost safety: an API key alone can never enable paid model calls.
     "AI_RUNTIME_MODE": "disabled",
+    // Narrow exception: one cheap Haiku score draft per assignment per 15
+    // minutes, only after an explicit reviewer click. Every call is logged.
+    "AI_REVIEW_SCORING_MODE": "enabled",
     // Delivery safety: a key alone cannot send mail. Production is enabled,
     // while EMAIL_DELIVERY_ALLOWLIST (a Worker secret) limits real recipients.
     "EMAIL_DELIVERY_MODE": "resend"

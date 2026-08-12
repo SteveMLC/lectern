@@ -62,6 +62,7 @@ export interface LecternRepo {
   updateOrganizerSpeaker(input: UpdateOrganizerSpeakerInput): Promise<Speaker>;
   importOrganizerSpeakers(input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }>;
   createSpeakerTask(input: CreateSpeakerTaskInput): Promise<{ definition: TaskDefinition; assigned: number }>;
+  updateSpeakerTaskDueDate(eventId: string, definitionId: string, dueAt: string | null): Promise<TaskDefinition>;
   sendBulkTaskReminders(input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }>;
 
   /**
@@ -115,6 +116,7 @@ export interface UpdateSessionInput {
   eventId: string;
   title: string;
   abstract: string;
+  speakerIds?: string[];
   now: string;
 }
 
@@ -154,6 +156,7 @@ export interface ImportOrganizerSpeakersInput {
 export interface CreateSpeakerTaskInput {
   definitionId: string;
   eventId: string;
+  taskType: "general" | "file_upload";
   title: string;
   instructions: string | null;
   dueAt: string | null;

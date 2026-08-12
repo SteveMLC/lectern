@@ -208,7 +208,10 @@ export function Speakers() {
                 {speaker.logisticsNotes ? <Badge tone="indigo">Logistics noted</Badge> : null}
               </div>
               {speaker.bio ? (
-                <p className="mt-4 flex-1 text-sm leading-6 text-zinc-600 line-clamp-3">{speaker.bio}</p>
+                <div className="mt-4 flex-1 text-sm leading-6 text-zinc-600">
+                  <p>{speaker.bio}</p>
+                  <p className="mt-1 text-[11px] font-medium text-emerald-700">Full portal bio saved</p>
+                </div>
               ) : (
                 <p className="mt-4 flex-1 text-sm italic text-zinc-400">Bio still needed.</p>
               )}

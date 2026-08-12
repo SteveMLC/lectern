@@ -282,6 +282,10 @@ export class AirtableRepo implements LecternRepo {
     throw new AirtableNotWiredError("createSpeakerTask");
   }
 
+  async updateSpeakerTaskDueDate(_eventId: string, _definitionId: string, _dueAt: string | null): Promise<TaskDefinition> {
+    throw new AirtableNotWiredError("updateSpeakerTaskDueDate");
+  }
+
   async sendBulkTaskReminders(_input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }> {
     throw new AirtableNotWiredError("sendBulkTaskReminders");
   }

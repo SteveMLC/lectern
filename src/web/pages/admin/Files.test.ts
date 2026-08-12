@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrganizerSpeakersResponse } from "../../../shared/contracts";
-import { filterDeliverables, latestAssetIdsForSpeakers } from "./Files";
+import { filterDeliverables, latestAssetIdsForSpeakers, taskTypeLabel } from "./Files";
 
 type OrganizerSpeaker = OrganizerSpeakersResponse["speakers"][number];
 const base = {
@@ -44,5 +44,14 @@ describe("latestAssetIdsForSpeakers", () => {
       ],
     };
     expect(latestAssetIdsForSpeakers([speaker], new Set(["ada"]))).toEqual(["new", "session"]);
+  });
+});
+
+describe("taskTypeLabel", () => {
+  it("distinguishes upload deliverables from general speaker actions", () => {
+    expect(taskTypeLabel("headshot")).toBe("File upload");
+    expect(taskTypeLabel("custom_file_upload_taskdef_1")).toBe("File upload");
+    expect(taskTypeLabel("recording_release")).toBe("General action");
+    expect(taskTypeLabel("custom_general_taskdef_2")).toBe("General action");
   });
 });

@@ -38,8 +38,8 @@ Status meanings: **FIXED** means implemented or an existing passing behavior was
 | ABS-10 | NOT FOUND | No numeric aggregate column or sort existed. | **FIXED** — weighted results table toggles ascending/descending; V2. |
 | ABS-11 | NOT FOUND | No co-presenter flow was reachable. | **FIXED** — public CFP accepts co-presenters with role labels, organizer review renders them, and acceptance preserves the same links on the session; V9. |
 | ABS-12 | NOT FOUND | No conflict/recusal control existed. | **FIXED** — reviewer Recuse stores `abstain` and removes the item from the actionable queue; V3. |
-| ABS-13 | PARTIAL | General submissions CSV existed, but it contained no review scores/aggregates. | **FIXED** — review-results CSV includes weighted aggregate, completion count, status, track, and id; V2. |
-| ABS-14 | NOT FOUND | No AI evaluator, AI score, or override existed. | **PARKED** — deliberate product stance: SpeakerOps does not claim AI review; item is N/A under its pass criteria. |
+| ABS-13 | PARTIAL | General submissions CSV existed, but it contained no review scores/aggregates. | **FIXED** — review-results CSV includes weighted aggregate, completion count, status, track, and id, and the browser export now carries organizer auth instead of failing with 401; V2/score closeout. |
+| ABS-14 | NOT FOUND | No AI evaluator, AI score, or override existed. | **FIXED** — the reviewer can explicitly request a bounded Haiku score draft, edit every value and comment, and submit manually. One paid draft per assignment per 15 minutes; provider counters are logged and repeated clicks fall back without charge. |
 
 ## AI Agenda & Schedule Builder (8/8 logged)
 
@@ -65,7 +65,7 @@ The baseline reason for every AIA item was “judge call failed because the eval
 | CFP-03 | PASS | Logged-out public CFP showed event, deadline, tracks, formats, and form. | **FIXED (preserved)** — public route unchanged except new configured fields. |
 | CFP-04 | NOT FOUND | CFP close date was read-only and no PATCH/settings route existed. | **FIXED** — `/admin/settings` and organizer PATCH update open/close state; V4. |
 | CFP-05 | PARTIAL | Submission and status dashboard work, but the rubric requires account creation. | **PARTIAL** — private capability links provide the complete submit/confirm/dashboard journey without passwords; conventional submitter accounts remain a deliberate parked product-model mismatch. |
-| CFP-06 | PASS | Submitted proposal data round-tripped intact to organizers. | **FIXED (preserved)** — shared contracts and validation retained. |
+| CFP-06 | PASS | Submitted proposal data round-tripped intact to organizers. | **FIXED** — shared contracts/validation are retained and custom-field answers are now explicitly labeled on organizer submission rows and mobile cards. |
 | CFP-07 | NOT FOUND | No save-draft or resume-later path existed. | **FIXED** — server-backed anonymous drafts issue a private resume URL and restore title, abstract, format, track, speakers, and answers after reload. |
 | CFP-08 | OMITTED BY RUN | Source rubric requires automatic submission confirmation in email or the in-app outbox. | **FIXED** — each successful proposal now records a simulated confirmation with recipient, event, and proposal title in the durable outbox. |
 | CFP-09 | NOT FOUND | No proposal editing surface or PATCH route existed. | **FIXED** — capability-scoped title/abstract/answer editing; V1. |
@@ -88,17 +88,17 @@ The baseline reason for every CNT item was “judge call failed because the eval
 | CNT-01 | CANNOT JUDGE | Evaluator credit exhausted before file-request judging. | **FIXED** — organizer-authored requests carry instructions/due dates and multi-speaker assignments; V11. |
 | CNT-02 | CANNOT JUDGE | Evaluator credit exhausted before portal upload judging. | **FIXED** — portal uploads persist task/session context and matching task uploads auto-complete the request; V11. |
 | CNT-03 | CANNOT JUDGE | Evaluator credit exhausted before speaker scoping judging. | **FIXED (preserved)** — speaker capability returns only that speaker's sessions/tasks/files; organizer routes remain passcode-gated. |
-| CNT-04 | CANNOT JUDGE | Evaluator credit exhausted before version judging. | **FIXED** — all versions remain downloadable with timestamp and per-kind Latest marker; V8. |
+| CNT-04 | CANNOT JUDGE | Evaluator credit exhausted before version judging. | **FIXED** — all versions remain individually downloadable with timestamp and explicit Latest version / Previous version labels; V8/score closeout. |
 | CNT-05 | CANNOT JUDGE | Evaluator credit exhausted before file-comment judging. | **FIXED** — durable per-file speaker/organizer comment threads show role, author, timestamp, and survive reload; V11. |
 | CNT-06 | CANNOT JUDGE | Evaluator credit exhausted before upload-constraint judging. | **FIXED (preserved)** — uploader states headshot/slides/document and 10 MB limit; server enforces it. |
 | CNT-07 | CANNOT JUDGE | Evaluator credit exhausted before deliverables-dashboard judging. | **FIXED** — central deliverables dashboard summarizes uploads/missing files/open tasks and filters by speaker identity, upload state, or incomplete tasks. |
 | CNT-08 | CANNOT JUDGE | Evaluator credit exhausted before bulk-reminder judging. | **FIXED** — multi-select bulk task reminders record exact recipients and receipted outbox rows; V11. |
 | CNT-09 | CANNOT JUDGE | Evaluator credit exhausted before session-edit judging. | **FIXED (preserved)** — Agenda “Edit details” persists title/abstract. |
-| CNT-10 | CANNOT JUDGE | Evaluator credit exhausted before organizer speaker-edit judging. | **FIXED (preserved)** — roster opens the profile/files surface and changes persist. |
-| CNT-11 | CANNOT JUDGE | Evaluator credit exhausted before content-history judging. | **FIXED** — session edits snapshot title/abstract; organizer history can restore an older version without losing the replaced copy; V12. |
+| CNT-10 | CANNOT JUDGE | Evaluator credit exhausted before organizer speaker-edit judging. | **FIXED** — roster edits persist and the full saved bio is legible on the speaker card instead of being line-clamped. |
+| CNT-11 | CANNOT JUDGE | Evaluator credit exhausted before content-history judging. | **FIXED** — session edits snapshot title/abstract; organizer history can restore an older version without losing the replaced copy, and the receipt shows the restored abstract excerpt; V12/score closeout. |
 | CNT-12 | CANNOT JUDGE | Evaluator credit exhausted before approval-gate judging. | **FIXED** — explicit review/approved state gates public sessions, speakers, and schedule data at the SQL boundary; V12. |
 | CNT-13 | CANNOT JUDGE | Evaluator credit exhausted before central-library judging. | **FIXED** — `/admin/files` aggregates owner/task/session/date/version/latest metadata; V8/V11. |
-| CNT-14 | CANNOT JUDGE | Evaluator credit exhausted before bulk-download judging. | **FIXED** — organizer selection downloads a valid dependency-free ZIP containing latest selected versions, with 50-file/50-MB limits; V11. |
+| CNT-14 | CANNOT JUDGE | Evaluator credit exhausted before bulk-download judging. | **FIXED** — organizer selection downloads a valid dependency-free ZIP containing latest selected versions, with by-speaker, by-session, or flat grouping plus 50-file/50-MB limits and an explicit completion receipt; V11/score closeout. |
 
 ## Public & Embeddable Widgets (16/16 logged)
 
@@ -131,13 +131,13 @@ The baseline reason for every EMB item was “judge call failed because the eval
 | SPK-02 | PARTIAL | Speaker creation only happened through CFP; no organizer add-speaker flow. | **FIXED** — manual organizer add accepts identity, profile, status, and logistics fields into the event-scoped roster; V10. |
 | SPK-03 | NOT FOUND | No inbound CSV speaker import existed. | **FIXED** — CSV upload validates required fields and duplicate rows, then updates existing event emails instead of duplicating them; V10. |
 | SPK-04 | NOT FOUND | No speaker-level workflow status/filter existed. | **FIXED** — persisted prospect/invited/confirmed/declined status is distinct from proposal decisions and roster-filterable; V10. |
-| SPK-05 | NOT FOUND | Tasks were seeded, with no organizer create/edit/assign UI. | **FIXED** — custom deliverable creation and multi-speaker assignment are organizer-operable; V11. |
-| SPK-06 | PASS | Per-speaker onboarding template and simulated-send control worked. | **FIXED (preserved)** — outbox now makes the receipt durable; V5. |
+| SPK-05 | NOT FOUND | Tasks were seeded, with no organizer create/edit/assign UI. | **FIXED** — organizer can create general-action or file-upload tasks, multi-assign them, and edit the shared due date after assignment; V11/score closeout. |
+| SPK-06 | PASS | Per-speaker onboarding template and simulated-send control worked. | **FIXED** — first-class portal-invitation template resolves speaker, event, and per-recipient capability URL tokens and records individual outbox receipts; V5/score closeout. |
 | SPK-07 | PASS | Capability portal was speaker-facing and scoped to the linked speaker. | **FIXED (preserved)** — proposals were added without organizer reviews/reasoning. |
 | SPK-08 | PASS | Profile/headshot edits persisted into organizer/public surfaces. | **FIXED (preserved)** — upload/profile seams unchanged. |
 | SPK-09 | PASS | Task status/due dates and completion persisted across reload. | **FIXED (preserved)** — task update path unchanged. |
 | SPK-10 | PARTIAL | Organizer could download files, but timestamps/uploader/latest identity were missing. | **FIXED** — timestamps and per-kind Latest markers in portal and central organizer files; V8. |
-| SPK-11 | PASS | Session-speaker link appeared organizer-side and speaker-side. | **FIXED (preserved)** — co-presenters now follow the same acceptance lineage; V9. |
+| SPK-11 | PASS | Session-speaker link appeared organizer-side and speaker-side. | **FIXED** — co-presenters follow acceptance lineage, and direct sessions can use the complete organizer roster plus add/replace/remove speaker links after creation; V9/score closeout. |
 | SPK-12 | NOT FOUND | Roster had no aggregate task progress/filter. | **FIXED** — every roster card shows completed/total tasks and a progress bar; organizer can filter incomplete, complete, or unassigned speakers. |
 | SPK-13 | PARTIAL | Send succeeded, but recipient selection and communications history were incomplete. | **FIXED** — free-form subject/body plus multi-select and workflow-group recipients record one durable outbox row per exact speaker; real inbox delivery remains the manual half; V5. |
 | SPK-14 | PASS | Templates resolved recipient-specific names, tasks, portal URLs, and slot facts. | **FIXED (preserved)** — drafting/template logic unchanged. |

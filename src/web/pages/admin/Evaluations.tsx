@@ -27,6 +27,7 @@ export function Evaluations() {
   const [override, setOverride] = useState<EvaluationWorkspaceResponse | null>(null);
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const data = override ?? loaded;
 
   if (loading) return <Spinner label="Loading evaluation rounds" />;
@@ -38,12 +39,29 @@ export function Evaluations() {
         title="Evaluation rounds"
         subtitle="Round-scoped scorecards, reviewer pools, assignments, progress, and weighted results."
         actions={<div className="flex gap-2">
-          <a className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700" href={`/api/events/${encodeURIComponent(eventSlug)}/evaluations.csv`}>Export review CSV</a>
+          <Button variant="secondary" onClick={async () => {
+            setActionError(null);
+            try {
+              const blob = await apiClient.downloadEvaluationCsv(eventSlug);
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `review-results-${eventSlug}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1_000);
+              setNotice("Weighted review results exported as CSV.");
+            } catch (caught) {
+              setActionError(caught instanceof ApiRequestError ? caught.message : "Review results could not be exported.");
+            }
+          }}>Export review CSV</Button>
           <Button variant="secondary" onClick={() => { setOverride(null); reload(); }}>Refresh</Button>
           <Button onClick={() => setCreating(true)}>Add round</Button>
         </div>}
       />
       {notice ? <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</p> : null}
+      {actionError ? <div className="mb-4"><ErrorBanner message={actionError} /></div> : null}
       {creating ? (
         <RoundEditor
           eventSlug={eventSlug}

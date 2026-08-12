@@ -20,6 +20,8 @@ export interface Env {
   ANTHROPIC_MODEL?: string;
   /** Must be exactly "enabled" before the runtime may use ANTHROPIC_API_KEY. Defaults off. */
   AI_RUNTIME_MODE?: string;
+  /** Enables only the one-click, Haiku-only reviewer score draft. Independently budgeted. */
+  AI_REVIEW_SCORING_MODE?: string;
   /** Secret. Resend API credential; never exposed to the browser. */
   RESEND_API_KEY?: string;
   /** Verified Resend sender, for example "Lectern <updates@example.com>". */

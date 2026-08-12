@@ -10,6 +10,12 @@ import { AssetComments } from "../../components/AssetComments";
 export type DeliverableFilter = "all" | "has_files" | "missing_files" | "incomplete_tasks";
 type OrganizerSpeaker = OrganizerSpeakersResponse["speakers"][number];
 
+export function taskTypeLabel(key: string): "General action" | "File upload" {
+  return key === "headshot" || key === "slides" || key.includes("custom_file_upload_")
+    ? "File upload"
+    : "General action";
+}
+
 export function latestAssetIdsForSpeakers(speakers: OrganizerSpeaker[], selectedIds: Set<string>): string[] {
   const latest = new Map<string, OrganizerSpeaker["assets"][number]>();
   for (const speaker of speakers) {
@@ -49,10 +55,14 @@ export function Files() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskType, setTaskType] = useState<"general" | "file_upload">("file_upload");
   const [taskInstructions, setTaskInstructions] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("");
+  const [editingDueDefinitionId, setEditingDueDefinitionId] = useState<string | null>(null);
+  const [editingDueAt, setEditingDueAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [zipBusy, setZipBusy] = useState(false);
+  const [zipGrouping, setZipGrouping] = useState<"speaker" | "session" | "flat">("speaker");
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, error, loading, reload } = useAsync(() => apiClient.organizerSpeakers(eventSlug), [eventSlug]);
@@ -80,8 +90,8 @@ export function Files() {
       {actionError ? <div className="mb-4"><ErrorBanner message={actionError} /></div> : null}
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="font-semibold">Content requests</h2><p className="mt-1 text-sm text-zinc-500">Select speakers below, then create one due-dated request or send reminders for their open tasks.</p></div>
-          <div className="flex flex-wrap gap-2"><Button type="button" variant="secondary" disabled={selectedIds.size === 0 || busy} onClick={async () => {
+          <div><h2 className="font-semibold">Speaker tasks and content requests</h2><p className="mt-1 text-sm text-zinc-500">Assign a general action or a file upload with an optional deadline, then remind speakers with open work.</p></div>
+          <div className="flex flex-wrap items-center gap-2"><label className="text-xs text-zinc-600">ZIP grouping <select aria-label="ZIP grouping" value={zipGrouping} onChange={(event) => setZipGrouping(event.target.value as typeof zipGrouping)} className="ml-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5"><option value="speaker">By speaker</option><option value="session">By session</option><option value="flat">No folders</option></select></label><Button type="button" variant="secondary" disabled={selectedIds.size === 0 || busy} onClick={async () => {
             setBusy(true); setActionError(null);
             try { const result = await apiClient.remindSpeakerTasks(eventSlug, { speakerIds: [...selectedIds] }); setNotice(`${result.queued} reminder${result.queued === 1 ? "" : "s"} logged to the outbox for ${result.recipientEmails.join(", ") || "no speakers with open tasks"}.`); }
             catch (caught) { setActionError(caught instanceof ApiRequestError ? caught.message : "Reminders could not be sent."); }
@@ -91,22 +101,22 @@ export function Files() {
             if (assetIds.length === 0) { setActionError("The selected speakers do not have files to download."); return; }
             setZipBusy(true); setActionError(null); setNotice(null);
             try {
-              const blob = await apiClient.downloadAssetZip(eventSlug, { assetIds });
+              const blob = await apiClient.downloadAssetZip(eventSlug, { assetIds, groupBy: zipGrouping });
               const url = URL.createObjectURL(blob);
               const link = document.createElement("a");
               link.href = url; link.download = `${eventSlug}-speaker-files.zip`; document.body.appendChild(link); link.click(); link.remove();
               setTimeout(() => URL.revokeObjectURL(url), 1_000);
-              setNotice(`ZIP ready with ${assetIds.length} latest file${assetIds.length === 1 ? "" : "s"} from ${selectedIds.size} selected speaker${selectedIds.size === 1 ? "" : "s"}.`);
+              setNotice(`ZIP ready with ${assetIds.length} latest file${assetIds.length === 1 ? "" : "s"} from ${selectedIds.size} selected speaker${selectedIds.size === 1 ? "" : "s"}, grouped ${zipGrouping === "speaker" ? "by speaker" : zipGrouping === "session" ? "by session" : "without folders"}.`);
             } catch (caught) { setActionError(caught instanceof ApiRequestError ? caught.message : "The ZIP could not be generated."); }
             finally { setZipBusy(false); }
-          }}>{zipBusy ? "Generating ZIP…" : "Download latest ZIP"}</Button><Button type="button" disabled={selectedIds.size === 0} onClick={() => setTaskOpen((value) => !value)}>{taskOpen ? "Cancel request" : "Create file request"}</Button></div>
+          }}>{zipBusy ? "Generating ZIP…" : "Download latest ZIP"}</Button><Button type="button" disabled={selectedIds.size === 0} onClick={() => setTaskOpen((value) => !value)}>{taskOpen ? "Cancel task" : "Create task"}</Button></div>
         </div>
         {taskOpen ? <form className="mt-4 grid gap-3 border-t border-zinc-200 pt-4 sm:grid-cols-2" onSubmit={async (event) => {
           event.preventDefault(); setBusy(true); setActionError(null);
-          try { const result = await apiClient.createSpeakerTask(eventSlug, { title: taskTitle, instructions: taskInstructions || null, dueAt: taskDueAt ? new Date(taskDueAt).toISOString() : null, speakerIds: [...selectedIds] }); setNotice(`“${result.definition.label}” assigned to ${result.assigned} speaker${result.assigned === 1 ? "" : "s"}.`); setTaskTitle(""); setTaskInstructions(""); setTaskDueAt(""); setTaskOpen(false); reload(); }
+          try { const result = await apiClient.createSpeakerTask(eventSlug, { taskType, title: taskTitle, instructions: taskInstructions || null, dueAt: taskDueAt ? new Date(taskDueAt).toISOString() : null, speakerIds: [...selectedIds] }); setNotice(`${taskType === "file_upload" ? "File upload" : "General action"} “${result.definition.label}” assigned to ${result.assigned} speaker${result.assigned === 1 ? "" : "s"}.`); setTaskTitle(""); setTaskInstructions(""); setTaskDueAt(""); setTaskOpen(false); reload(); }
           catch (caught) { setActionError(caught instanceof ApiRequestError ? caught.message : "Task could not be created."); }
           finally { setBusy(false); }
-        }}><Field label="Request title" required><Input required value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Upload final slide deck" /></Field><Field label="Due date and time"><Input type="datetime-local" value={taskDueAt} onChange={(event) => setTaskDueAt(event.target.value)} /></Field><div className="sm:col-span-2"><Field label="Instructions"><Textarea value={taskInstructions} onChange={(event) => setTaskInstructions(event.target.value)} placeholder="PDF or PPTX; include alt text for key diagrams." /></Field></div><div className="sm:col-span-2"><Button type="submit" disabled={busy}>{busy ? "Creating…" : `Assign to ${selectedIds.size} selected`}</Button></div></form> : null}
+        }}><Field label="Task type" required><select className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm" value={taskType} onChange={(event) => setTaskType(event.target.value as "general" | "file_upload")}><option value="file_upload">File upload</option><option value="general">General action</option></select></Field><Field label="Task title" required><Input required value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder={taskType === "file_upload" ? "Upload final slide deck" : "Confirm travel details"} /></Field><Field label="Due date and time"><Input type="datetime-local" value={taskDueAt} onChange={(event) => setTaskDueAt(event.target.value)} /></Field><div className="sm:col-span-2"><Field label="Instructions"><Textarea value={taskInstructions} onChange={(event) => setTaskInstructions(event.target.value)} placeholder={taskType === "file_upload" ? "PDF or PPTX; include alt text for key diagrams." : "Open the portal and mark this complete when finished."} /></Field></div><div className="sm:col-span-2"><Button type="submit" disabled={busy}>{busy ? "Creating…" : `Assign to ${selectedIds.size} selected`}</Button></div></form> : null}
       </Card>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Card className="p-4"><div className="text-2xl font-semibold">{totalFiles}</div><div className="text-xs text-zinc-500">uploaded files</div></Card>
@@ -136,10 +146,7 @@ export function Files() {
       ) : (
         <div className="space-y-5">
           {visible.map((speaker) => {
-            const latest = new Set(
-              [...new Set(speaker.assets.map((asset) => asset.kind))]
-                .map((kind) => speaker.assets.find((asset) => asset.kind === kind)!.id),
-            );
+            const latest = new Set(latestAssetIdsForSpeakers([speaker], new Set([speaker.id])));
             return (
               <Card key={speaker.id} className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -147,7 +154,26 @@ export function Files() {
                   <Badge tone={speaker.completedTasks === speaker.totalTasks ? "emerald" : "amber"}>{speaker.completedTasks} / {speaker.totalTasks} tasks complete</Badge>
                 </div>
                 <div className="mt-4 space-y-2">
-                  {speaker.tasks.length === 0 ? <p className="rounded-lg border border-dashed border-zinc-200 p-3 text-sm text-zinc-500">No assigned content tasks.</p> : speaker.tasks.map(({ task, definition }) => <div key={task.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 p-3 text-sm"><div><p className="font-medium">{definition.label}</p><p className="mt-1 text-xs text-zinc-500">{definition.description || "No additional instructions"}{definition.dueAt ? ` · due ${formatDateTime(definition.dueAt, data!.event.timezone)}` : " · no due date"}</p></div><Badge tone={task.status === "complete" ? "emerald" : task.status === "blocked" ? "rose" : "amber"}>{task.status}</Badge></div>)}
+                  {speaker.tasks.length === 0 ? <p className="rounded-lg border border-dashed border-zinc-200 p-3 text-sm text-zinc-500">No assigned speaker tasks.</p> : speaker.tasks.map(({ task, definition }) => (
+                    <div key={task.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{definition.label}</p><Badge tone={taskTypeLabel(definition.key) === "General action" ? "violet" : "sky"}>{taskTypeLabel(definition.key)}</Badge></div><p className="mt-1 text-xs text-zinc-500">{definition.description || "No additional instructions"}{definition.dueAt ? ` · due ${formatDateTime(definition.dueAt, data!.event.timezone)}` : " · no due date"}</p></div>
+                        <div className="flex items-center gap-2"><Badge tone={task.status === "complete" ? "emerald" : task.status === "blocked" ? "rose" : "amber"}>{task.status}</Badge><Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => { setEditingDueDefinitionId(definition.id); setEditingDueAt(definition.dueAt ? new Date(definition.dueAt).toISOString().slice(0, 16) : ""); }}>Edit due date</Button></div>
+                      </div>
+                      {editingDueDefinitionId === definition.id ? (
+                        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-zinc-100 pt-3">
+                          <Field label="Due date and time"><Input type="datetime-local" value={editingDueAt} onChange={(event) => setEditingDueAt(event.target.value)} /></Field>
+                          <Button type="button" disabled={busy} onClick={async () => {
+                            setBusy(true); setActionError(null);
+                            try { await apiClient.updateSpeakerTaskDueDate(eventSlug, definition.id, { dueAt: editingDueAt ? new Date(editingDueAt).toISOString() : null }); setNotice(`Due date updated for “${definition.label}” across every assignment.`); setEditingDueDefinitionId(null); reload(); }
+                            catch (caught) { setActionError(caught instanceof ApiRequestError ? caught.message : "Due date could not be updated."); }
+                            finally { setBusy(false); }
+                          }}>Save due date</Button>
+                          <Button type="button" variant="ghost" onClick={() => setEditingDueDefinitionId(null)}>Cancel</Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
                 {speaker.assets.length === 0 ? (
                   <p className="mt-4 rounded-lg border border-dashed border-zinc-200 p-3 text-sm text-zinc-500">No files uploaded.</p>
@@ -155,7 +181,7 @@ export function Files() {
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {speaker.assets.map((asset) => (
                       <div key={asset.id} className="rounded-lg border border-zinc-200 p-3 text-sm">
-                        <a href={`/api/assets/${asset.id}`} className="block hover:text-accent"><div><span className="font-medium">{asset.filename}</span>{latest.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest</Badge> : null}{asset.sessionId ? <Badge className="ml-2" tone="sky">{sessionTitleById.get(asset.sessionId) ? `Session: ${sessionTitleById.get(asset.sessionId)}` : "Session file"}</Badge> : null}</div><p className="mt-1 text-xs text-zinc-500">{asset.kind} · version {asset.versionNumber} · {asset.taskId ? "task-linked" : asset.sessionId ? "session-linked" : "speaker file"} · {formatDateTime(asset.uploadedAt, data!.event.timezone)}</p></a>
+                        <a href={`/api/assets/${asset.id}`} className="block hover:text-accent"><div><span className="font-medium">{asset.filename}</span>{latest.has(asset.id) ? <Badge className="ml-2" tone="emerald">Latest version</Badge> : <Badge className="ml-2" tone="zinc">Previous version</Badge>}{asset.sessionId ? <Badge className="ml-2" tone="sky">{sessionTitleById.get(asset.sessionId) ? `Session: ${sessionTitleById.get(asset.sessionId)}` : "Session file"}</Badge> : null}</div><p className="mt-1 text-xs text-zinc-500">Download version {asset.versionNumber} · {asset.kind} · {asset.taskId ? "task-linked" : asset.sessionId ? "session-linked" : "speaker file"} · {formatDateTime(asset.uploadedAt, data!.event.timezone)}</p></a>
                         <AssetComments filename={asset.filename} comments={speaker.assetComments.filter((comment) => comment.assetId === asset.id)} timezone={data!.event.timezone} onSubmit={async (body) => { await apiClient.addOrganizerAssetComment(eventSlug, asset.id, { body }); setNotice(`Comment posted on ${asset.filename}.`); reload(); }} />
                       </div>
                     ))}
