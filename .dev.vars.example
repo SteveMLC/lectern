@@ -10,8 +10,12 @@ ORGANIZER_PASSCODE=speakerops-dev
 # AIRTABLE_TOKEN=
 # AIRTABLE_BASE_ID=
 
-# Optional — real email sending (Lane C wires this; simulated outbox without it).
+# Optional — real email sending. All four values are required for live mail;
+# leave mode disabled to retain the persisted simulated outbox.
 # RESEND_API_KEY=
+# RESEND_FROM_EMAIL=SpeakerOps <updates@your-verified-domain.example>
+# EMAIL_DELIVERY_MODE=disabled
+# EMAIL_DELIVERY_ALLOWLIST=you@example.com
 
 # Optional — AI-assisted drafting. Both the key and explicit mode are required;
 # leaving mode disabled guarantees deterministic, zero-API-cost templates.

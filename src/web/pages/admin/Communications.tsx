@@ -4,6 +4,7 @@ import type {
   CommunicationKind,
   CommunicationPreviewResponse,
   ScheduleNoticeDraftResponse,
+  SimulateCommunicationResponse,
 } from "../../../shared/contracts";
 import {
   Badge,
@@ -32,7 +33,7 @@ export function Communications() {
   const [selectedSpeaker, setSelectedSpeaker] = useState(searchParams.get("speaker") ?? "");
   const [kind, setKind] = useState<CommunicationKind>("reminder");
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<{ messageId: string; deliveredAt: string } | null>(null);
+  const [sent, setSent] = useState<SimulateCommunicationResponse | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
   const speakerId = selectedSpeaker || speakers.data?.speakers[0]?.id || "";
@@ -57,7 +58,7 @@ export function Communications() {
       });
       setSent(result);
     } catch (caught) {
-      setSendError(caught instanceof ApiRequestError ? caught.message : "Simulated send failed.");
+      setSendError(caught instanceof ApiRequestError ? caught.message : "Email delivery failed.");
     } finally {
       setSending(false);
     }
@@ -67,7 +68,7 @@ export function Communications() {
     <div>
       <PageHeader
         title="Communications"
-        subtitle="Preview the exact speaker email, download its calendar handoff, and record a safe simulated send."
+        subtitle="Preview the exact speaker email, download its calendar handoff, and deliver it through the configured safe transport."
       />
 
       <BulkComposer eventSlug={eventSlug} />
@@ -100,7 +101,7 @@ export function Communications() {
               </Field>
             </div>
             <div className="mt-5 rounded-lg bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-              Simulated mode writes a message and successful delivery attempt to the outbox without contacting the speaker.
+              Delivery is simulated and receipted by default. When Resend is explicitly enabled, only allowlisted recipients receive real email.
             </div>
           </Card>
 
@@ -221,12 +222,12 @@ function ScheduleNoticeCard({ eventSlug, preselect }: { eventSlug: string; prese
         });
       }
       setDone(
-        `Recorded ${draft.recipients.length} simulated deliver${draft.recipients.length === 1 ? "y" : "ies"} — ${draft.recipients.map((recipient) => recipient.name).join(", ")} now ${draft.recipients.length === 1 ? "knows" : "know"} their slot.`,
+        `Processed ${draft.recipients.length} deliver${draft.recipients.length === 1 ? "y" : "ies"} — ${draft.recipients.map((recipient) => recipient.name).join(", ")} now ${draft.recipients.length === 1 ? "knows" : "know"} their slot.`,
       );
       setDraft(null);
       setNote("");
     } catch (caught) {
-      setError(caught instanceof ApiRequestError ? caught.message : "Simulated send failed.");
+      setError(caught instanceof ApiRequestError ? caught.message : "Email delivery failed.");
     } finally {
       setSending(false);
     }
@@ -339,7 +340,7 @@ function ScheduleNoticeCard({ eventSlug, preselect }: { eventSlug: string; prese
                 >
                   {sending
                     ? "Sending…"
-                    : `Send (simulated) to ${draft.recipients.length} speaker${draft.recipients.length === 1 ? "" : "s"}`}
+                    : `Deliver to ${draft.recipients.length} speaker${draft.recipients.length === 1 ? "" : "s"}`}
                 </Button>
                 <a
                   href={draft.icsUrl}
@@ -392,7 +393,7 @@ function MessagePreview({
 }: {
   preview: CommunicationPreviewResponse;
   sending: boolean;
-  sent: { messageId: string; deliveredAt: string } | null;
+  sent: SimulateCommunicationResponse | null;
   error: string | null;
   onSimulate: () => Promise<void>;
 }) {
@@ -418,7 +419,7 @@ function MessagePreview({
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button type="button" disabled={sending} onClick={() => void onSimulate()}>
-            {sending ? "Recording…" : "Send simulated"}
+            {sending ? "Delivering…" : "Deliver email"}
           </Button>
           {preview.icsUrl ? (
             <a
@@ -433,7 +434,9 @@ function MessagePreview({
 
         {sent ? (
           <div role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Simulated delivery recorded at {formatDateTime(sent.deliveredAt)} · {sent.messageId}
+            {sent.status === "failed"
+              ? `Delivery failed and was recorded: ${sent.error ?? "Unknown provider error"}`
+              : `${sent.mode === "resend" ? "Email sent" : "Simulated delivery recorded"} at ${formatDateTime(sent.deliveredAt!)} · ${sent.providerId ?? sent.messageId}`}
           </div>
         ) : null}
         {error ? <div className="mt-4"><ErrorBanner message={error} /></div> : null}

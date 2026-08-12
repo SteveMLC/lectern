@@ -837,7 +837,7 @@ api.get("/docs", (c) =>
       { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/reviewers", auth: "organizer", purpose: "Add or update a round reviewer and assignment cap." },
       { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId/assignments", auth: "organizer", purpose: "Replace one reviewer's exact assignments for a round." },
       { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/auto-distribute", auth: "organizer", purpose: "Round-robin unassigned proposals without exceeding reviewer caps." },
-      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", auth: "organizer", purpose: "Record a simulated reviewer reminder receipt." },
+      { method: "POST", path: "/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", auth: "organizer", purpose: "Deliver or simulate a reviewer reminder and persist its receipt." },
       { method: "GET", path: "/events/:slug/evaluations.csv", auth: "organizer", purpose: "Export weighted review results with spreadsheet formula guarding." },
       { method: "GET", path: "/reviewer/:token", auth: "reviewer link", purpose: "Return only that reviewer's assigned proposals in open rounds; blind rounds omit speaker identity." },
       { method: "PUT", path: "/reviewer/:token/rounds/:roundId/submissions/:submissionId", auth: "reviewer link", purpose: "Submit or update the assigned proposal's scorecard, recommendation, and comments." },
@@ -861,8 +861,8 @@ api.get("/docs", (c) =>
       { method: "PATCH", path: "/events/:slug/sessions/:sessionId/content-approval", auth: "organizer", purpose: "Approve or return content and gate public program visibility." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
-      { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated-message delivery receipts for the event outbox." },
-      { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
+      { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated and real delivery receipts for the event outbox." },
+      { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Deliver through the configured transport and persist the provider receipt; simulated by default." },
       { method: "POST", path: "/events/:slug/assets/download.zip", auth: "organizer", purpose: "Download selected current speaker files as a valid ZIP." },
       { method: "POST", path: "/events/:slug/assets/:assetId/comments", auth: "organizer", purpose: "Add a durable organizer comment to a speaker file." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
@@ -1363,13 +1363,21 @@ api.post("/events/:slug/evaluations/rounds/:roundId/reviewers/:email/nudge", org
   if (!reviewer) return errorResponse(404, "reviewer_not_found", "No reviewer with that email in this round.");
   const now = new Date().toISOString();
   const messageId = randomId("msg");
-  await repo.simulateCommunication({
+  const delivery = await repo.simulateCommunication({
     messageId, attemptId: randomId("del"), eventId: bundle.event.id, speakerId: null,
     toEmail: reviewer.email, subject: `${round!.name}: ${reviewer.assigned - reviewer.complete} review(s) outstanding`,
     bodyMd: `Hi ${reviewer.name},\n\nPlease complete your assigned reviews for ${bundle.event.name}.\n\nReviewer queue: ${new URL(c.req.url).origin}/review/${reviewer.token}`,
     now,
   });
-  return c.json({ messageId, status: "sent_simulated", deliveredAt: now });
+  const body: SimulateCommunicationResponse = {
+    messageId,
+    status: delivery.messageStatus,
+    mode: delivery.mode,
+    deliveredAt: delivery.status === "success" ? now : null,
+    providerId: delivery.providerId,
+    error: delivery.error,
+  };
+  return c.json(body);
 });
 
 api.get("/events/:slug/submissions.csv", organizerAuth, async (c) => {
@@ -1941,7 +1949,7 @@ api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
   }
   const now = new Date().toISOString();
   const messageId = randomId("msg");
-  await repo.simulateCommunication({
+  const delivery = await repo.simulateCommunication({
     messageId,
     attemptId: randomId("del"),
     eventId: bundle.event.id,
@@ -1953,8 +1961,11 @@ api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
   });
   const body: SimulateCommunicationResponse = {
     messageId,
-    status: "sent_simulated",
-    deliveredAt: now,
+    status: delivery.messageStatus,
+    mode: delivery.mode,
+    deliveredAt: delivery.status === "success" ? now : null,
+    providerId: delivery.providerId,
+    error: delivery.error,
   };
   return c.json(body, 201);
 });

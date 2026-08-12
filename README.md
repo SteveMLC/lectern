@@ -32,7 +32,7 @@ The complete judging path is deployed and production-proven:
 - **Golden path**: public CFP submission → persisted in D1 → visible in the organizer submissions console, with speaker dedup by email.
 - Organizer console (passcode-gated): dashboard counts, searchable submissions, formula-safe CSV export, Approve/Maybe/Deny decisions with editable feedback drafts, direct invited sessions, and drag-and-drop room scheduling with day/track/room filters, list projection, exact controls, and live room/speaker conflicts.
 - **Speaker portal**: demo-link profile editing, onboarding task completion, and speaker-facing R2 upload/download as first-class asset records. Production-grade expiring links are deliberately not claimed.
-- **Communications**: task-reminder and session-update previews, persisted simulated sends, and downloadable `.ics` calendar handoffs.
+- **Communications**: task-reminder and session-update previews, persisted delivery receipts, optional real Resend transport with an explicit recipient allowlist, and downloadable `.ics` calendar handoffs.
 - **AI decision emails, all three ways**: every decision opens a reasoning box; Claude (`claude-sonnet-5`) drafts the speaker-facing email from the organizer's blunt internal notes — an acceptance carrying the speaker's portal link and the exact onboarding checklist the system derives (link guaranteed even if the model omits it), or thoughtful feedback for deny/waitlist. AI proposes, the human approves, nothing auto-sends, and an honest template takes over when no key is configured.
 - **Editable program copy**: retitle a talk when you approve it, or any time after from the agenda. The session carries the program title; the submission keeps what the speaker pitched, so lineage always shows both.
 - **Committee notes that outlive the call**: the reasoning behind a decision is persisted as a review on the proposal — visible on the card next time anyone looks, exported in the CSV, and kept out of speaker-facing surfaces.
@@ -147,6 +147,11 @@ pnpm release:preflight             # reports every remaining local release block
 pnpm cf:provision                  # creates the D1 database and R2 bucket
 # copy the database_id printed by d1 create into wrangler.jsonc
 pnpm exec wrangler secret put ORGANIZER_PASSCODE
+# Optional real email: add both values, verify the sender domain in Resend,
+# then change EMAIL_DELIVERY_MODE to "resend" in wrangler.jsonc.
+pnpm exec wrangler secret put RESEND_API_KEY
+pnpm exec wrangler secret put RESEND_FROM_EMAIL
+pnpm exec wrangler secret put EMAIL_DELIVERY_ALLOWLIST
 pnpm db:migrate:remote
 pnpm db:seed:remote
 pnpm deploy                        # vite build && wrangler deploy
@@ -196,7 +201,7 @@ The JSON API the app uses is the public API.
 | POST | `/api/events/:slug/sessions` | Bearer passcode | Add a direct invited/sponsor session |
 | PUT | `/api/events/:slug/sessions/:sessionId/slot` | Bearer passcode | Create or move an agenda placement |
 | GET | `/api/events/:slug/communications/preview` | Bearer passcode | Preview a reminder or session update |
-| POST | `/api/events/:slug/communications/simulate` | Bearer passcode | Persist a simulated delivery receipt |
+| POST | `/api/events/:slug/communications/simulate` | Bearer passcode | Deliver through configured transport and persist its receipt (simulated by default) |
 | GET | `/api/airtable/status` | Bearer passcode | Airtable mirror connectivity, schema, mapping, and reset-safety state |
 | POST | `/api/airtable/events/:slug/sync` | Bearer passcode | Idempotently mirror one event into Airtable |
 | POST | `/api/speakers/:speakerId/assets` | Bearer passcode | Upload a speaker file to R2 (multipart: `file`, `kind`) |
@@ -273,7 +278,7 @@ That idempotency is covered by tests rather than asserted: a second sync of unch
 ## Deliberately deferred
 
 - Visual form-builder, reviewer assignments, and multi-round review management beyond the working decision queue.
-- Real email delivery; previews, calendar attachments, and persisted simulated delivery work without third-party credentials.
+- Provider webhooks for bounce/complaint lifecycle updates. Real Resend submission and provider IDs are supported; previews, calendar handoffs, and persisted simulated receipts remain available without credentials.
 - Accelevents-specific field mapping/import, dark mode, and exhaustive mobile admin polish. A generic submissions CSV export is already included.
 
 ## Contributing

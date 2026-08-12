@@ -75,6 +75,7 @@ import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
 import { summarizeReviewScores } from "../../../shared/domain/reviews";
+import { createEmailDelivery, type EmailDelivery } from "../../integrations/emailDelivery";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case, exactly as stored)
@@ -660,7 +661,10 @@ const ALL_STATUSES: SubmissionStatus[] = [
 // ---------------------------------------------------------------------------
 
 export class D1Repo implements SpeakerOpsRepo {
-  constructor(private readonly db: D1Database) {}
+  constructor(
+    private readonly db: D1Database,
+    private readonly emailDelivery: EmailDelivery = createEmailDelivery({}),
+  ) {}
 
   private async getPublicProgram(slug: string): Promise<{
     event: EventRow;
@@ -1084,22 +1088,19 @@ export class D1Repo implements SpeakerOpsRepo {
     ).bind(input.eventId, ...input.speakerIds).all<{ id: string; name: string; email: string; labels: string }>();
     const recipients = rows.results ?? [];
     if (recipients.length === 0) return { queued: 0, recipientEmails: [] };
-    const statements: D1PreparedStatement[] = [];
-    recipients.forEach((row, index) => {
+    for (const [index, row] of recipients.entries()) {
       const labels = row.labels.split("||");
-      statements.push(
-        this.db.prepare(
-          `INSERT INTO messages (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
-           VALUES (?1, ?2, NULL, ?3, ?4, 'Reminder: speaker tasks need attention', ?5, 'sent_simulated', ?6)`,
-        ).bind(input.messageIds[index], input.eventId, row.id, row.email,
-          `Hi ${row.name},\n\nPlease complete: ${labels.join(", ")}.\n\nOpen your speaker portal to finish these tasks.`, input.now),
-        this.db.prepare(
-          `INSERT INTO delivery_attempts (id, message_id, attempted_at, mode, status, provider_id, error)
-           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
-        ).bind(input.attemptIds[index], input.messageIds[index], input.now),
-      );
-    });
-    await this.db.batch(statements);
+      await this.simulateCommunication({
+        messageId: input.messageIds[index]!,
+        attemptId: input.attemptIds[index]!,
+        eventId: input.eventId,
+        speakerId: row.id,
+        toEmail: row.email,
+        subject: "Reminder: speaker tasks need attention",
+        bodyMd: `Hi ${row.name},\n\nPlease complete: ${labels.join(", ")}.\n\nOpen your speaker portal to finish these tasks.`,
+        now: input.now,
+      });
+    }
     return { queued: recipients.length, recipientEmails: recipients.map((row) => row.email) };
   }
 
@@ -2311,31 +2312,35 @@ export class D1Repo implements SpeakerOpsRepo {
     return portal;
   }
 
-  async simulateCommunication(input: SimulateCommunicationInput): Promise<void> {
+  async simulateCommunication(input: SimulateCommunicationInput) {
+    await this.db.prepare(
+      `INSERT INTO messages
+         (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
+       VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'queued', ?7)`,
+    ).bind(
+      input.messageId, input.eventId, input.speakerId, input.toEmail,
+      input.subject, input.bodyMd, input.now,
+    ).run();
+
+    const delivery = await this.emailDelivery.send({
+      messageId: input.messageId,
+      toEmail: input.toEmail,
+      subject: input.subject,
+      bodyMd: input.bodyMd,
+    });
     await this.db.batch([
-      this.db
-        .prepare(
-          `INSERT INTO messages
-             (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
-           VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'sent_simulated', ?7)`,
-        )
-        .bind(
-          input.messageId,
-          input.eventId,
-          input.speakerId,
-          input.toEmail,
-          input.subject,
-          input.bodyMd,
-          input.now,
-        ),
-      this.db
-        .prepare(
-          `INSERT INTO delivery_attempts
-             (id, message_id, attempted_at, mode, status, provider_id, error)
-           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
-        )
-        .bind(input.attemptId, input.messageId, input.now),
+      this.db.prepare("UPDATE messages SET status = ?1 WHERE id = ?2")
+        .bind(delivery.messageStatus, input.messageId),
+      this.db.prepare(
+        `INSERT INTO delivery_attempts
+           (id, message_id, attempted_at, mode, status, provider_id, error)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+      ).bind(
+        input.attemptId, input.messageId, input.now, delivery.mode,
+        delivery.status, delivery.providerId, delivery.error,
+      ),
     ]);
+    return delivery;
   }
 
   async queueDueTaskReminders(now: string, dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
@@ -2355,32 +2360,36 @@ export class D1Repo implements SpeakerOpsRepo {
     const candidates = rows.results ?? [];
     if (candidates.length === 0) return { queued: 0, taskIds: [] };
 
-    const statements: D1PreparedStatement[] = [];
+    const taskIds: string[] = [];
     for (const row of candidates) {
       const suffix = `${row.task_id}_${row.due_at}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const messageId = `msg_auto_due_${suffix}`;
-      statements.push(
+      const subject = `Reminder: ${row.task_label} is due`;
+      const bodyMd = `Hi ${row.speaker_name},\n\nYour ${row.task_label} task for ${row.event_name} is incomplete and was due ${row.due_at}.\n\nOpen your speaker portal to complete it.`;
+      const reserved = await this.db.prepare(
+        `INSERT OR IGNORE INTO messages
+           (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'queued', ?7)`,
+      ).bind(messageId, row.event_id, row.speaker_id, row.email, subject, bodyMd, now).run();
+      if ((reserved.meta.changes ?? 0) === 0) continue;
+
+      const delivery = await this.emailDelivery.send({
+        messageId, toEmail: row.email, subject, bodyMd,
+      });
+      await this.db.batch([
+        this.db.prepare("UPDATE messages SET status = ?1 WHERE id = ?2")
+          .bind(delivery.messageStatus, messageId),
         this.db.prepare(
-          `INSERT OR IGNORE INTO messages
-             (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
-           VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 'sent_simulated', ?7)`,
-        ).bind(
-          messageId, row.event_id, row.speaker_id, row.email,
-          `Reminder: ${row.task_label} is due`,
-          `Hi ${row.speaker_name},\n\nYour ${row.task_label} task for ${row.event_name} is incomplete and was due ${row.due_at}.\n\nOpen your speaker portal to complete it.`,
-          now,
-        ),
-        this.db.prepare(
-          `INSERT OR IGNORE INTO delivery_attempts
+          `INSERT INTO delivery_attempts
              (id, message_id, attempted_at, mode, status, provider_id, error)
-           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
-        ).bind(`del_auto_due_${suffix}`, messageId, now),
-      );
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+        ).bind(
+          `del_auto_due_${suffix}`, messageId, now, delivery.mode,
+          delivery.status, delivery.providerId, delivery.error,
+        ),
+      ]);
+      taskIds.push(row.task_id);
     }
-    const results = await this.db.batch(statements);
-    const taskIds = candidates
-      .filter((_row, index) => (results[index * 2]?.meta.changes ?? 0) > 0)
-      .map((row) => row.task_id);
     return { queued: taskIds.length, taskIds };
   }
 
