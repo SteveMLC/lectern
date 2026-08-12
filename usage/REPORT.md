@@ -1,15 +1,15 @@
 # AI usage reimbursement audit
 
-Generated 2026-08-12 23:35 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
+Generated 2026-08-12 23:36 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
 
-Ledger digest: `3e99740930efb05081bc75fbbd4101a4769ee33d82f47654125ce5d2fb0f20e4` (184 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
-Receipt-allocation digest: `ac7790926f78bd683081db6b9251884d27f7b7a5a6c7d451107ca09494050b74` (38 records). Raw receipts remain private.
+Ledger digest: `b614219db4238eb3b8eb1aee112e43e47b62bb8b5d16f47a1174075c91cedd3f` (186 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
+Receipt-allocation digest: `3266279c4827c2cde9d7f29ef42193b85b6437d6ebfb645e35c81b80543059a8` (39 records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
-2. **API-equivalent estimate — $1494.12** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $465.13 evidenced so far** — the number a reimbursement claim uses, backed by 3 primary billing records plus 35 zero-dollar coverage extensions. 0 usage entries remain uncovered by recorded evidence.
+2. **API-equivalent estimate — $1495.44** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
+3. **Actual billed spend — $465.13 evidenced so far** — the number a reimbursement claim uses, backed by 3 primary billing records plus 36 zero-dollar coverage extensions. 1 usage entry remain uncovered by recorded evidence.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -17,14 +17,14 @@ The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhm
 
 | Provider / model | Entries | Calls | Input | Cache reads | Cache writes | Output | API-equivalent USD |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| anthropic/claude-fable-5 | 60 | 1211 | 3,468 | 559,928,799 | 16,207,667 | 1,080,326 | $938.13 |
+| anthropic/claude-fable-5 | 61 | 1213 | 3,472 | 561,162,156 | 16,208,801 | 1,081,633 | $939.45 |
 | anthropic/claude-opus-5 | 14 | 436 | 845,106 | 218,003,353 | 9,030,040 | 457,513 | $214.97 |
 | openai/gpt-5.6-sol | 91 | — | 9,489,061 | 437,737,472 | 0 | 1,026,850 | $297.12 |
 | openai/gpt-5.5 | 1 | 6 | 5,393 | 516,096 | 0 | 137 | $0.29 |
 | anthropic/claude-sonnet-5 | 16 | 13 | 26,863 | 102,153,695 | 3,480,757 | 429,907 | $33.49 |
 | anthropic/claude-opus-4-8 | 1 | 17 | 34 | 8,979,232 | 535,436 | 7,291 | $10.03 |
-| anthropic/claude-haiku-4-5-20251001 | 1 | — | 19,914 | 276,442 | 23,992 | 4,443 | $0.10 |
-| **Total** | **184** | | | | | | **$1494.12** |
+| anthropic/claude-haiku-4-5-20251001 | 2 | 1 | 20,757 | 276,442 | 23,992 | 4,662 | $0.10 |
+| **Total** | **186** | | | | | | **$1495.44** |
 
 ## Evidence inventory
 
@@ -216,6 +216,8 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | 2026-08-12 | Codex engineering task | gpt-5.6-sol | engineering qa release | 7,254,501 | $4.64 | `1dabfa2eaee0…` (15286 lines) | `docs/USAB` `src/web/p` `src/web/p` |
 | 2026-08-12 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 54,824,143 | $77.00 | `f03b61157cde…` (7711 lines) | `docs/USAB` `src/web/p` `src/web/p` |
 | 2026-08-12 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 10,332,166 | $22.13 | `39fc66cfc313…` (7801 lines) | `public/og` `scripts/r` `scripts/r` `submissio` |
+| 2026-08-12 | Lectern runtime | claude-haiku-4-5-20251001 | runtime ai feature | 1,062 | $0.00 | `eb7051184fdd…` (1 lines) | `e61506d9c` `https://l` `runtime:r` |
+| 2026-08-12 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 1,235,802 | $1.32 | `ba7930c06290…` (7807 lines) | `usage/REP` `usage/led` |
 
 ## Receipt allocations
 
@@ -260,6 +262,7 @@ Billing evidence stays in `usage/private/`. The tracked allocation ledger stores
 | 2026-07-21–2026-08-21 | openai | ChatGPT Pro subscription — Jul 21–Aug 21, 2026 — coverage extension | coverage extension | $0.00 | 1 | `920a87c11f8c…` (38,220 bytes) |
 | 2026-08-09–2026-09-09 | anthropic | Claude Max subscription — Aug 9–Sep 9, 2026 — coverage extension | coverage extension | $0.00 | 1 | `a429dcde5cd9…` (34,130 bytes) |
 | 2026-07-21–2026-08-21 | openai | ChatGPT Pro subscription — Jul 21–Aug 21, 2026 — coverage extension | coverage extension | $0.00 | 1 | `920a87c11f8c…` (38,220 bytes) |
+| 2026-08-09–2026-09-09 | anthropic | Claude Max subscription — Aug 9–Sep 9, 2026 — coverage extension | coverage extension | $0.00 | 1 | `a429dcde5cd9…` (34,130 bytes) |
 | 2026-08-09–2026-09-09 | anthropic | Claude Max subscription — Aug 9–Sep 9, 2026 — coverage extension | coverage extension | $0.00 | 1 | `a429dcde5cd9…` (34,130 bytes) |
 
 ## How to audit this
