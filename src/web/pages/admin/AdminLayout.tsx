@@ -80,7 +80,7 @@ function AdminShell({ onLock }: { onLock: () => void }) {
         <div className="flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
-              S
+              L
             </span>
             Lectern
           </Link>
@@ -125,7 +125,7 @@ function AdminShell({ onLock }: { onLock: () => void }) {
         <div className="border-b border-zinc-200 px-5 py-4">
           <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span className="flex size-6 items-center justify-center rounded-md bg-accent text-xs font-bold text-white">
-              S
+              L
             </span>
             Lectern
           </Link>
