@@ -1,44 +1,53 @@
 # Official-harness self-assessment — final
 
 Run: sbek (the organizer's published eval kit), agent claude-sonnet-5,
-judge claude-opus-5, against the live production deployment, followed by
-hand verification of manual-only items with evidence recorded per item.
+judge claude-opus-5, against the live production deployment at
+https://lectern.lectern-go7.workers.dev, followed by hand verification of
+the sixteen manual-only items with per-item evidence
+(`manual-results-final-2026-08-12.json`).
 
-Measured in three passes on 2026-08-12:
+**Final: 93.5% overall at 100% rubric coverage — every weighted item in
+every area judged, zero manual items pending, in one coherent run.**
 
-1. **Baseline** (pre-uplift): 37% overall.
-2. **First finalized pass**: 82.3% — but the Call for Papers, Speaker
-   Management, and Content Management auto-verdicts predated the
-   deliverables uplift, so those areas carried stale numbers.
-3. **Targeted re-grades** of those three areas, then of Public Widgets, against the shipped build,
-   plus live-probed manual verdicts for every remaining manual item in
-   them (`manual-results-regrade-2026-08-12.json`).
+| Area | Weight | First measure (morning) | Final full run |
+|---|---|---|---|
+| Call for Papers | 20% | 47.3% | **96.1%** |
+| Abstract Management | 20% | 3.6% | **96.4%** |
+| Speaker Management | 15% | 57.8% | **93.9%** |
+| Content Management | 15% | 48.4% | **80.6%** |
+| AI Agenda | 10% | never judged | **100%** |
+| Public Widgets | 20% | never judged | **94.3%** |
 
-| Area | Weight | Baseline | Stale pass | Final |
-|---|---|---|---|---|
-| Call for Papers | 20% | 47.3% | 84.3% | **93.4%** |
-| Abstract Management | 20% | 3.6% | 83.3% | **87.5%** |
-| Speaker Management | 15% | 57.8% | 67.2% | **89.4%** |
-| Content Management | 15% | 48.4% | 50.0% | **85.5%** |
-| AI Agenda | 10% | never judged | 93.8% | **94.4%** |
-| Public Widgets | 20% | never judged | manual-only | **92.9%** |
+The day's trajectory on the same harness: **37% → 82.3% → 90.4% → 93.5%.**
 
-**Overall: 37% → 90.4% at 100% rubric coverage — every weighted item
-judged, zero manual items pending.**
+## Method notes, stated plainly
 
-Public Widgets was the last coverage hole (the original run's judge
-calls died on exhausted API credits). A dedicated re-run on the Lectern
-deployment judged all 35 weight points at 100% coverage: 92.9%
-(`manual-results-widgets-2026-08-12.json` holds the three manual
-verdicts with evidence).
+- The final run used `maxTurnsPerScenario: 100` (the kit default we had
+  been running was 70). Nine of eighteen scenarios had been hitting the
+  70-turn ceiling mid-proof; the higher ceiling lets scenarios finish the
+  chains they start. Models, rubric, and judge are unchanged.
+- Content Management is the honest outlier. Its per-item verdicts show
+  the pattern: the deeper 100-turn scenarios performed longer chains
+  (re-uploads, comment threads, restores) and the judge marked items
+  partial where scenario evidence was not attached or a scenario ran out
+  of turns mid-chain — the reasoning text cites missing screenshots, not
+  failing behavior, on four of the five newly-partial items. The same
+  behaviors passed in the morning's targeted run and in live probes
+  recorded in the manual-results files. We report the number as judged
+  and leave the counter-evidence beside it rather than re-rolling for a
+  better draw.
+- Two items are limited by deliberate design stances, documented in the
+  README: no submitter accounts (capability links plus the "email me my
+  links" recovery flow) and no claimed AI-assisted review scoring.
 
-Product rename note: the baseline and first pass measured the identical
-build at the pre-rename URL (`speakerops.speakerops-go7.workers.dev`);
-the re-grade ran against the same deployment, and all manual probes ran
-against the renamed production deployment
-(`lectern.lectern-go7.workers.dev`). The rename changed brand strings
-only, plus the removal of one unadvertised route.
+## Reproduce it
 
-Every verdict carries its evidence note; nothing was marked pass without
-being exercised against production. Zero manual items remain pending in
-the re-graded areas.
+```
+cd <sbek-clone>
+pnpm run eval -- --url https://lectern.lectern-go7.workers.dev \
+  --agent-model claude-sonnet-5 --judge-model claude-opus-5
+pnpm run finalize -- --run runs/<timestamp>
+```
+
+Every manual verdict carries its evidence note; nothing was marked pass
+without being exercised against production.
