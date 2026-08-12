@@ -1,5 +1,6 @@
 import type {
   AssetKind,
+  AssetComment,
   EventBundle,
   EventCounts,
   EventSummary,
@@ -12,6 +13,7 @@ import type {
   PublicSpeakersResponse,
   ResourcePage,
   Session,
+  SessionVersion,
   SessionFormat,
   Speaker,
   SpeakerAsset,
@@ -58,6 +60,8 @@ export interface SpeakerOpsRepo {
   createOrganizerSpeaker(input: CreateOrganizerSpeakerInput): Promise<Speaker>;
   updateOrganizerSpeaker(input: UpdateOrganizerSpeakerInput): Promise<Speaker>;
   importOrganizerSpeakers(input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }>;
+  createSpeakerTask(input: CreateSpeakerTaskInput): Promise<{ definition: TaskDefinition; assigned: number }>;
+  sendBulkTaskReminders(input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }>;
 
   /**
    * Public CFP intake. Upserts the speaker by (event, email) — a returning
@@ -73,6 +77,9 @@ export interface SpeakerOpsRepo {
   getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;
   createDirectSession(input: CreateDirectSessionInput): Promise<OrganizerSession>;
   updateSession(input: UpdateSessionInput): Promise<OrganizerSession>;
+  listSessionVersions(eventId: string, sessionId: string): Promise<SessionVersion[]>;
+  restoreSessionVersion(input: RestoreSessionVersionInput): Promise<OrganizerSession>;
+  updateSessionContentApproval(input: UpdateSessionContentApprovalInput): Promise<OrganizerSession>;
   upsertAgendaSlot(input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse>;
   publishAgenda(eventId: string, now: string): Promise<string>;
   countsForEvent(eventId: string): Promise<EventCounts>;
@@ -99,6 +106,7 @@ export interface SpeakerOpsRepo {
   listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
+  createAssetComment(input: CreateAssetCommentInput): Promise<AssetComment>;
 }
 
 export interface UpdateSessionInput {
@@ -106,6 +114,21 @@ export interface UpdateSessionInput {
   eventId: string;
   title: string;
   abstract: string;
+  now: string;
+}
+
+export interface RestoreSessionVersionInput {
+  eventId: string;
+  sessionId: string;
+  versionId: string;
+  snapshotId: string;
+  now: string;
+}
+
+export interface UpdateSessionContentApprovalInput {
+  eventId: string;
+  sessionId: string;
+  status: "needs_review" | "approved";
   now: string;
 }
 
@@ -124,6 +147,25 @@ export interface UpdateOrganizerSpeakerInput extends UpdateOrganizerSpeakerReque
 export interface ImportOrganizerSpeakersInput {
   eventId: string;
   rows: Array<SpeakerCsvRow & { id: string }>;
+  now: string;
+}
+
+export interface CreateSpeakerTaskInput {
+  definitionId: string;
+  eventId: string;
+  title: string;
+  instructions: string | null;
+  dueAt: string | null;
+  speakerIds: string[];
+  speakerTaskIds: string[];
+  now: string;
+}
+
+export interface BulkTaskReminderInput {
+  eventId: string;
+  speakerIds: string[];
+  messageIds: string[];
+  attemptIds: string[];
   now: string;
 }
 
@@ -276,7 +318,17 @@ export interface SpeakerPortalBundle {
   cfp: EventBundle["cfp"];
   tasks: SpeakerPortalTask[];
   assets: SpeakerAsset[];
+  assetComments: AssetComment[];
   resources: ResourcePage[];
+}
+
+export interface CreateAssetCommentInput {
+  id: string;
+  assetId: string;
+  authorRole: "speaker" | "organizer";
+  authorName: string;
+  body: string;
+  now: string;
 }
 
 export interface UpdateSpeakerProposalInput {
@@ -341,5 +393,7 @@ export interface CreateSpeakerAssetInput {
   contentType: string;
   sizeBytes: number;
   r2Key: string;
+  taskId: string | null;
+  sessionId: string | null;
   uploadedAt: string;
 }

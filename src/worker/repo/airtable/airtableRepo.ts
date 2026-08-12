@@ -5,16 +5,19 @@ import type {
   EvaluationWorkspaceResponse,
   OrganizerAgendaResponse,
   OrganizerSession,
+  SessionVersion,
   PublicScheduleResponse,
   PublicSessionsResponse,
   PublicSpeakersResponse,
   OrganizerSpeakersResponse,
   Speaker,
   SpeakerAsset,
+  AssetComment,
   ReviewerQueueResponse,
   OutboxMessage,
   SubmissionListItem,
   CfpDraftRequest,
+  TaskDefinition,
 } from "../../../shared/contracts";
 import type {
   CreateCfpSubmissionInput,
@@ -26,6 +29,8 @@ import type {
   SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpdateSessionInput,
+  RestoreSessionVersionInput,
+  UpdateSessionContentApprovalInput,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
@@ -43,6 +48,9 @@ import type {
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
   ImportOrganizerSpeakersInput,
+  CreateSpeakerTaskInput,
+  BulkTaskReminderInput,
+  CreateAssetCommentInput,
 } from "../types";
 
 /**
@@ -266,6 +274,14 @@ export class AirtableRepo implements SpeakerOpsRepo {
     throw new AirtableNotWiredError("importOrganizerSpeakers");
   }
 
+  async createSpeakerTask(_input: CreateSpeakerTaskInput): Promise<{ definition: TaskDefinition; assigned: number }> {
+    throw new AirtableNotWiredError("createSpeakerTask");
+  }
+
+  async sendBulkTaskReminders(_input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }> {
+    throw new AirtableNotWiredError("sendBulkTaskReminders");
+  }
+
   async createEvent(_input: CreateEventInput): Promise<EventBundle> { throw new AirtableNotWiredError("createEvent"); }
   async updateEventSettings(_input: UpdateEventSettingsInput): Promise<EventBundle> { throw new AirtableNotWiredError("updateEventSettings"); }
   async createTrack(_input: CreateTrackInput): Promise<EventBundle> { throw new AirtableNotWiredError("createTrack"); }
@@ -306,6 +322,18 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async updateSession(_input: UpdateSessionInput): Promise<OrganizerSession> {
     throw new AirtableNotWiredError("updateSession");
+  }
+
+  async listSessionVersions(_eventId: string, _sessionId: string): Promise<SessionVersion[]> {
+    throw new AirtableNotWiredError("listSessionVersions");
+  }
+
+  async restoreSessionVersion(_input: RestoreSessionVersionInput): Promise<OrganizerSession> {
+    throw new AirtableNotWiredError("restoreSessionVersion");
+  }
+
+  async updateSessionContentApproval(_input: UpdateSessionContentApprovalInput): Promise<OrganizerSession> {
+    throw new AirtableNotWiredError("updateSessionContentApproval");
   }
 
   async upsertAgendaSlot(_input: UpsertAgendaSlotInput): Promise<OrganizerAgendaResponse> {
@@ -435,5 +463,9 @@ export class AirtableRepo implements SpeakerOpsRepo {
 
   async getSpeakerAssetById(_id: string): Promise<SpeakerAsset | null> {
     throw new AirtableNotWiredError("getSpeakerAssetById");
+  }
+
+  async createAssetComment(_input: CreateAssetCommentInput): Promise<AssetComment> {
+    throw new AirtableNotWiredError("createAssetComment");
   }
 }

@@ -5,11 +5,14 @@ import { apiClient } from "../lib/api";
 import { formatDateRange, formatDateOnly } from "../lib/status";
 import { useAsync } from "../lib/useAsync";
 import { Itinerary } from "../components/Itinerary";
+import { PublicProgram } from "../components/PublicProgram";
 
 export function EventPage() {
   const { slug = "" } = useParams();
   const { data, error, loading } = useAsync(() => apiClient.eventBundle(slug), [slug]);
   const schedule = useAsync(() => apiClient.publicSchedule(slug), [slug]);
+  const sessions = useAsync(() => apiClient.publicSessions(slug), [slug]);
+  const speakers = useAsync(() => apiClient.publicSpeakers(slug), [slug]);
 
   if (loading) {
     return (
@@ -82,6 +85,12 @@ export function EventPage() {
             ) : null}
           </div>
         </Card>
+
+        {schedule.data && sessions.data && speakers.data ? (
+          <PublicProgram schedule={schedule.data} sessions={sessions.data} speakers={speakers.data} />
+        ) : schedule.error || sessions.error || speakers.error ? (
+          <ErrorBanner message={(schedule.error ?? sessions.error ?? speakers.error)?.message ?? "The program could not be loaded."} />
+        ) : <Spinner label="Loading program" />}
 
         {schedule.data ? <Itinerary schedule={schedule.data} /> : null}
 

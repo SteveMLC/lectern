@@ -1,15 +1,15 @@
 # AI usage reimbursement audit
 
-Generated 2026-08-12 13:34 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
+Generated 2026-08-12 14:21 UTC by `pnpm usage:report`. Do not edit by hand — regenerate instead.
 
-Ledger digest: `5abef8d831922bfce8e171345ceaab575de15671aae19d709607739160f366be` (128 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
+Ledger digest: `6671b3fcdacd5aa924343128b6005eeff326b851e8f5975d4b462d0abccbc0a6` (130 entries). `pnpm usage:check` fails if this file no longer matches the ledger.
 Receipt-allocation digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (0 records). Raw receipts remain private.
 
 ## The three numbers, kept separate
 
 1. **Provider-reported tokens** — counters copied from local provider session logs.
-2. **API-equivalent estimate — $1043.15** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
-3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 127 usage entries remain uncovered by a recorded receipt.
+2. **API-equivalent estimate — $1067.16** — those tokens at pinned public list prices ([pricing.json](pricing.json)). A workload gauge, not a bill.
+3. **Actual billed spend — $0.00 evidenced so far** — the number a reimbursement claim uses. 129 usage entries remain uncovered by a recorded receipt.
 
 The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhmAPoBKR_Az-A/) allows a valid submission up to **$500** in token-cost reimbursement, including qualifying Codex Pro / Claude Max subscription usage, subject to proof and organizer review. The claim will be the receipt amounts, capped at $500 — never the API-equivalent gauge.
 
@@ -19,11 +19,11 @@ The [brief](https://docs.google.com/document/d/1rBHJtiNKHv4i43tdf2Rm0sDEYuIcajhm
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | anthropic/claude-fable-5 | 37 | 670 | 1,338 | 344,299,491 | 12,264,571 | 747,615 | $626.99 |
 | anthropic/claude-opus-5 | 13 | 436 | 1,191 | 218,003,353 | 9,030,040 | 364,499 | $208.42 |
-| openai/gpt-5.6-sol | 63 | — | 6,344,630 | 288,851,968 | 0 | 706,340 | $197.34 |
+| openai/gpt-5.6-sol | 65 | — | 7,132,259 | 323,753,984 | 0 | 793,993 | $221.36 |
 | openai/gpt-5.5 | 1 | 6 | 5,393 | 516,096 | 0 | 137 | $0.29 |
 | anthropic/claude-sonnet-5 | 13 | 13 | 15,012 | 0 | 0 | 5,473 | $0.08 |
 | anthropic/claude-opus-4-8 | 1 | 17 | 34 | 8,979,232 | 535,436 | 7,291 | $10.03 |
-| **Total** | **128** | | | | | | **$1043.15** |
+| **Total** | **130** | | | | | | **$1067.16** |
 
 ## Evidence inventory
 
@@ -159,6 +159,8 @@ One row per immutable ledger entry. The digest is the SHA-256 of the raw provide
 | 2026-08-12 | Fable / Opus / Walt build session | claude-fable-5 | planning design engineering | 7,315,809 | $25.20 | `5e28b26dc7dc…` (5485 lines) | `migration` `seed/seed` `src/share` `src/share` `src/share` `src/share` `src/share` `src/share` `src/share` `src/web/l` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` |
 | 2026-08-12 | Fable / Opus / Walt build session | claude-opus-5 | planning design engineering | 19,177,453 | $17.86 | `5e28b26dc7dc…` (5485 lines) | `migration` `seed/seed` `src/share` `src/share` `src/share` `src/share` `src/share` `src/share` `src/share` `src/web/l` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` |
 | 2026-08-12 | Codex engineering task | gpt-5.6-sol | engineering qa release | 7,003,136 | $4.67 | `c16459f814b1…` (10477 lines) | `migration` `migration` `seed/seed` `src/share` `src/share` `src/share` `src/share` `src/share` `src/web/l` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` |
+| 2026-08-12 | Codex engineering task | gpt-5.6-sol | engineering qa release | 34,460,964 | $23.26 | `7de507222bed…` (11494 lines) | — |
+| 2026-08-12 | Codex engineering task | gpt-5.6-sol | engineering qa release | 1,316,334 | $0.76 | `72a67d28eade…` (11533 lines) | `docs/API.` `docs/EVAL` `migration` `migration` `migration` `src/share` `src/share` `src/share` `src/share` `src/share` `src/share` `src/web/A` `src/web/c` `src/web/c` `src/web/c` `src/web/l` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/web/p` `src/worke` `src/worke` `src/worke` `src/worke` `usage/REP` `usage/led` |
 
 ## Receipt allocations
 

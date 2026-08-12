@@ -4,6 +4,8 @@ import {
   AssetKind,
   AgendaSlotRequest,
   UpdateSessionRequest,
+  SessionContentApprovalRequest,
+  type SessionVersionsResponse,
   CfpSubmissionRequest,
   CfpDraftRequest,
   type CfpDraftResponse,
@@ -29,6 +31,15 @@ import {
   type OrganizerSpeakerMutationResponse,
   ImportOrganizerSpeakersRequest,
   type ImportOrganizerSpeakersResponse,
+  CreateSpeakerTaskRequest,
+  type CreateSpeakerTaskResponse,
+  BulkTaskReminderRequest,
+  type BulkTaskReminderResponse,
+  BulkAssetDownloadRequest,
+  CreateAssetCommentRequest,
+  type AssetCommentResponse,
+  BulkCommunicationRequest,
+  type BulkCommunicationResponse,
   type PublicScheduleResponse,
   type PublicSessionsResponse,
   type PublicSpeakersResponse,
@@ -52,12 +63,15 @@ import {
   SubmitReviewRequest,
   type ReviewerQueueResponse,
   type OutboxResponse,
+  type Speaker,
+  type SpeakerAsset,
 } from "../../shared/contracts";
 import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { parseSpeakerCsv } from "../../shared/domain/speakerCsv";
+import { buildStoreZip } from "../../shared/domain/zip";
 import { randomId } from "../../shared/ids";
 import type { Env } from "../env";
 import { organizerAuth } from "../lib/auth";
@@ -148,6 +162,17 @@ async function uploadSpeakerAsset(
   if (file.size > MAX_UPLOAD_BYTES) {
     return errorResponse(413, "too_large", "Uploads are limited to 10 MB.");
   }
+  const taskId = typeof form.get("taskId") === "string" && String(form.get("taskId")).trim()
+    ? String(form.get("taskId")).trim() : null;
+  const sessionId = typeof form.get("sessionId") === "string" && String(form.get("sessionId")).trim()
+    ? String(form.get("sessionId")).trim() : null;
+  const portal = await repo.getSpeakerPortalByToken(speakerId);
+  if (taskId && !portal?.tasks.some(({ task }) => task.id === taskId)) {
+    return errorResponse(422, "task_not_found", "The selected task does not belong to this speaker.");
+  }
+  if (sessionId && !portal?.sessions.some((session) => session.id === sessionId)) {
+    return errorResponse(422, "session_not_found", "The selected session does not belong to this speaker.");
+  }
 
   const assetId = randomId("asset");
   const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, "_").slice(-120) || `upload-${assetId}.bin`;
@@ -163,6 +188,8 @@ async function uploadSpeakerAsset(
     contentType,
     sizeBytes: file.size,
     r2Key,
+    taskId,
+    sessionId,
     uploadedAt: new Date().toISOString(),
   });
   const body: UploadAssetResponse = { asset };
@@ -178,11 +205,64 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function xmlText(value: string): string {
+  return escapeHtml(value);
+}
+
+function publicProgramXml(
+  kind: string,
+  schedule: PublicScheduleResponse,
+  sessions: PublicSessionsResponse,
+  speakers: PublicSpeakersResponse,
+): string | null {
+  if (kind === "speakers" || kind === "gallery") {
+    return `<?xml version="1.0" encoding="UTF-8"?><speakers event="${xmlText(speakers.event.name)}">${speakers.speakers.map((speaker) => `<speaker id="${xmlText(speaker.id)}"><name>${xmlText(speaker.name)}</name><title>${xmlText(speaker.title ?? "")}</title><company>${xmlText(speaker.company ?? "")}</company><bio>${xmlText(speaker.bio ?? "")}</bio></speaker>`).join("")}</speakers>`;
+  }
+  if (kind === "sessions") {
+    return `<?xml version="1.0" encoding="UTF-8"?><sessions event="${xmlText(sessions.event.name)}">${sessions.sessions.map((session) => `<session id="${xmlText(session.id)}" format="${xmlText(session.format)}"><title>${xmlText(session.title)}</title><description>${xmlText(session.abstract)}</description><track>${xmlText(session.track?.name ?? "")}</track>${session.speakers.map((speaker) => `<speaker role="${xmlText(speaker.role)}">${xmlText(speaker.name)}</speaker>`).join("")}</session>`).join("")}</sessions>`;
+  }
+  if (kind === "schedule" || kind === "itinerary") {
+    return `<?xml version="1.0" encoding="UTF-8"?><schedule event="${xmlText(schedule.event.name)}" timezone="${xmlText(schedule.timezone)}">${schedule.slots.map((slot) => `<slot id="${xmlText(slot.id)}" starts-at="${xmlText(slot.startsAt)}" ends-at="${xmlText(slot.endsAt)}"><room>${xmlText(slot.room?.name ?? "")}</room><session id="${xmlText(slot.session.id)}">${xmlText(slot.session.title)}</session></slot>`).join("")}</schedule>`;
+  }
+  return null;
+}
+
 function safeCssColor(value: string | null): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#eef2ff";
 }
 
-function embedDocument(title: string, body: string, interactive = false): Response {
+interface EmbedOptions {
+  color: string;
+  track: string | null;
+  showDescription: boolean;
+  showCompany: boolean;
+}
+
+function embedOptions(c: Context<{ Bindings: Env }>): EmbedOptions {
+  const requested = c.req.query("color") ?? "";
+  return {
+    color: /^#[0-9a-fA-F]{6}$/.test(requested) ? requested : "#4338ca",
+    track: c.req.query("track")?.trim() || null,
+    showDescription: c.req.query("description") !== "0",
+    showCompany: c.req.query("company") !== "0",
+  };
+}
+
+function filterSchedule(data: PublicScheduleResponse, track: string | null): PublicScheduleResponse {
+  return track ? { ...data, slots: data.slots.filter((slot) => slot.session.track?.id === track) } : data;
+}
+
+function filterSessions(data: PublicSessionsResponse, track: string | null): PublicSessionsResponse {
+  return track ? { ...data, sessions: data.sessions.filter((session) => session.track?.id === track) } : data;
+}
+
+function filterSpeakers(data: PublicSpeakersResponse, schedule: PublicScheduleResponse, track: string | null): PublicSpeakersResponse {
+  if (!track) return data;
+  const ids = new Set(schedule.slots.filter((slot) => slot.session.track?.id === track).flatMap((slot) => slot.session.speakers.map((speaker) => speaker.id)));
+  return { ...data, speakers: data.speakers.filter((speaker) => ids.has(speaker.id)) };
+}
+
+function embedDocument(title: string, body: string, interactive = false, color = "#4338ca"): Response {
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -211,12 +291,12 @@ function embedDocument(title: string, body: string, interactive = false): Respon
     .speaker-body { display: grid; gap: 4px; min-width: 0; }
     .speaker-name { font-size: 15px; font-weight: 700; }
     .avatar { border-radius: 999px; flex-shrink: 0; height: 48px; object-fit: cover; width: 48px; }
-    .avatar-initials { align-items: center; background: #eef2ff; color: #4338ca; display: flex; font-size: 15px;
+    .avatar-initials { align-items: center; background: #eef2ff; color: ${color}; display: flex; font-size: 15px;
                        font-weight: 700; justify-content: center; }
     .day { border-bottom: 1px solid #e4e4e7; color: #18181b; font-size: 13px; font-weight: 700; margin: 16px 0 2px;
            padding-bottom: 6px; }
     .day:first-of-type { margin-top: 4px; }
-    .time { color: #4338ca; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+    .time { color: ${color}; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
     .group { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 16px 0 2px;
              text-transform: uppercase; }
     .group:first-of-type { margin-top: 4px; }
@@ -225,7 +305,7 @@ function embedDocument(title: string, body: string, interactive = false): Respon
     .count { color: #71717a; font-size: 12px; margin: -5px 0 12px; }
     .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .tab { background: #fff; border: 1px solid #d4d4d8; border-radius: 999px; color: #3f3f46; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; }
-    .tab[aria-selected="true"] { background: #4338ca; border-color: #4338ca; color: #fff; }
+    .tab[aria-selected="true"] { background: ${color}; border-color: ${color}; color: #fff; }
     .gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
     .gallery .speaker { min-height: 150px; }
     .gallery .avatar { height: 64px; width: 64px; }
@@ -233,7 +313,7 @@ function embedDocument(title: string, body: string, interactive = false): Respon
     .action[aria-pressed="true"] { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
     .detail { border-top: 1px solid #e4e4e7; margin-top: 10px; padding-top: 10px; }
     .session-link { border-left: 2px solid #c7d2fe; margin-top: 8px; padding-left: 9px; }
-    details summary { color: #4338ca; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 8px; }
+    details summary { color: ${color}; cursor: pointer; font-size: 12px; font-weight: 700; margin-top: 8px; }
     @media (max-width: 520px) { .wrap { padding: 12px; } .row { display: grid; justify-content: start; } }
   </style>
 </head>
@@ -313,7 +393,7 @@ function sessionSpeakers(speakers: PublicSessionsResponse["sessions"][number]["s
  * time, showing only what is actually placed. Distinct on purpose from the
  * sessions embed, which is the catalogue.
  */
-export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
+export function renderScheduleEmbed(data: PublicScheduleResponse, options: EmbedOptions = { color: "#4338ca", track: null, showDescription: true, showCompany: true }): Response {
   let body: string;
   if (data.slots.length === 0) {
     body = `<div class="empty">Schedule coming soon.</div>`;
@@ -340,7 +420,7 @@ export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
     ${track ? `<span class="pill" style="background:${safeCssColor(track.color)}; color:#18181b">${escapeHtml(track.name)}</span>` : ""}
   </div>
   <div class="meta"><span class="time">${escapeHtml(starts)}-${escapeHtml(ends)}</span>${slot.room ? ` · ${escapeHtml(slot.room.name)}` : ""} · ${escapeHtml(slot.session.format)} · ${sessionSpeakers(slot.session.speakers)}</div>
-  <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
+  ${options.showDescription ? `<p class="abstract">${escapeHtml(slot.session.abstract)}</p>` : ""}
   </div>
 </details>`;
           })
@@ -354,6 +434,7 @@ export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
     `${data.event.name} schedule`,
     `<header class="header"><div class="eyebrow">Schedule</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">By day and time · ${escapeHtml(data.timezone)}</div></header>${body}`,
     true,
+    options.color,
   );
 }
 
@@ -362,7 +443,7 @@ export function renderScheduleEmbed(data: PublicScheduleResponse): Response {
  * no slot yet. An attendee browsing topics wants this; an attendee planning
  * their day wants the schedule.
  */
-export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: PublicScheduleResponse): Response {
+export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: PublicScheduleResponse, options: EmbedOptions = { color: "#4338ca", track: null, showDescription: true, showCompany: true }): Response {
   let body: string;
   if (data.sessions.length === 0) {
     body = `<div class="empty">Sessions coming soon.</div>`;
@@ -377,12 +458,12 @@ export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: Publ
         const slot = slotBySession.get(session.id);
         const room = slot?.room?.name ?? "Room pending";
         const when = slot ? `${formatEmbedDay(slot.startsAt, schedule.timezone)} · ${formatEmbedTime(slot.startsAt, schedule.timezone)}-${formatEmbedTime(slot.endsAt, schedule.timezone)}` : "Time pending";
-        const speakerSearch = session.speakers.map((speaker) => `${speaker.name} ${speaker.title ?? ""} ${speaker.company ?? ""}`).join(" ");
+        const speakerSearch = session.speakers.map((speaker) => `${speaker.name} ${speaker.title ?? ""} ${options.showCompany ? speaker.company ?? "" : ""}`).join(" ");
         return `<article class="item" data-search="${escapeHtml(`${session.title} ${speakerSearch}`.toLowerCase())}" data-track="${escapeHtml(track)}" data-format="${escapeHtml(session.format)}" data-room="${escapeHtml(room)}">
   <p class="title">${escapeHtml(session.title)}</p>
-  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${escapeHtml(when)} · ${escapeHtml(room)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
-  <p class="abstract">${escapeHtml(session.abstract.slice(0, 180))}${session.abstract.length > 180 ? "…" : ""}</p>
-  ${session.abstract.length > 180 ? `<details><summary>Show more</summary><p class="abstract">${escapeHtml(session.abstract)}</p></details>` : ""}
+  <div class="meta"><span class="pill" style="background:${safeCssColor(session.track?.color ?? null)}">${escapeHtml(track)}</span> · ${escapeHtml(session.format)} · ${escapeHtml(when)} · ${escapeHtml(room)} · ${session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, options.showCompany ? speaker.company : null].filter(Boolean).join(", "))).join("; ") || "Speakers TBA"}</div>
+  ${options.showDescription ? `<p class="abstract">${escapeHtml(session.abstract.slice(0, 180))}${session.abstract.length > 180 ? "…" : ""}</p>` : ""}
+  ${options.showDescription && session.abstract.length > 180 ? `<details><summary>Show more</summary><p class="abstract">${escapeHtml(session.abstract)}</p></details>` : ""}
 </article>`;
       }).join("");
     body = `<div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search titles or speakers" aria-label="Search sessions" /><select class="control" data-filter data-track aria-label="Filter by track"><option value="">All tracks</option>${tracks.map((track) => `<option>${escapeHtml(track)}</option>`).join("")}</select><select class="control" data-filter data-format aria-label="Filter by format"><option value="">All formats</option>${formats.map((format) => `<option>${escapeHtml(format)}</option>`).join("")}</select><select class="control" data-filter data-room aria-label="Filter by room"><option value="">All rooms</option>${rooms.map((room) => `<option>${escapeHtml(room)}</option>`).join("")}</select></div><div class="count" data-count></div><section class="stack">${items}</section>`;
@@ -392,10 +473,11 @@ export function renderSessionsEmbed(data: PublicSessionsResponse, schedule: Publ
     `${data.event.name} sessions`,
     `<header class="header"><div class="eyebrow">Sessions</div><h1>${escapeHtml(data.event.name)}</h1><div class="subtle">Search and filter the full catalogue</div></header>${body}`,
     true,
+    options.color,
   );
 }
 
-export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: PublicScheduleResponse, gallery = false): Response {
+export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: PublicScheduleResponse, gallery = false, options: EmbedOptions = { color: "#4338ca", track: null, showDescription: true, showCompany: true }): Response {
   const surname = (name: string) => name.trim().split(/\s+/).at(-1) ?? name;
   const speakers = [...data.speakers].sort((a, b) => surname(a.name).localeCompare(surname(b.name)) || a.name.localeCompare(b.name));
   const items =
@@ -414,10 +496,10 @@ export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: Publ
   }
   <div class="speaker-body">
     <div class="speaker-name">${escapeHtml(speaker.name)}</div>
-    <div class="meta">${escapeHtml([speaker.title, speaker.company].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
+    <div class="meta">${escapeHtml([speaker.title, options.showCompany ? speaker.company : null].filter(Boolean).join(", ") || "Speaker")}${speaker.location ? ` · ${escapeHtml(speaker.location)}` : ""}</div>
   </div>
   </summary>
-  <div class="detail">${speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : `<p class="abstract">Bio coming soon.</p>`}<div class="group">Sessions (${sessions.length})</div>${sessions.length ? sessions.map((slot) => `<div class="session-link"><div class="title">${escapeHtml(slot.session.title)}</div><div class="meta">${escapeHtml(formatEmbedDay(slot.startsAt, schedule.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, schedule.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, schedule.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")}</div></div>`).join("") : `<div class="subtle">No scheduled sessions.</div>`}</div>
+  <div class="detail">${options.showDescription ? (speaker.bio ? `<p class="abstract">${escapeHtml(speaker.bio)}</p>` : `<p class="abstract">Bio coming soon.</p>`) : ""}<div class="group">Sessions (${sessions.length})</div>${sessions.length ? sessions.map((slot) => `<div class="session-link"><div class="title">${escapeHtml(slot.session.title)}</div><div class="meta">${escapeHtml(formatEmbedDay(slot.startsAt, schedule.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, schedule.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, schedule.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")}</div></div>`).join("") : `<div class="subtle">No scheduled sessions.</div>`}</div>
 </details>`;
             },
           )
@@ -427,18 +509,19 @@ export function renderSpeakersEmbed(data: PublicSpeakersResponse, schedule: Publ
     `${data.event.name} ${gallery ? "speaker gallery" : "speakers"}`,
     `<header class="header"><div class="eyebrow">${gallery ? "Speaker gallery" : "Speakers"}</div><h1>${escapeHtml(data.event.name)}</h1></header><div class="controls"><input class="control" data-filter data-query type="search" placeholder="Search speakers" aria-label="Search speakers" /></div><div class="count" data-count></div><section class="${gallery ? "gallery" : "stack"}">${items}</section>`,
     true,
+    options.color,
   );
 }
 
-export function renderItineraryEmbed(data: PublicScheduleResponse): Response {
+export function renderItineraryEmbed(data: PublicScheduleResponse, options: EmbedOptions = { color: "#4338ca", track: null, showDescription: true, showCompany: true }): Response {
   const days = [...new Set(data.slots.map((slot) => formatEmbedDay(slot.startsAt, data.timezone)))];
   const cards = data.slots.map((slot) => `<article class="item" data-session-card>
     <div class="row"><p class="title">${escapeHtml(slot.session.title)}</p><button class="action" type="button" data-save-id="${escapeHtml(slot.session.id)}" aria-pressed="false">☆ Save</button></div>
     <div class="meta">${slot.session.track ? `<span class="pill" style="background:${safeCssColor(slot.session.track.color)}">${escapeHtml(slot.session.track.name)}</span> · ` : ""}${escapeHtml(formatEmbedDay(slot.startsAt, data.timezone))} · ${escapeHtml(formatEmbedTime(slot.startsAt, data.timezone))}-${escapeHtml(formatEmbedTime(slot.endsAt, data.timezone))} · ${escapeHtml(slot.room?.name ?? "Room pending")} · ${slot.session.speakers.map((speaker) => escapeHtml([speaker.name, speaker.title, speaker.company].filter(Boolean).join(", "))).join("; ")}</div>
-    <p class="abstract">${escapeHtml(slot.session.abstract)}</p>
+    ${options.showDescription ? `<p class="abstract">${escapeHtml(slot.session.abstract)}</p>` : ""}
   </article>`).join("");
   const body = `<section data-itinerary="${escapeHtml(data.event.slug)}"><div class="controls"><label class="control"><input type="checkbox" data-personal /> My saved schedule only</label><a class="control" data-export hidden>Export saved .ics</a><button class="control" type="button" data-clear>Clear saved</button></div><div class="count" data-count></div><div class="subtle">${days.length} event day${days.length === 1 ? "" : "s"} · stored only in this browser</div><section class="stack" style="margin-top:12px">${cards}</section></section>`;
-  return embedDocument(`${data.event.name} itinerary`, `<header class="header"><div class="eyebrow">Schedule itinerary</div><h1>${escapeHtml(data.event.name)}</h1></header>${body}`, true);
+  return embedDocument(`${data.event.name} itinerary`, `<header class="header"><div class="eyebrow">Schedule itinerary</div><h1>${escapeHtml(data.event.name)}</h1></header>${body}`, true, options.color);
 }
 
 // ---------------------------------------------------------------------------
@@ -485,20 +568,48 @@ api.get("/events/:slug", async (c) => {
 api.get("/public/events/:slug/schedule", async (c) => {
   const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return c.json(body);
+  return c.json(filterSchedule(body, embedOptions(c).track));
 });
 
 api.get("/public/events/:slug/sessions", async (c) => {
   const body = await createRepo(c.env).getPublicSessions(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return c.json(body);
+  return c.json(filterSessions(body, embedOptions(c).track));
 });
 
 api.get("/public/events/:slug/speakers", async (c) => {
-  const body = await createRepo(c.env).getPublicSpeakers(c.req.param("slug"));
-  if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return c.json(body);
+  const repo = createRepo(c.env);
+  const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
+  if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const options = embedOptions(c);
+  return c.json(filterSpeakers(body, schedule, options.track));
 });
+
+async function publicXmlResponse(c: Context<{ Bindings: Env }>, widget: string) {
+  const repo = createRepo(c.env);
+  const slug = c.req.param("slug") ?? "";
+  const [schedule, sessions, speakers] = await Promise.all([
+    repo.getPublicSchedule(slug),
+    repo.getPublicSessions(slug),
+    repo.getPublicSpeakers(slug),
+  ]);
+  if (!schedule || !sessions || !speakers) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const options = embedOptions(c);
+  const xml = publicProgramXml(
+    widget,
+    filterSchedule(schedule, options.track),
+    filterSessions(sessions, options.track),
+    filterSpeakers(speakers, schedule, options.track),
+  );
+  if (!xml) return errorResponse(404, "widget_not_found", "Choose schedule, sessions, speakers, itinerary, or gallery.");
+  return new Response(xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=60" } });
+}
+
+api.get("/public/events/:slug/schedule.xml", (c) => publicXmlResponse(c, "schedule"));
+api.get("/public/events/:slug/sessions.xml", (c) => publicXmlResponse(c, "sessions"));
+api.get("/public/events/:slug/speakers.xml", (c) => publicXmlResponse(c, "speakers"));
+api.get("/public/events/:slug/itinerary.xml", (c) => publicXmlResponse(c, "itinerary"));
+api.get("/public/events/:slug/gallery.xml", (c) => publicXmlResponse(c, "gallery"));
 
 api.get("/events/:slug/speakers", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
@@ -556,6 +667,70 @@ api.post("/events/:slug/speakers/import", organizerAuth, async (c) => {
   return c.json(body);
 });
 
+api.post("/events/:slug/speaker-tasks", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateSpeakerTaskRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Task is invalid.", parsed.error.issues);
+  const speakerIds = [...new Set(parsed.data.speakerIds)];
+  try {
+    const body: CreateSpeakerTaskResponse = await repo.createSpeakerTask({
+      definitionId: randomId("taskdef"), eventId: bundle.event.id,
+      title: parsed.data.title, instructions: parsed.data.instructions, dueAt: parsed.data.dueAt,
+      speakerIds, speakerTaskIds: speakerIds.map(() => randomId("task")), now: new Date().toISOString(),
+    });
+    return c.json(body, 201);
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "speaker_not_found") {
+      return errorResponse(422, "speaker_not_found", "One or more selected speakers do not belong to this event.");
+    }
+    throw caught;
+  }
+});
+
+api.post("/events/:slug/speaker-tasks/remind", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = BulkTaskReminderRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Reminder selection is invalid.", parsed.error.issues);
+  const speakerIds = [...new Set(parsed.data.speakerIds)];
+  const body: BulkTaskReminderResponse = await repo.sendBulkTaskReminders({
+    eventId: bundle.event.id, speakerIds,
+    messageIds: speakerIds.map(() => randomId("msg")), attemptIds: speakerIds.map(() => randomId("del")),
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
+api.post("/events/:slug/communications/bulk", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = BulkCommunicationRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Bulk message is invalid.", parsed.error.issues);
+  const selected = new Set(parsed.data.speakerIds);
+  const recipients = (await repo.getOrganizerSpeakers(bundle.event.id)).filter((speaker) => selected.has(speaker.id));
+  if (recipients.length !== selected.size) return errorResponse(422, "speaker_not_found", "One or more selected speakers do not belong to this event.");
+  const now = new Date().toISOString();
+  for (const speaker of recipients) {
+    await repo.simulateCommunication({
+      messageId: randomId("msg"), attemptId: randomId("del"), eventId: bundle.event.id,
+      speakerId: speaker.id, toEmail: speaker.email, subject: parsed.data.subject,
+      bodyMd: parsed.data.bodyMd, now,
+    });
+  }
+  const body: BulkCommunicationResponse = { sent: recipients.length, recipientEmails: recipients.map((speaker) => speaker.email) };
+  return c.json(body);
+});
+
 api.patch("/events/:slug/speakers/:speakerId", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -581,34 +756,39 @@ api.patch("/events/:slug/speakers/:speakerId", organizerAuth, async (c) => {
 api.get("/embeds/events/:slug/schedule", async (c) => {
   const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderScheduleEmbed(body);
+  const options = embedOptions(c);
+  return renderScheduleEmbed(filterSchedule(body, options.track), options);
 });
 
 api.get("/embeds/events/:slug/sessions", async (c) => {
   const repo = createRepo(c.env);
   const [body, schedule] = await Promise.all([repo.getPublicSessions(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
   if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSessionsEmbed(body, schedule);
+  const options = embedOptions(c);
+  return renderSessionsEmbed(filterSessions(body, options.track), filterSchedule(schedule, options.track), options);
 });
 
 api.get("/embeds/events/:slug/speakers", async (c) => {
   const repo = createRepo(c.env);
   const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
   if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSpeakersEmbed(body, schedule);
+  const options = embedOptions(c);
+  return renderSpeakersEmbed(filterSpeakers(body, schedule, options.track), filterSchedule(schedule, options.track), false, options);
 });
 
 api.get("/embeds/events/:slug/gallery", async (c) => {
   const repo = createRepo(c.env);
   const [body, schedule] = await Promise.all([repo.getPublicSpeakers(c.req.param("slug")), repo.getPublicSchedule(c.req.param("slug"))]);
   if (!body || !schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderSpeakersEmbed(body, schedule, true);
+  const options = embedOptions(c);
+  return renderSpeakersEmbed(filterSpeakers(body, schedule, options.track), filterSchedule(schedule, options.track), true, options);
 });
 
 api.get("/embeds/events/:slug/itinerary", async (c) => {
   const body = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!body) return errorResponse(404, "event_not_found", "No event with that slug.");
-  return renderItineraryEmbed(body);
+  const options = embedOptions(c);
+  return renderItineraryEmbed(filterSchedule(body, options.track), options);
 });
 
 api.get("/docs", (c) =>
@@ -632,6 +812,8 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
       { method: "GET", path: "/public/events/:slug/sessions", auth: "public", purpose: "Iframe-safe sessions JSON." },
       { method: "GET", path: "/public/events/:slug/speakers", auth: "public", purpose: "Iframe-safe speaker gallery JSON." },
+      { method: "GET", path: "/public/events/:slug/:widget.xml", auth: "public", purpose: "Configured schedule, sessions, speakers, itinerary, or gallery XML feed." },
+      { method: "GET", path: "/public/events/:slug/agenda.ics", auth: "public", purpose: "Whole published agenda as RFC 5545 calendar data." },
       { method: "GET", path: "/embeds/events/:slug/schedule", auth: "public", purpose: "Drop-in schedule iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/sessions", auth: "public", purpose: "Drop-in sessions iframe HTML." },
       { method: "GET", path: "/embeds/events/:slug/speakers", auth: "public", purpose: "Drop-in speaker gallery iframe HTML." },
@@ -644,6 +826,11 @@ api.get("/docs", (c) =>
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId", auth: "speaker link", purpose: "Complete or reopen a linked speaker task." },
       { method: "POST", path: "/speaker-portal/:token/assets", auth: "speaker link", purpose: "Upload the linked speaker's headshot, slides, or document to R2." },
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
+      { method: "POST", path: "/events/:slug/speakers", auth: "organizer", purpose: "Add a speaker directly to the event roster." },
+      { method: "POST", path: "/events/:slug/speakers/import", auth: "organizer", purpose: "Validate and upsert an event-scoped speaker CSV." },
+      { method: "POST", path: "/events/:slug/speaker-tasks", auth: "organizer", purpose: "Create and assign a custom speaker deliverable." },
+      { method: "POST", path: "/events/:slug/speaker-tasks/remind", auth: "organizer", purpose: "Record bulk reminders for selected incomplete speakers." },
+      { method: "POST", path: "/events/:slug/communications/bulk", auth: "organizer", purpose: "Record a free-form bulk communication and per-recipient receipts." },
       { method: "GET", path: "/events/:slug/evaluations", auth: "organizer", purpose: "Round setup, reviewer progress, assignments, and weighted results." },
       { method: "POST", path: "/events/:slug/evaluations/rounds", auth: "organizer", purpose: "Create an evaluation round and its weighted scorecard." },
       { method: "PUT", path: "/events/:slug/evaluations/rounds/:roundId", auth: "organizer", purpose: "Update an evaluation round and its weighted scorecard." },
@@ -666,12 +853,18 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/admin/ping", auth: "organizer", purpose: "Passcode verification (204)." },
       { method: "GET", path: "/admin/ai-usage", auth: "organizer", purpose: "Provider-reported AI usage events for the reimbursement audit." },
       { method: "GET", path: "/events/:slug/agenda", auth: "organizer", purpose: "Sessions, placements, and computed room/speaker conflicts." },
+      { method: "POST", path: "/events/:slug/agenda/publish", auth: "organizer", purpose: "Publish the reviewed agenda with a durable receipt." },
       { method: "POST", path: "/events/:slug/sessions", auth: "organizer", purpose: "Add an invited or sponsor session directly, without a submission." },
       { method: "PATCH", path: "/events/:slug/sessions/:sessionId", auth: "organizer", purpose: "Retitle or reword a session in the published program; the source submission keeps what the speaker pitched." },
+      { method: "GET", path: "/events/:slug/sessions/:sessionId/versions", auth: "organizer", purpose: "List restorable session-content versions." },
+      { method: "POST", path: "/events/:slug/sessions/:sessionId/versions/:versionId/restore", auth: "organizer", purpose: "Restore an earlier session-content version without losing the replaced copy." },
+      { method: "PATCH", path: "/events/:slug/sessions/:sessionId/content-approval", auth: "organizer", purpose: "Approve or return content and gate public program visibility." },
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
       { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated-message delivery receipts for the event outbox." },
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Persist a safe simulated message and successful delivery attempt." },
+      { method: "POST", path: "/events/:slug/assets/download.zip", auth: "organizer", purpose: "Download selected current speaker files as a valid ZIP." },
+      { method: "POST", path: "/events/:slug/assets/:assetId/comments", auth: "organizer", purpose: "Add a durable organizer comment to a speaker file." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "GET", path: "/public/events/:slug/itinerary.ics?sessions=id,id", auth: "public", purpose: "Export an attendee's selected scheduled sessions as one RFC 5545 calendar." },
       { method: "GET", path: "/public/walkthrough.mp4", auth: "public", purpose: "Stream the narrated submission walkthrough stored in R2." },
@@ -920,6 +1113,28 @@ api.post("/speaker-portal/:token/assets", async (c) => {
   const portal = await createRepo(c.env).getSpeakerPortalByToken(token);
   if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
   return uploadSpeakerAsset(c, portal.speaker.id);
+});
+
+api.post("/speaker-portal/:token/assets/:assetId/comments", async (c) => {
+  const token = c.req.param("token").trim();
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(token);
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+  if (!portal.assets.some((asset) => asset.id === c.req.param("assetId"))) {
+    return errorResponse(404, "asset_not_found", "No file with that id for this speaker.");
+  }
+  let raw: unknown;
+  try { raw = await c.req.json(); }
+  catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateAssetCommentRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Comment is invalid.", parsed.error.issues);
+  await repo.createAssetComment({
+    id: randomId("acomment"), assetId: c.req.param("assetId"),
+    authorRole: "speaker", authorName: portal.speaker.name,
+    body: parsed.data.body, now: new Date().toISOString(),
+  });
+  const body: SpeakerPortalResponse = (await repo.getSpeakerPortalByToken(token))!;
+  return c.json(body, 201);
 });
 
 // ---------------------------------------------------------------------------
@@ -1538,6 +1753,74 @@ api.patch("/events/:slug/sessions/:sessionId", organizerAuth, async (c) => {
   }
 });
 
+api.get("/events/:slug/sessions/:sessionId/versions", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  try {
+    const body: SessionVersionsResponse = {
+      versions: await repo.listSessionVersions(bundle.event.id, c.req.param("sessionId")),
+    };
+    return c.json(body);
+  } catch (error) {
+    if (error instanceof Error && error.message === "session_not_found") {
+      return errorResponse(404, "session_not_found", "No session with that id for this event.");
+    }
+    throw error;
+  }
+});
+
+api.post("/events/:slug/sessions/:sessionId/versions/:versionId/restore", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  try {
+    const session = await repo.restoreSessionVersion({
+      eventId: bundle.event.id,
+      sessionId: c.req.param("sessionId"),
+      versionId: c.req.param("versionId"),
+      snapshotId: randomId("sver"),
+      now: new Date().toISOString(),
+    });
+    return c.json({ session });
+  } catch (error) {
+    if (error instanceof Error && error.message === "session_not_found") {
+      return errorResponse(404, "session_not_found", "No session with that id for this event.");
+    }
+    if (error instanceof Error && error.message === "version_not_found") {
+      return errorResponse(404, "version_not_found", "No saved version with that id for this session.");
+    }
+    throw error;
+  }
+});
+
+api.patch("/events/:slug/sessions/:sessionId/content-approval", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); }
+  catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SessionContentApprovalRequest.safeParse(raw);
+  if (!parsed.success) {
+    return errorResponse(422, "validation_error", "Content approval status is invalid.", parsed.error.issues);
+  }
+  try {
+    const session = await repo.updateSessionContentApproval({
+      eventId: bundle.event.id,
+      sessionId: c.req.param("sessionId"),
+      status: parsed.data.status,
+      now: new Date().toISOString(),
+    });
+    return c.json({ session });
+  } catch (error) {
+    if (error instanceof Error && error.message === "session_not_found") {
+      return errorResponse(404, "session_not_found", "No session with that id for this event.");
+    }
+    throw error;
+  }
+});
+
 api.put("/events/:slug/sessions/:sessionId/slot", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -1706,6 +1989,30 @@ api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {
   });
 });
 
+api.get("/public/events/:slug/agenda.ics", async (c) => {
+  const loaded = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
+  if (!loaded) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const schedule = filterSchedule(loaded, embedOptions(c).track);
+  const generatedAt = new Date().toISOString();
+  const calendar = buildCalendarCollection(schedule.slots.map((slot) => ({
+    uid: `${slot.session.id}@speakerops`,
+    eventName: schedule.event.name,
+    sessionTitle: slot.session.title,
+    description: slot.session.abstract,
+    location: slot.room?.name ?? "Room pending",
+    startsAt: slot.startsAt,
+    endsAt: slot.endsAt,
+    generatedAt,
+  })));
+  return new Response(calendar, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8",
+      "content-disposition": `attachment; filename="${schedule.event.slug}-agenda.ics"`,
+      "cache-control": "public, max-age=60",
+    },
+  });
+});
+
 api.get("/public/events/:slug/itinerary.ics", async (c) => {
   const schedule = await createRepo(c.env).getPublicSchedule(c.req.param("slug"));
   if (!schedule) return errorResponse(404, "event_not_found", "No event with that slug.");
@@ -1758,6 +2065,72 @@ api.on(["GET", "HEAD"], "/public/walkthrough.mp4", async (c) => {
 
 api.post("/speakers/:speakerId/assets", organizerAuth, async (c) => {
   return uploadSpeakerAsset(c, c.req.param("speakerId"));
+});
+
+api.post("/events/:slug/assets/download.zip", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); }
+  catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = BulkAssetDownloadRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Choose between 1 and 50 files.", parsed.error.issues);
+  const ids = [...new Set(parsed.data.assetIds)];
+  const records: Array<{ asset: SpeakerAsset; speaker: Speaker }> = [];
+  for (const id of ids) {
+    const asset = await repo.getSpeakerAssetById(id);
+    if (!asset) return errorResponse(404, "asset_not_found", "One or more selected files do not belong to this event.");
+    const speaker = await repo.getSpeakerById(asset.speakerId);
+    if (!speaker || speaker.eventId !== bundle.event.id) return errorResponse(404, "asset_not_found", "One or more selected files do not belong to this event.");
+    records.push({ asset, speaker });
+  }
+  const totalBytes = records.reduce((sum, record) => sum + record.asset.sizeBytes, 0);
+  if (totalBytes > 50 * 1024 * 1024) return errorResponse(413, "archive_too_large", "Select at most 50 MB of files per ZIP.");
+
+  const files: Array<{ name: string; data: Uint8Array; modifiedAt: Date }> = [];
+  for (const [index, { asset, speaker }] of records.entries()) {
+    const object = await c.env.BUCKET.get(asset.r2Key);
+    if (!object) return errorResponse(404, "object_missing", "One or more selected file objects are unavailable.");
+    const safeSpeaker = speaker.name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || speaker.id;
+    const safeFile = asset.filename.replace(/[^A-Za-z0-9._-]+/g, "_") || `file-${index + 1}`;
+    files.push({
+      name: `${safeSpeaker}/v${asset.versionNumber}-${safeFile}`,
+      data: new Uint8Array(await object.arrayBuffer()),
+      modifiedAt: new Date(asset.uploadedAt),
+    });
+  }
+  const archive = buildStoreZip(files);
+  return new Response(archive, {
+    headers: {
+      "content-type": "application/zip",
+      "content-length": String(archive.byteLength),
+      "content-disposition": `attachment; filename="${bundle.event.slug}-speaker-files.zip"`,
+      "cache-control": "no-store",
+    },
+  });
+});
+
+api.post("/events/:slug/assets/:assetId/comments", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const asset = await repo.getSpeakerAssetById(c.req.param("assetId"));
+  const speaker = asset ? await repo.getSpeakerById(asset.speakerId) : null;
+  if (!asset || !speaker || speaker.eventId !== bundle.event.id) {
+    return errorResponse(404, "asset_not_found", "No file with that id for this event.");
+  }
+  let raw: unknown;
+  try { raw = await c.req.json(); }
+  catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateAssetCommentRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Comment is invalid.", parsed.error.issues);
+  const body: AssetCommentResponse = { comment: await repo.createAssetComment({
+    id: randomId("acomment"), assetId: asset.id,
+    authorRole: "organizer", authorName: "Event team",
+    body: parsed.data.body, now: new Date().toISOString(),
+  }) };
+  return c.json(body, 201);
 });
 
 api.get("/assets/:assetId", async (c) => {

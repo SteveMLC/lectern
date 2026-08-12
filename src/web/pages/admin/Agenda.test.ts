@@ -16,10 +16,12 @@ function session(id: string, slot: OrganizerSession["slot"] = null): OrganizerSe
     format: "talk",
     status: "confirmed",
     origin: "direct",
+    contentApprovalStatus: "approved",
     createdAt: now,
     updatedAt: now,
     speakers: [],
     slot,
+    versionCount: 0,
   };
 }
 

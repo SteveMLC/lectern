@@ -1,5 +1,6 @@
 import type {
   AgendaSlot,
+  AssetComment,
   ConditionalRule,
   Event,
   EventBundle,
@@ -20,6 +21,7 @@ import type {
   ResourcePage,
   Room,
   Session,
+  SessionVersion,
   Speaker,
   SpeakerAsset,
   SpeakerTask,
@@ -46,6 +48,8 @@ import type {
   SimulateCommunicationInput,
   SubmissionDecisionResult,
   UpdateSessionInput,
+  RestoreSessionVersionInput,
+  UpdateSessionContentApprovalInput,
   UpsertAgendaSlotInput,
   UpdateSpeakerProfileInput,
   UpdateSpeakerTaskInput,
@@ -63,6 +67,9 @@ import type {
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
   ImportOrganizerSpeakersInput,
+  CreateSpeakerTaskInput,
+  BulkTaskReminderInput,
+  CreateAssetCommentInput,
 } from "../types";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
@@ -196,12 +203,23 @@ interface SessionRow {
   format: string;
   status: string;
   origin: string;
+  content_approval_status: string;
   created_at: string;
   updated_at: string;
 }
 
 interface OrganizerSessionRow extends SessionRow {
   track_name: string | null;
+  version_count: number;
+}
+
+interface SessionVersionRow {
+  id: string;
+  session_id: string;
+  title: string;
+  abstract: string;
+  editor: string;
+  created_at: string;
 }
 
 interface AgendaSlotRow {
@@ -223,7 +241,19 @@ interface SpeakerAssetRow {
   content_type: string;
   size_bytes: number;
   r2_key: string;
+  task_id: string | null;
+  session_id: string | null;
+  version_number: number;
   uploaded_at: string;
+}
+
+interface AssetCommentRow {
+  id: string;
+  asset_id: string;
+  author_role: string;
+  author_name: string;
+  body: string;
+  created_at: string;
 }
 
 interface PublicSessionRow {
@@ -476,7 +506,21 @@ function mapAsset(r: SpeakerAssetRow): SpeakerAsset {
     contentType: r.content_type,
     sizeBytes: r.size_bytes,
     r2Key: r.r2_key,
+    taskId: r.task_id,
+    sessionId: r.session_id,
+    versionNumber: r.version_number,
     uploadedAt: r.uploaded_at,
+  };
+}
+
+function mapAssetComment(r: AssetCommentRow): AssetComment {
+  return {
+    id: r.id,
+    assetId: r.asset_id,
+    authorRole: r.author_role as AssetComment["authorRole"],
+    authorName: r.author_name,
+    body: r.body,
+    createdAt: r.created_at,
   };
 }
 
@@ -582,6 +626,7 @@ function mapSession(r: SessionRow): Session {
     format: r.format as Session["format"],
     status: r.status as Session["status"],
     origin: r.origin as Session["origin"],
+    contentApprovalStatus: r.content_approval_status as Session["contentApprovalStatus"],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -635,7 +680,7 @@ export class D1Repo implements SpeakerOpsRepo {
                   t.id AS track_id, t.name AS track_name, t.color AS track_color
            FROM sessions s
            LEFT JOIN tracks t ON t.id = s.track_id
-           WHERE s.event_id = ? AND s.status = 'confirmed'
+           WHERE s.event_id = ? AND s.status = 'confirmed' AND s.content_approval_status = 'approved'
            ORDER BY COALESCE(t.sort_order, 999), s.title`,
         )
         .bind(event.id),
@@ -646,7 +691,7 @@ export class D1Repo implements SpeakerOpsRepo {
            FROM session_speakers ss
            JOIN sessions s ON s.id = ss.session_id
            JOIN speakers sp ON sp.id = ss.speaker_id
-           WHERE s.event_id = ? AND s.status = 'confirmed'
+           WHERE s.event_id = ? AND s.status = 'confirmed' AND s.content_approval_status = 'approved'
            ORDER BY ss.session_id, ss.sort_order`,
         )
         .bind(event.id),
@@ -656,7 +701,7 @@ export class D1Repo implements SpeakerOpsRepo {
            FROM agenda_slots a
            JOIN sessions s ON s.id = a.session_id
            LEFT JOIN rooms r ON r.id = a.room_id
-           WHERE a.event_id = ? AND s.status = 'confirmed'
+           WHERE a.event_id = ? AND s.status = 'confirmed' AND s.content_approval_status = 'approved'
            ORDER BY a.starts_at, COALESCE(r.sort_order, 999), s.title`,
         )
         .bind(event.id),
@@ -885,6 +930,7 @@ export class D1Repo implements SpeakerOpsRepo {
            WHERE ss.speaker_id = sp.id
              AND s.event_id = ?
              AND s.status = 'confirmed'
+             AND s.content_approval_status = 'approved'
          )
          ORDER BY sp.name`,
       )
@@ -898,7 +944,7 @@ export class D1Repo implements SpeakerOpsRepo {
   }
 
   async getOrganizerSpeakers(eventId: string): Promise<OrganizerSpeakersResponse["speakers"]> {
-    const [speakersRes, assetsRes] = await this.db.batch([
+    const [speakersRes, assetsRes, tasksRes, commentsRes] = await this.db.batch([
       this.db.prepare(
         `SELECT sp.*,
           (SELECT sa.id FROM speaker_assets sa WHERE sa.speaker_id = sp.id AND sa.kind = 'headshot' ORDER BY sa.uploaded_at DESC LIMIT 1) AS headshot_asset_id,
@@ -910,8 +956,26 @@ export class D1Repo implements SpeakerOpsRepo {
         `SELECT sa.* FROM speaker_assets sa JOIN speakers sp ON sp.id = sa.speaker_id
          WHERE sp.event_id = ? ORDER BY sa.uploaded_at DESC`,
       ).bind(eventId),
+      this.db.prepare(
+        `SELECT st.id, st.event_id, st.speaker_id, st.task_definition_id, st.status,
+          st.completed_at, st.updated_at, td.id AS definition_id, td.key, td.label, td.description,
+          td.applies_to, td.due_at, td.sort_order
+         FROM speaker_tasks st JOIN task_definitions td ON td.id = st.task_definition_id
+         WHERE st.event_id = ? ORDER BY td.due_at, td.sort_order`,
+      ).bind(eventId),
+      this.db.prepare(
+        `SELECT ac.* FROM asset_comments ac
+         JOIN speaker_assets sa ON sa.id = ac.asset_id
+         JOIN speakers sp ON sp.id = sa.speaker_id
+         WHERE sp.event_id = ? ORDER BY ac.created_at, ac.id`,
+      ).bind(eventId),
     ]);
     const assets = ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset);
+    const comments = ((commentsRes?.results ?? []) as unknown as AssetCommentRow[]).map(mapAssetComment);
+    const taskRows = (tasksRes?.results ?? []) as unknown as Array<SpeakerTaskRow & {
+      definition_id: string; key: string; label: string; description: string | null;
+      applies_to: string; due_at: string | null; sort_order: number;
+    }>;
     return ((speakersRes?.results ?? []) as unknown as Array<SpeakerRow & {
       headshot_asset_id: string | null; total_tasks: number; completed_tasks: number;
     }>).map((row) => ({
@@ -922,6 +986,15 @@ export class D1Repo implements SpeakerOpsRepo {
       totalTasks: Number(row.total_tasks),
       completedTasks: Number(row.completed_tasks),
       assets: assets.filter((asset) => asset.speakerId === row.id),
+      assetComments: comments.filter((comment) => assets.some((asset) => asset.speakerId === row.id && asset.id === comment.assetId)),
+      tasks: taskRows.filter((task) => task.speaker_id === row.id).map((task) => ({
+        task: mapSpeakerTask(task),
+        definition: {
+          id: task.definition_id, eventId: task.event_id, key: task.key, label: task.label,
+          description: task.description, appliesTo: task.applies_to as TaskDefinition["appliesTo"],
+          dueAt: task.due_at, sortOrder: task.sort_order,
+        },
+      })),
     }));
   }
 
@@ -972,6 +1045,62 @@ export class D1Repo implements SpeakerOpsRepo {
     ).bind(row.id, input.eventId, row.email, row.name, row.company, row.title, row.bio, input.now)));
     const updated = input.rows.filter((row) => existingEmails.has(row.email.toLowerCase())).length;
     return { imported: input.rows.length - updated, updated, total: input.rows.length };
+  }
+
+  async createSpeakerTask(input: CreateSpeakerTaskInput): Promise<{ definition: TaskDefinition; assigned: number }> {
+    const valid = await this.db.prepare(
+      `SELECT id FROM speakers WHERE event_id = ? AND id IN (${input.speakerIds.map(() => "?").join(",")})`,
+    ).bind(input.eventId, ...input.speakerIds).all<{ id: string }>();
+    const speakerIds = valid.results.map((row) => row.id);
+    if (speakerIds.length !== new Set(input.speakerIds).size) throw new Error("speaker_not_found");
+    await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO task_definitions (id, event_id, key, label, description, applies_to, due_at, sort_order)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'all_speakers', ?6, 100)`,
+      ).bind(input.definitionId, input.eventId, `custom_${input.definitionId}`, input.title,
+        input.instructions, input.dueAt),
+      ...speakerIds.map((speakerId, index) => this.db.prepare(
+        `INSERT INTO speaker_tasks (id, event_id, speaker_id, task_definition_id, status, completed_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'pending', NULL, ?5)`,
+      ).bind(input.speakerTaskIds[index], input.eventId, speakerId, input.definitionId, input.now)),
+    ]);
+    return {
+      definition: {
+        id: input.definitionId, eventId: input.eventId, key: `custom_${input.definitionId}`,
+        label: input.title, description: input.instructions, appliesTo: "all_speakers",
+        dueAt: input.dueAt, sortOrder: 100,
+      },
+      assigned: speakerIds.length,
+    };
+  }
+
+  async sendBulkTaskReminders(input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }> {
+    const rows = await this.db.prepare(
+      `SELECT sp.id, sp.name, sp.email, GROUP_CONCAT(td.label, '||') AS labels
+       FROM speakers sp JOIN speaker_tasks st ON st.speaker_id = sp.id AND st.status <> 'complete'
+       JOIN task_definitions td ON td.id = st.task_definition_id
+       WHERE sp.event_id = ? AND sp.id IN (${input.speakerIds.map(() => "?").join(",")})
+       GROUP BY sp.id ORDER BY sp.name`,
+    ).bind(input.eventId, ...input.speakerIds).all<{ id: string; name: string; email: string; labels: string }>();
+    const recipients = rows.results ?? [];
+    if (recipients.length === 0) return { queued: 0, recipientEmails: [] };
+    const statements: D1PreparedStatement[] = [];
+    recipients.forEach((row, index) => {
+      const labels = row.labels.split("||");
+      statements.push(
+        this.db.prepare(
+          `INSERT INTO messages (id, event_id, template_id, speaker_id, to_email, subject, body_md, status, created_at)
+           VALUES (?1, ?2, NULL, ?3, ?4, 'Reminder: speaker tasks need attention', ?5, 'sent_simulated', ?6)`,
+        ).bind(input.messageIds[index], input.eventId, row.id, row.email,
+          `Hi ${row.name},\n\nPlease complete: ${labels.join(", ")}.\n\nOpen your speaker portal to finish these tasks.`, input.now),
+        this.db.prepare(
+          `INSERT INTO delivery_attempts (id, message_id, attempted_at, mode, status, provider_id, error)
+           VALUES (?1, ?2, ?3, 'simulated', 'success', NULL, NULL)`,
+        ).bind(input.attemptIds[index], input.messageIds[index], input.now),
+      );
+    });
+    await this.db.batch(statements);
+    return { queued: recipients.length, recipientEmails: recipients.map((row) => row.email) };
   }
 
   async createCfpSubmission(input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
@@ -1383,7 +1512,8 @@ export class D1Repo implements SpeakerOpsRepo {
     const [sessionsRes, speakersRes, slotsRes] = await this.db.batch([
       this.db
         .prepare(
-          `SELECT s.*, t.name AS track_name
+          `SELECT s.*, t.name AS track_name,
+                  (SELECT COUNT(*) FROM session_versions sv WHERE sv.session_id = s.id) AS version_count
            FROM sessions s
            LEFT JOIN tracks t ON t.id = s.track_id
            WHERE s.event_id = ?
@@ -1423,6 +1553,7 @@ export class D1Repo implements SpeakerOpsRepo {
       trackName: row.track_name,
       speakers: speakersBySession.get(row.id) ?? [],
       slot: slotBySession.get(row.id) ?? null,
+      versionCount: Number(row.version_count ?? 0),
     }));
     const sessionSpeakers = speakerRows.map((row) => ({
       sessionId: row.session_id,
@@ -1495,15 +1626,104 @@ export class D1Repo implements SpeakerOpsRepo {
    * lineage always shows both the pitch and the published title.
    */
   async updateSession(input: UpdateSessionInput): Promise<OrganizerSession> {
+    const current = await this.db
+      .prepare("SELECT * FROM sessions WHERE id = ?1 AND event_id = ?2")
+      .bind(input.sessionId, input.eventId)
+      .first<SessionRow>();
+    if (!current) throw new Error("session_not_found");
+
+    if (current.title !== input.title || current.abstract !== input.abstract) {
+      await this.db.batch([
+        this.db
+          .prepare(
+            `INSERT INTO session_versions (id, session_id, title, abstract, editor, created_at)
+             VALUES (?1, ?2, ?3, ?4, 'Organizer', ?5)`,
+          )
+          .bind(`sver_${crypto.randomUUID().slice(0, 12)}`, input.sessionId, current.title, current.abstract, input.now),
+        this.db
+          .prepare(
+            `UPDATE sessions SET title = ?1, abstract = ?2, updated_at = ?3
+             WHERE id = ?4 AND event_id = ?5`,
+          )
+          .bind(input.title, input.abstract, input.now, input.sessionId, input.eventId),
+      ]);
+    }
+
+    const agenda = await this.getOrganizerAgenda(input.eventId);
+    const updated = agenda.sessions.find((session) => session.id === input.sessionId);
+    if (!updated) throw new Error("session_not_found");
+    return updated;
+  }
+
+  async listSessionVersions(eventId: string, sessionId: string): Promise<SessionVersion[]> {
+    const session = await this.db
+      .prepare("SELECT id FROM sessions WHERE id = ?1 AND event_id = ?2")
+      .bind(sessionId, eventId)
+      .first<{ id: string }>();
+    if (!session) throw new Error("session_not_found");
     const result = await this.db
       .prepare(
-        `UPDATE sessions SET title = ?1, abstract = ?2, updated_at = ?3
-         WHERE id = ?4 AND event_id = ?5`,
+        `SELECT id, session_id, title, abstract, editor, created_at
+         FROM session_versions WHERE session_id = ? ORDER BY created_at DESC, id DESC`,
       )
-      .bind(input.title, input.abstract, input.now, input.sessionId, input.eventId)
+      .bind(sessionId)
+      .all<SessionVersionRow>();
+    return (result.results ?? []).map((row) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      title: row.title,
+      abstract: row.abstract,
+      editor: row.editor,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async restoreSessionVersion(input: RestoreSessionVersionInput): Promise<OrganizerSession> {
+    const [current, version] = await Promise.all([
+      this.db
+        .prepare("SELECT * FROM sessions WHERE id = ?1 AND event_id = ?2")
+        .bind(input.sessionId, input.eventId)
+        .first<SessionRow>(),
+      this.db
+        .prepare(
+          `SELECT sv.* FROM session_versions sv
+           JOIN sessions s ON s.id = sv.session_id
+           WHERE sv.id = ?1 AND sv.session_id = ?2 AND s.event_id = ?3`,
+        )
+        .bind(input.versionId, input.sessionId, input.eventId)
+        .first<SessionVersionRow>(),
+    ]);
+    if (!current) throw new Error("session_not_found");
+    if (!version) throw new Error("version_not_found");
+    await this.db.batch([
+      this.db
+        .prepare(
+          `INSERT INTO session_versions (id, session_id, title, abstract, editor, created_at)
+           VALUES (?1, ?2, ?3, ?4, 'Organizer (before restore)', ?5)`,
+        )
+        .bind(input.snapshotId, input.sessionId, current.title, current.abstract, input.now),
+      this.db
+        .prepare(
+          `UPDATE sessions SET title = ?1, abstract = ?2, updated_at = ?3
+           WHERE id = ?4 AND event_id = ?5`,
+        )
+        .bind(version.title, version.abstract, input.now, input.sessionId, input.eventId),
+    ]);
+    const agenda = await this.getOrganizerAgenda(input.eventId);
+    const restored = agenda.sessions.find((session) => session.id === input.sessionId);
+    if (!restored) throw new Error("session_not_found");
+    return restored;
+  }
+
+  async updateSessionContentApproval(input: UpdateSessionContentApprovalInput): Promise<OrganizerSession> {
+    const result = await this.db
+      .prepare(
+        `UPDATE sessions SET content_approval_status = ?1, updated_at = ?2
+         WHERE id = ?3 AND event_id = ?4`,
+      )
+      .bind(input.status, input.now, input.sessionId, input.eventId)
       .run();
     if (!result.meta.changes) throw new Error("session_not_found");
-
     const agenda = await this.getOrganizerAgenda(input.eventId);
     const updated = agenda.sessions.find((session) => session.id === input.sessionId);
     if (!updated) throw new Error("session_not_found");
@@ -1592,7 +1812,7 @@ export class D1Repo implements SpeakerOpsRepo {
       .first<SpeakerRow>();
     if (!speaker) return null;
 
-    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes] = await this.db.batch([
+    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes, commentsRes] = await this.db.batch([
       this.db
         .prepare(
           "SELECT id, slug, name, tagline, starts_on, ends_on, timezone FROM events WHERE id = ?",
@@ -1638,6 +1858,11 @@ export class D1Repo implements SpeakerOpsRepo {
           "SELECT * FROM resource_pages WHERE event_id = ? AND is_published = 1 ORDER BY title",
         )
         .bind(speaker.event_id),
+      this.db.prepare(
+        `SELECT ac.* FROM asset_comments ac
+         JOIN speaker_assets sa ON sa.id = ac.asset_id
+         WHERE sa.speaker_id = ? ORDER BY ac.created_at, ac.id`,
+      ).bind(speaker.id),
     ]);
 
     const event = ((eventRes?.results ?? []) as unknown as EventRow[])[0];
@@ -1697,6 +1922,7 @@ export class D1Repo implements SpeakerOpsRepo {
       cfp: eventBundle?.cfp ?? null,
       tasks,
       assets: ((assetsRes?.results ?? []) as unknown as SpeakerAssetRow[]).map(mapAsset),
+      assetComments: ((commentsRes?.results ?? []) as unknown as AssetCommentRow[]).map(mapAssetComment),
       resources: ((resourcesRes?.results ?? []) as unknown as ResourcePageRow[]).map(
         mapResourcePage,
       ),
@@ -2179,8 +2405,14 @@ export class D1Repo implements SpeakerOpsRepo {
     await this.db.batch([
       this.db
         .prepare(
-          `INSERT INTO speaker_assets (id, speaker_id, kind, filename, content_type, size_bytes, r2_key, uploaded_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+          `INSERT INTO speaker_assets
+           (id, speaker_id, kind, filename, content_type, size_bytes, r2_key, task_id, session_id, version_number, uploaded_at)
+           SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
+             COALESCE(MAX(version_number), 0) + 1, ?10
+           FROM speaker_assets
+           WHERE speaker_id = ?2 AND kind = ?3
+             AND COALESCE(task_id, '') = COALESCE(?8, '')
+             AND COALESCE(session_id, '') = COALESCE(?9, '')`,
         )
         .bind(
           input.id,
@@ -2190,6 +2422,8 @@ export class D1Repo implements SpeakerOpsRepo {
           input.contentType,
           input.sizeBytes,
           input.r2Key,
+          input.taskId,
+          input.sessionId,
           input.uploadedAt,
         ),
       // Delivering the file IS doing the task. A speaker who uploads their
@@ -2203,11 +2437,11 @@ export class D1Repo implements SpeakerOpsRepo {
               SET status = 'complete', completed_at = ?3, updated_at = ?3
             WHERE speaker_id = ?1
               AND status <> 'complete'
-              AND task_definition_id IN (
+              AND (id = ?4 OR (?4 IS NULL AND task_definition_id IN (
                 SELECT id FROM task_definitions WHERE key = ?2
-              )`,
+              )))`,
         )
-        .bind(input.speakerId, input.kind, input.uploadedAt),
+        .bind(input.speakerId, input.kind, input.uploadedAt, input.taskId),
     ]);
     const created = await this.getSpeakerAssetById(input.id);
     if (!created) throw new Error("Asset not found after insert.");
@@ -2220,5 +2454,20 @@ export class D1Repo implements SpeakerOpsRepo {
       .bind(id)
       .first<SpeakerAssetRow>();
     return row ? mapAsset(row) : null;
+  }
+
+  async createAssetComment(input: CreateAssetCommentInput): Promise<AssetComment> {
+    await this.db.prepare(
+      `INSERT INTO asset_comments (id, asset_id, author_role, author_name, body, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    ).bind(input.id, input.assetId, input.authorRole, input.authorName, input.body, input.now).run();
+    return {
+      id: input.id,
+      assetId: input.assetId,
+      authorRole: input.authorRole,
+      authorName: input.authorName,
+      body: input.body,
+      createdAt: input.now,
+    };
   }
 }
