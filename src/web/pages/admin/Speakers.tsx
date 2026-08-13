@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { CreateOrganizerSpeakerRequest, OrganizerSession, OrganizerSpeakersResponse, Room, UpdateOrganizerSpeakerRequest } from "../../../shared/contracts";
 import { SpeakerAvatar } from "../../components/SpeakerAvatar";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, PageHeader, Select, Spinner, Textarea } from "../../components/ui";
+import { CopyLinkButton } from "../../components/CopyLinkButton";
 import { ApiRequestError, apiClient } from "../../lib/api";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
@@ -244,12 +245,15 @@ export function Speakers() {
                   />
                 </div>
               </div>
-              <Link
-                to={`/speaker/${speaker.id}`}
-                className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-strong"
-              >
-                Open speaker portal
-              </Link>
+              <div className="mt-5 flex gap-2">
+                <Link
+                  to={`/speaker/${speaker.id}`}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-strong"
+                >
+                  Open speaker portal
+                </Link>
+                <CopyLinkButton path={`/speaker/${speaker.id}`} label="Copy" />
+              </div>
               <Button type="button" variant="secondary" className="mt-2 w-full" onClick={() => {
                 setEditingId(speaker.id);
                 setEditForm({ name: speaker.name, company: speaker.company, title: speaker.title, bio: speaker.bio, workflowStatus: speaker.workflowStatus, logisticsNotes: speaker.logisticsNotes });

@@ -68,16 +68,19 @@ export function Dashboard() {
               label="Accepted"
               value={accepted}
               detail={`${acceptanceRate}% acceptance rate`}
+              to="/admin/submissions"
             />
             <MetricCard
               label="Sessions"
               value={counts.sessions}
               detail={`${scheduledRate}% became sessions`}
+              to="/admin/agenda"
             />
             <MetricCard
               label="Speakers"
               value={counts.speakers}
               detail={`${bundle.tracks.length} tracks, ${bundle.rooms.length} rooms`}
+              to="/admin/speakers"
             />
           </div>
 

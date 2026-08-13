@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   PublicScheduleResponse,
   PublicSession,
@@ -74,6 +74,19 @@ export function PublicProgram({
 }) {
   const [view, setView] = useState<ProgramView>("schedule");
   const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  // "/" jumps to search from anywhere on the page, unless already typing.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      event.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [trackId, setTrackId] = useState("");
   const [format, setFormat] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -142,9 +155,10 @@ export function PublicProgram({
         </div>
         <div className="mt-4 grid gap-2 md:grid-cols-[minmax(12rem,2fr)_repeat(3,minmax(8rem,1fr))]">
           <Input
+            ref={searchRef}
             type="search"
             aria-label={view === "speakers" ? "Search speaker gallery" : "Search session titles and speaker names"}
-            placeholder={view === "speakers" ? "Search speakers" : "Search titles or speakers"}
+            placeholder={view === "speakers" ? "Search speakers ( / )" : "Search titles or speakers ( / )"}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
