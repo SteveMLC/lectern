@@ -14,14 +14,28 @@ export function CopyLinkButton({ path, label = "Copy link", className = "" }: {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   async function copy() {
+    const url = new URL(path, window.location.origin).toString();
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(new URL(path, window.location.origin).toString());
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch {
+      // Older engines and stricter permission states: fall back to the
+      // selection-based path, which works under any real user gesture.
+      const scratch = document.createElement("textarea");
+      scratch.value = url;
+      scratch.setAttribute("readonly", "");
+      scratch.style.position = "fixed";
+      scratch.style.opacity = "0";
+      document.body.appendChild(scratch);
+      scratch.select();
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      scratch.remove();
+    }
+    if (ok) {
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1600);
-    } catch {
-      // Clipboard can be unavailable (permissions, insecure context); the
-      // visible link itself remains selectable, so fail quietly.
     }
   }
 
