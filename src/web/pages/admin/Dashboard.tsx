@@ -72,7 +72,7 @@ export function Dashboard() {
             <MetricCard
               label="Sessions"
               value={counts.sessions}
-              detail={`${scheduledRate}% of accepted converted`}
+              detail={`${scheduledRate}% became sessions`}
             />
             <MetricCard
               label="Speakers"
@@ -93,13 +93,13 @@ export function Dashboard() {
                 <div className="flex items-center gap-4">
                   <Link
                     to="/admin/reviews"
-                    className="text-sm font-semibold text-accent hover:underline"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
                   >
-                    Make decisions →
+                    Make decisions <span aria-hidden>→</span>
                   </Link>
                   <Link
                     to="/admin/submissions"
-                    className="text-sm font-medium text-zinc-500 hover:text-zinc-800 hover:underline"
+                    className="inline-flex items-center text-sm font-medium text-zinc-500 hover:text-zinc-800 hover:underline"
                   >
                     Open submissions
                   </Link>
@@ -204,8 +204,8 @@ function MetricCard({
       <p className="text-sm text-zinc-500">{label}</p>
       <p className="mt-1 text-3xl font-semibold text-zinc-900">{value}</p>
       {to ? (
-        <Link to={to} className="mt-2 block text-sm font-medium text-accent hover:underline">
-          {detail} →
+        <Link to={to} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
+          {detail} <span aria-hidden>→</span>
         </Link>
       ) : (
         <p className="mt-2 text-sm text-zinc-500">{detail}</p>
