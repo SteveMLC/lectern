@@ -885,10 +885,16 @@ export const CommunicationPreviewResponse = z.object({
 export type CommunicationPreviewResponse = z.infer<typeof CommunicationPreviewResponse>;
 
 export const SimulateCommunicationRequest = z.object({
-  speakerId: z.string(),
+  /** Exactly one of speakerId / toEmail: a roster speaker, or any direct
+   * recipient (reviewer invitations, contacts). Both persist to the outbox. */
+  speakerId: z.string().optional(),
+  toEmail: z.email().max(254).optional(),
   subject: z.string().min(1).max(300),
   bodyMd: z.string().min(1).max(10000),
-});
+}).refine(
+  (value) => Boolean(value.speakerId) !== Boolean(value.toEmail),
+  { message: "Provide exactly one of speakerId or toEmail." },
+);
 export type SimulateCommunicationRequest = z.infer<typeof SimulateCommunicationRequest>;
 
 export const SimulateCommunicationResponse = z.object({

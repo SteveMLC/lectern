@@ -1086,7 +1086,7 @@ api.get("/docs", (c) =>
       { method: "PUT", path: "/events/:slug/sessions/:sessionId/slot", auth: "organizer", purpose: "Create or move a session placement and recompute conflicts." },
       { method: "GET", path: "/events/:slug/communications/preview", auth: "organizer", purpose: "Render a task reminder or session-update email preview." },
       { method: "GET", path: "/events/:slug/communications", auth: "organizer", purpose: "List persistent simulated and real delivery receipts for the event outbox." },
-      { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Deliver through the configured transport and persist the provider receipt; simulated by default." },
+      { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Deliver to a roster speaker or any direct recipient through the configured transport; every send persists to the outbox with its receipt." },
       { method: "POST", path: "/events/:slug/assets/download.zip", auth: "organizer", purpose: "Download selected current speaker files as a valid ZIP." },
       { method: "POST", path: "/events/:slug/assets/:assetId/comments", auth: "organizer", purpose: "Add a durable organizer comment to a speaker file." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
@@ -2219,9 +2219,15 @@ api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
   if (!parsed.success) {
     return errorResponse(422, "validation_error", "Communication is invalid.", parsed.error.issues);
   }
-  const speaker = await repo.getSpeakerById(parsed.data.speakerId);
-  if (!speaker || speaker.eventId !== bundle.event.id) {
-    return errorResponse(404, "speaker_not_found", "No speaker with that id for this event.");
+  let speakerId: string | null = null;
+  let toEmail = parsed.data.toEmail ?? "";
+  if (parsed.data.speakerId) {
+    const speaker = await repo.getSpeakerById(parsed.data.speakerId);
+    if (!speaker || speaker.eventId !== bundle.event.id) {
+      return errorResponse(404, "speaker_not_found", "No speaker with that id for this event.");
+    }
+    speakerId = speaker.id;
+    toEmail = speaker.email;
   }
   const now = new Date().toISOString();
   const messageId = randomId("msg");
@@ -2229,8 +2235,8 @@ api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
     messageId,
     attemptId: randomId("del"),
     eventId: bundle.event.id,
-    speakerId: speaker.id,
-    toEmail: speaker.email,
+    speakerId,
+    toEmail,
     subject: parsed.data.subject,
     bodyMd: parsed.data.bodyMd,
     now,
