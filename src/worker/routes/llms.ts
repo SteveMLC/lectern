@@ -66,6 +66,10 @@ Everything is walkable right now:
    https://lectern.lectern-go7.workers.dev/review/rev_sam_demo
    (Sam Peters, two assigned proposals in the open Final Review round).
    Recusal removes a proposal from that reviewer's queue.
+   Kill My SaaS judges: each of you already has your own scored queue —
+   /review/rev_swyx · /review/rev_sydney · /review/rev_phlo ·
+   /review/rev_kelsey (two assigned proposals each; your scorecards
+   aggregate with Sam's, and "Draft scores with AI" is propose-only).
 4. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Add a room inline, or "Auto-place" the unscheduled pool into conflict-free

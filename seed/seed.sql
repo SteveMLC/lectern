@@ -193,6 +193,25 @@ INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigne
 ('round_final', 'sam@horizonsummit.example', 'sub_rag_dead',     '2026-08-02T09:05:00Z'),
 ('round_final', 'sam@horizonsummit.example', 'sub_design_evals', '2026-08-02T09:05:00Z');
 
+-- The Kill My SaaS judges, provisioned as real reviewers so each can walk
+-- their own scored queue: /review/rev_swyx etc. Multiple reviewers on the
+-- same submissions is the point — scorecards aggregate and notes stack.
+INSERT INTO round_reviewers (round_id, reviewer_name, reviewer_email, reviewer_token, assignment_cap, created_at) VALUES
+('round_final', 'swyx',   'swyx@ai.engineer',   'rev_swyx',   5, '2026-08-13T09:00:00Z'),
+('round_final', 'Sydney', 'sydney@ai.engineer', 'rev_sydney', 5, '2026-08-13T09:00:00Z'),
+('round_final', 'Phlo',   'phlo@ai.engineer',   'rev_phlo',   5, '2026-08-13T09:00:00Z'),
+('round_final', 'Kelsey', 'kelsey@ai.engineer', 'rev_kelsey', 5, '2026-08-13T09:00:00Z');
+
+INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigned_at) VALUES
+('round_final', 'swyx@ai.engineer',   'sub_rag_dead',     '2026-08-13T09:05:00Z'),
+('round_final', 'swyx@ai.engineer',   'sub_design_evals', '2026-08-13T09:05:00Z'),
+('round_final', 'sydney@ai.engineer', 'sub_rag_dead',     '2026-08-13T09:05:00Z'),
+('round_final', 'sydney@ai.engineer', 'sub_design_evals', '2026-08-13T09:05:00Z'),
+('round_final', 'phlo@ai.engineer',   'sub_rag_dead',     '2026-08-13T09:05:00Z'),
+('round_final', 'phlo@ai.engineer',   'sub_design_evals', '2026-08-13T09:05:00Z'),
+('round_final', 'kelsey@ai.engineer', 'sub_rag_dead',     '2026-08-13T09:05:00Z'),
+('round_final', 'kelsey@ai.engineer', 'sub_design_evals', '2026-08-13T09:05:00Z');
+
 INSERT INTO reviews (id, round_id, submission_id, reviewer_name, reviewer_email, scores_json, overall_comment, recommendation, submitted_at) VALUES
 ('rev_screen_rag_sam',    'round_screen', 'sub_rag_dead',     'Sam Peters',  'sam@horizonsummit.example',  '{"relevance":4,"depth":4,"readiness":4}', 'Strong practical angle. Verify the 70 percent claim has a chart behind it.', 'accept',  '2026-07-28T20:00:00Z'),
 ('rev_screen_rag_ines',   'round_screen', 'sub_rag_dead',     'Ines Farrow', 'ines@horizonsummit.example', '{"relevance":4,"depth":3,"readiness":4}', 'Title is bait but the content reads real.', 'accept', '2026-07-29T08:30:00Z'),
