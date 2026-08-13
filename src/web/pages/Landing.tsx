@@ -54,6 +54,14 @@ export function Landing() {
             <Link to="/embed-preview" className="hover:text-zinc-900">
               Embeds
             </Link>
+            <a
+              href="https://github.com/SteveMLC/lectern"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-zinc-900"
+            >
+              GitHub
+            </a>
             <Link
               to="/admin"
               className="rounded-lg bg-accent px-3 py-1.5 font-medium text-white hover:bg-accent-strong"
@@ -66,9 +74,9 @@ export function Landing() {
 
       <main>
         <section className="mx-auto max-w-5xl px-6 pb-16 pt-20 text-center">
-          <p className="mb-4 inline-block rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
-            Open source · MIT · Cloudflare-native
-          </p>
+          <a href="https://github.com/SteveMLC/lectern" target="_blank" rel="noreferrer" className="mb-4 inline-block rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:underline">
+            Open source · MIT · Source on GitHub →
+          </a>
           <h1 className="mx-auto max-w-2xl text-4xl font-semibold tracking-tight text-zinc-900">
             CFP to published agenda, without the enterprise tax.
           </h1>

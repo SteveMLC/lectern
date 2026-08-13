@@ -206,6 +206,14 @@ function AdminFooter({ eventSlug, onLock }: { eventSlug: string; onLock: () => v
       >
         View public event page →
       </Link>
+      <a
+        href="https://github.com/SteveMLC/lectern"
+        target="_blank"
+        rel="noreferrer"
+        className="block text-xs font-medium text-zinc-500 hover:text-zinc-800"
+      >
+        Source on GitHub →
+      </a>
       <button
         type="button"
         onClick={onLock}
