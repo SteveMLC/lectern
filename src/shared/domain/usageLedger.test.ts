@@ -342,6 +342,24 @@ describe("usage ledger", () => {
     expect(validateReceipt(extension, [entry])).toEqual([]);
   });
 
+  it("validates an append-only provider spend increment without double-covering usage", () => {
+    const increment = {
+      schemaVersion: 1,
+      id: "receipt-api-increment-1",
+      recordedAt: "2026-08-13T12:00:00Z",
+      provider: "anthropic",
+      label: "Anthropic API usage — incremental spend",
+      period: { start: "2026-08-12T00:00:00Z", end: "2026-08-13T23:59:59Z" },
+      amountUsd: 44.46,
+      receiptStatus: "evidenced_provider_usage_increment",
+      extendsReceiptId: "receipt-api-1",
+      source: { kind: "provider_usage_statement", sha256: "9".repeat(64), bytes: 250, rawEvidence: "retained_privately" },
+      coversEntryIds: [],
+    };
+    expect(validateReceipt(increment, [])).toEqual([]);
+    expect(validateReceipt({ ...increment, extendsReceiptId: "" }, [])).toContain("extendsReceiptId is required");
+  });
+
   it("refuses to ingest an unrelated receipt outside the private evidence directory", async () => {
     const directory = await mkdtemp(join(tmpdir(), "lectern-receipt-boundary-"));
     const privateDirectory = join(directory, "usage", "private");

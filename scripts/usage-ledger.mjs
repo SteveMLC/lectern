@@ -221,9 +221,10 @@ export function validateReceipt(receipt, entries, seen = new Set(), covered = ne
   const evidenceKinds = {
     evidenced_subscription_receipt: "provider_receipt",
     evidenced_provider_usage_statement: "provider_usage_statement",
+    evidenced_provider_usage_increment: "provider_usage_statement",
     evidenced_allocation_extension: "existing_evidence_reference",
   };
-  if (!evidenceKinds[receipt.receiptStatus]) errors.push("receiptStatus must identify evidenced subscription, provider usage spend, or a coverage extension");
+  if (!evidenceKinds[receipt.receiptStatus]) errors.push("receiptStatus must identify evidenced subscription, provider usage spend/increment, or a coverage extension");
   if (evidenceKinds[receipt.receiptStatus] && receipt.source?.kind !== evidenceKinds[receipt.receiptStatus]) {
     errors.push(`source.kind must be ${evidenceKinds[receipt.receiptStatus]}`);
   }
@@ -231,6 +232,10 @@ export function validateReceipt(receipt, entries, seen = new Set(), covered = ne
     if (receipt.amountUsd !== 0) errors.push("allocation extensions must have amountUsd 0");
     requireText("extendsReceiptId", receipt.extendsReceiptId);
     if (receipt.supportingSources?.length) errors.push("allocation extensions must not duplicate supporting evidence");
+  } else if (receipt.receiptStatus === "evidenced_provider_usage_increment") {
+    if (receipt.amountUsd <= 0) errors.push("provider usage increments must have a positive amountUsd delta");
+    requireText("extendsReceiptId", receipt.extendsReceiptId);
+    if (receipt.supportingSources?.length) errors.push("provider usage increments must use one cumulative provider statement as evidence");
   } else if (receipt.amountUsd <= 0) errors.push("primary billing evidence amountUsd must be positive");
   if (!/^[a-f0-9]{64}$/.test(receipt.source?.sha256 ?? "")) errors.push("source.sha256 must be a SHA-256 digest");
   if (!Number.isSafeInteger(receipt.source?.bytes) || receipt.source.bytes < 1) errors.push("source.bytes must be positive");
@@ -241,7 +246,10 @@ export function validateReceipt(receipt, entries, seen = new Set(), covered = ne
     if (!Number.isSafeInteger(source?.bytes) || source.bytes < 1) errors.push(`supportingSources[${index}].bytes must be positive`);
     if (source?.rawEvidence !== "retained_privately") errors.push(`supportingSources[${index}].rawEvidence must be retained_privately`);
   }
-  if (!Array.isArray(receipt.coversEntryIds) || receipt.coversEntryIds.length === 0) errors.push("coversEntryIds must identify at least one usage entry");
+  if (!Array.isArray(receipt.coversEntryIds)) errors.push("coversEntryIds must be an array");
+  else if (receipt.coversEntryIds.length === 0 && receipt.receiptStatus !== "evidenced_provider_usage_increment") {
+    errors.push("coversEntryIds must identify at least one usage entry");
+  }
   for (const id of receipt.coversEntryIds ?? []) {
     const entry = entries.find((candidate) => candidate.id === id);
     if (!entry) errors.push(`unknown covered usage entry ${id}`);
@@ -817,7 +825,10 @@ async function allocation(options = {}) {
   const now = new Date().toISOString();
   const extensions = [];
   for (const target of targets) {
-    const sourceKinds = new Set(target.coversEntryIds
+    const coverageBasis = target.receiptStatus === "evidenced_provider_usage_increment"
+      ? receipts.find((receipt) => receipt.id === target.extendsReceiptId) ?? target
+      : target;
+    const sourceKinds = new Set(coverageBasis.coversEntryIds
       .map((id) => entries.find((entry) => entry.id === id)?.source?.kind)
       .filter(Boolean));
     const explicitIds = options.covers ? new Set(options.covers.split(",").map((id) => id.trim()).filter(Boolean)) : null;
@@ -827,7 +838,8 @@ async function allocation(options = {}) {
         && entry.cost?.actualBilledUsd === null
         && entry.period.end >= target.period.start
         && entry.period.start <= target.period.end
-        && sourceKinds.has(entry.source?.kind)
+        && (sourceKinds.has(entry.source?.kind)
+          || (target.receiptStatus === "evidenced_provider_usage_increment" && explicitIds?.has(entry.id)))
         && (!explicitIds || explicitIds.has(entry.id)),
     ).map((entry) => entry.id);
     if (!coversEntryIds.length) continue;
@@ -989,9 +1001,22 @@ async function receipt(options = {}) {
     readReceipts(),
   ]);
   const alreadyCovered = new Set(receipts.flatMap((item) => item.coversEntryIds ?? []));
+  const incrementalTarget = options.extendsReceipt
+    ? receipts.find((item) => item.id === options.extendsReceipt)
+    : null;
+  if (options.extendsReceipt && !incrementalTarget) throw new Error(`--extends-receipt ${options.extendsReceipt} does not exist`);
+  if (incrementalTarget && evidenceKind !== "provider_usage_statement") {
+    throw new Error("--extends-receipt is only valid with --evidence-kind provider_usage_statement");
+  }
+  if (incrementalTarget && (incrementalTarget.provider !== options.provider || !["evidenced_provider_usage_statement", "evidenced_provider_usage_increment"].includes(incrementalTarget.receiptStatus))) {
+    throw new Error("--extends-receipt must reference provider usage evidence for the same provider");
+  }
+  if (incrementalTarget && (options.covers || options.sourceKinds)) {
+    throw new Error("incremental provider spend references prior coverage; do not pass --covers or --source-kinds");
+  }
   const explicitIds = options.covers ? options.covers.split(",").map((id) => id.trim()).filter(Boolean) : null;
   const sourceKinds = options.sourceKinds ? new Set(options.sourceKinds.split(",").map((kind) => kind.trim()).filter(Boolean)) : null;
-  const coversEntryIds = explicitIds ?? entries
+  const coversEntryIds = incrementalTarget ? [] : explicitIds ?? entries
     .filter((entry) =>
       entry.provider === options.provider &&
       (!sourceKinds || sourceKinds.has(entry.source?.kind)) &&
@@ -1001,7 +1026,7 @@ async function receipt(options = {}) {
       !alreadyCovered.has(entry.id),
     )
     .map((entry) => entry.id);
-  if (coversEntryIds.length === 0) throw new Error("No uncovered usage entries match this provider and billing period; pass --covers with explicit ledger ids if needed.");
+  if (!incrementalTarget && coversEntryIds.length === 0) throw new Error("No uncovered usage entries match this provider and billing period; pass --covers with explicit ledger ids if needed.");
 
   const now = new Date().toISOString();
   const sha256 = sourceDigest(rawReceipt);
@@ -1030,7 +1055,8 @@ async function receipt(options = {}) {
     label: options.label,
     period,
     amountUsd,
-    receiptStatus: evidenceKinds[evidenceKind].receiptStatus,
+    receiptStatus: incrementalTarget ? "evidenced_provider_usage_increment" : evidenceKinds[evidenceKind].receiptStatus,
+    ...(incrementalTarget ? { extendsReceiptId: incrementalTarget.id } : {}),
     source: {
       kind: evidenceKinds[evidenceKind].sourceKind,
       sha256,
@@ -1041,6 +1067,7 @@ async function receipt(options = {}) {
     coversEntryIds,
     notes: [
       "Raw billing evidence is retained privately; only digests, byte sizes, allocation, and evidenced spend are committed.",
+      ...(incrementalTarget ? [`Incremental provider spend only; references ${incrementalTarget.id} and does not duplicate its $${incrementalTarget.amountUsd.toFixed(2)} amount or token coverage.`] : []),
       ...(options.note ? [options.note] : []),
     ],
   };
@@ -1105,7 +1132,7 @@ function buildReport(entries, digest, generatedAt, receipts = [], receiptDigest 
   const receiptInventory = receipts.map((receipt) => {
     const supportingCount = receipt.supportingSources?.length ?? 0;
     const evidence = `\`${receipt.source.sha256.slice(0, 12)}…\` (${receipt.source.bytes.toLocaleString("en-US")} bytes${supportingCount ? ` + ${supportingCount} supporting receipt${supportingCount === 1 ? "" : "s"}` : ""})`;
-    const evidenceClass = receipt.receiptStatus === "evidenced_provider_usage_statement"
+    const evidenceClass = ["evidenced_provider_usage_statement", "evidenced_provider_usage_increment"].includes(receipt.receiptStatus)
       ? "API usage statement"
       : receipt.receiptStatus === "evidenced_allocation_extension"
         ? "coverage extension"
@@ -1195,6 +1222,13 @@ async function check() {
         failures.push(`receipt line ${index + 1}: allocation extension does not match its primary evidence record`);
       }
       continue;
+    }
+    if (receipt.receiptStatus === "evidenced_provider_usage_increment") {
+      const target = receipts.find((candidate) => candidate.id === receipt.extendsReceiptId);
+      if (!target) failures.push(`receipt line ${index + 1}: provider usage increment target is missing`);
+      else if (target.provider !== receipt.provider || !["evidenced_provider_usage_statement", "evidenced_provider_usage_increment"].includes(target.receiptStatus)) {
+        failures.push(`receipt line ${index + 1}: provider usage increment does not reference matching provider usage evidence`);
+      }
     }
     for (const source of [receipt.source, ...(receipt.supportingSources ?? [])]) {
       if (evidenceHashes.has(source?.sha256)) failures.push(`receipt line ${index + 1}: billing evidence digest is recorded more than once`);
