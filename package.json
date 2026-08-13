@@ -19,6 +19,8 @@
     "usage:summary": "node scripts/usage-ledger.mjs summary",
     "usage:report": "node scripts/usage-ledger.mjs report",
     "usage:receipt": "node scripts/usage-ledger.mjs receipt",
+    "usage:allocate": "node scripts/usage-ledger.mjs allocation",
+    "usage:provider-import": "node scripts/usage-ledger.mjs provider-import",
     "usage:runtime": "node scripts/usage-ledger.mjs runtime",
     "usage:snapshot": "node scripts/usage-ledger.mjs snapshot",
     "usage:sync": "node scripts/usage-ledger.mjs sync",

@@ -122,6 +122,22 @@ pnpm usage:receipt -- \
 
 After each successful `usage:sync`, the logger automatically covers new in-period entries with zero-dollar allocation extensions that reference the already-recorded receipt. This keeps receipt evidence append-only and the billed total unchanged. You can also run `pnpm usage:allocate -- --all` explicitly; validation rejects overlapping coverage.
 
+When a provider billing page reports a new **cumulative** consumed amount after an earlier statement was recorded, append only the increase and reference the earlier statement. If the recorded statement was $40.13 and the new cumulative total is $84.59, record a $44.46 increment:
+
+```bash
+pnpm usage:receipt -- \
+  --file usage/private/anthropic-api-spend-later.png \
+  --provider anthropic \
+  --label "Anthropic API token spend — incremental update" \
+  --amount 44.46 \
+  --period-start 2026-08-12T00:00:00Z \
+  --period-end 2026-08-13T23:59:59Z \
+  --evidence-kind provider_usage_statement \
+  --extends-receipt receipt-previous-statement
+```
+
+The increment carries no second token allocation: it references the prior coverage and adds only newly consumed dollars. Never enter the new cumulative amount as another full receipt, because that would double-count earlier spend.
+
 The command fails closed for files outside `usage/private/`, including symlinks that resolve outside it. This prevents broad local searches or unrelated billing documents from entering the reimbursement workflow accidentally.
 
 Never revise an earlier usage entry to add billed spend. Corrections and receipts are new immutable records, preserving the original provider evidence and git history.
