@@ -60,18 +60,30 @@ Two things worth taking:
    session-scoped versus person-scoped split their admin Tasks page shows
    (Contact / Group / Submission). Ours are person-scoped only.
 
-## Ranked repair list
+## Ranked repair list, and what landed
 
-1. **Post-submission behaviour** — auto-redirect to the portal, keep the
-   customisable success message, add "submit another session". *The customer
-   wrote "make sure this works" on it.*
-2. **Portal Forms UI** — organizer builder and speaker fill-in. *(in flight)*
-3. **Agenda Week view and a Conflicts view** — the brief names week; conflicts
-   is nearly free and demonstrates the engine.
-4. **Human-readable submission codes** — cheap, and it shows up on every
-   surface a judge reads.
-5. **Per-form submission limits**, then multiple submission forms per event.
-6. Cross-field character limits, admin notification recipients, drag-to-reorder,
+1. **Post-submission behaviour** — *the customer wrote "make sure this works"*.
+   **Done.** Ten-second countdown into the speaker portal with "Go now" and a
+   sticky "Stay on this page", plus "Submit another proposal" that resets the
+   form and strips the draft token. A signed-in submitter keeps their
+   read-only name and email through the reset, which a blank wipe would have
+   stranded.
+2. **Portal Forms** — the missing brief section. Backend **done** and verified
+   end to end; organizer builder and speaker fill-in in flight.
+3. **Agenda Week and Conflicts views** — **done.** Week gives a column per
+   event day; Conflicts groups room and speaker double-bookings with the
+   overlapping window and a "Show on board" jump. Both back onto pure,
+   timezone-correct helpers with tests.
+4. **Human-readable submission codes** — **done.** `SUB-11` assigned inside
+   the insert so concurrent submissions cannot collide, backfilled for
+   existing rows, and shown on the confirmation, the review cards, and the
+   CSV export.
+5. **Speed** — not a gap but the loudest complaint on the tape. **Measured**:
+   slowest median surface 60ms, pages at 19-21ms, with
+   `scripts/measure-latency.mjs` committed so anyone can re-run it.
+6. **Per-form submission limits**, then multiple submission forms per event.
+   Not started.
+7. Cross-field character limits, admin notification recipients, drag-to-reorder,
    locked fields — real, but the customer ranked them last himself.
 
 ## Not gaps, confirmed
