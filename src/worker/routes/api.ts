@@ -753,6 +753,15 @@ api.post("/events/:slug/portal-forms", organizerAuth, async (c) => {
   try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
   const parsed = CreatePortalFormRequest.safeParse(raw);
   if (!parsed.success) return errorResponse(422, "validation_error", "Portal form is invalid.", parsed.error.issues);
+  const emptySelectIndex = parsed.data.fields.findIndex(
+    (field) => field.fieldType === "select" && (!field.options || field.options.length === 0),
+  );
+  if (emptySelectIndex >= 0) {
+    return errorResponse(422, "validation_error", "Choice-list fields require at least one option.", [{
+      path: ["fields", emptySelectIndex, "options"],
+      message: "Choice-list fields require at least one option.",
+    }]);
+  }
   const keys = new Set(parsed.data.fields.map((field) => field.key));
   if (keys.size !== parsed.data.fields.length) {
     return errorResponse(422, "validation_error", "Field keys must be unique within a form.");
