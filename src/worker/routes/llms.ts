@@ -103,6 +103,14 @@ Everything is walkable right now:
    anonymous personal itinerary (star sessions into "My schedule", no
    account required) on the public event page.
 
+## Scored on the organizer's own eval kit
+
+sbek, full official fidelity (sonnet agent, opus judge, 100 turns), against
+this live URL: **95.0% over 100% coverage** on 2026-08-14, after the
+extension work — up from the 93.5% submission-time record, with the raw
+automated pass moving 81.1% to 93.4%. Both runs, every verdict, and the
+manual evidence are in docs/eval/ in the repo; neither run was re-rolled.
+
 ## Speed, measured
 
 The brief asks for speed and the walkthrough calls the incumbent slow three

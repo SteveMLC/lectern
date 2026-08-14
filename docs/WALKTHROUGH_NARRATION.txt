@@ -2,18 +2,20 @@ This is Lectern — an open-source replacement for Sessionboard's programme side
 
 Every conference gets a public home: the programme, the schedule, and a speaker gallery, all rendered from the same data the organizer manages. [[slnc 2025]]
 
-The call for papers is a real form with optional submitter accounts and conditional logic. Speakers can create an account for a proposal-status dashboard, or submit without one and recover their private link by email. [[slnc 1125]] Pick Workshop as the format and a required workshop-length field appears. The API enforces the same rule, so a hidden field is never demanded. [[slnc 900]] Co-presenters attach with role labels, and they stay attached through review, acceptance, and the published session. [[slnc 1125]] Submitting shows a reference id on screen and sends a receipted confirmation email — every send in Lectern is logged with a receipt. [[slnc 2700]]
+The call for papers is a real form with optional submitter accounts and conditional logic. Speakers can create an account for a proposal-status dashboard, or submit without one and recover their private link by email. [[slnc 1125]] Pick Workshop as the format and a required workshop-length field appears. The API enforces the same rule, so a hidden field is never demanded. [[slnc 900]] Co-presenters attach with role labels, and they stay attached through review, acceptance, and the published session. [[slnc 1125]] Submitting shows a human-readable reference — SUB and a number, something an organizer can say out loud — and then Lectern counts down and walks the speaker straight into their portal. Every send along the way is logged with a receipt. [[slnc 2250]]
 
 The organizer console is one passcode, published deliberately so judges can walk in. [[slnc 2025]]
 
 The new proposal is already in Reviews, with its speakers and their bios. Decisions are a two-step flow. First a committee note — notes stack per reviewer name, so a solo organizer can escalate to a committee without accounts. [[slnc 900]] Then Lectern drafts the acceptance email from that note, for human review before anything sends. [[slnc 1350]] Deliver and approve: the decision, the note, and the receipted email land together, and the speaker's portal updates instantly. [[slnc 1575]]
 
-Accepted talks become sessions. Auto-place fills the unscheduled ones against rooms and conflicts. [[slnc 900]] Publishing is an explicit action with a receipt — and schedule notices carry each speaker's exact slot, never fired by a drag. [[slnc 2250]]
+An event can run several calls at once. The main call keeps its address, and a lightning-talk call runs beside it with its own questions, close date, and a one-proposal-per-person cap that counts drafts. [[slnc 1350]] Portal forms collect what speakers owe you — hotel and travel details here — assigned as tasks, answered in the portal, and read back with every response against the speaker's name. [[slnc 2025]]
 
-The public schedule updates immediately: time, room, track, and format on every block, with calendar files and embeddable widgets behind it. [[slnc 2475]]
+Accepted talks become sessions. Auto-place fills the unscheduled ones against rooms and conflicts. [[slnc 900]] Publishing is an explicit action with a receipt — and schedule notices carry each speaker's exact slot, never fired by a drag. [[slnc 1350]] The agenda reads as a room board, a list, a week — [[slnc 450]] and a conflicts view that names both sessions, the overlapping minutes, and the room or speaker at fault. [[slnc 2025]]
 
-Every speaker has a personal portal behind a capability link: their proposals with live status and editing, their tasks with due dates, uploads, and their own itinerary. [[slnc 2475]]
+The public schedule updates immediately: time, room, track, and format on every block, with calendar invitations behind it — real ones, with accept and decline. [[slnc 2475]]
 
-Organizer-side, every deliverable is versioned and exportable as a ZIP, and every email ever sent sits in the outbox with its receipt. [[slnc 2025]]
+Every speaker has a personal portal behind a capability link: their proposals with live status, their tasks with due dates — including forms to fill in, right there — and their own itinerary. [[slnc 2925]]
 
-Lectern. Open source, MIT — and measured against the organizer's own eval kit. The score, the method, and every verdict are in the repo.
+Organizer-side, every deliverable is versioned and exportable, and every email ever sent sits in the outbox with its receipt. [[slnc 1800]]
+
+Lectern. Open source, MIT — and measured against the organizer's own eval kit, before and after every gap we closed. The score, the method, and every verdict are in the repo.

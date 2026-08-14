@@ -1,0 +1,70 @@
+{
+  "ABS-07": {
+    "verdict": "pass",
+    "notes": "Fetched /api/reviewer/rev_swyx and rev_sydney: each queue carries only that reviewer's own identity and scorecards; no other reviewer's name or scores appear anywhere in the JSON. Auto-judge separately confirmed the blind round hides author identity while the organizer view shows it."
+  },
+  "ABS-09": {
+    "verdict": "pass",
+    "notes": "Live re-test: POST .../rounds/round_final/reviewers/sbek-reviewer@example.com/nudge returned msg_cknjg0htzhzn sent_simulated, and the outbox now lists 'Final Review: 0 review(s) outstanding' to that reviewer. The nudge persists to the communications log."
+  },
+  "ABS-13": {
+    "verdict": "pass",
+    "notes": "GET /api/events/horizon-2026/evaluations.csv returned header 'Title,Track,Weighted aggregate,Completed reviews,Submission status,Lectern ID' plus one row per submission, matching the on-screen results."
+  },
+  "ABS-14": {
+    "verdict": "pass",
+    "notes": "POST score-draft on sub_design_evals returned numeric per-criterion scores {originality:4, impact:4}, a recommendation, written reasoning, and aiUsed/model fields - propose-only, nothing saved. Human override: PUT with different values {originality:3, impact:5} and a different comment persisted; re-fetch shows the overridden scorecard as the reviewer's record, distinguishable because drafts are never auto-saved."
+  },
+  "CFP-08": {
+    "verdict": "pass",
+    "notes": "Outbox holds five 'Proposal received: <title>' records addressed to the submitter emails the eval used (priya.speaker@ and sbek-speaker@), each referencing the submission by title, status sent_simulated."
+  },
+  "CFP-14": {
+    "verdict": "pass",
+    "notes": "Outbox holds 'Your talk has been accepted to Horizon Dev Summit 2026' (sent_simulated) plus a proposal-status email to the decided submitter; dispatch is confirmed in the UI with a receipt banner per the agent transcript."
+  },
+  "CNT-08": {
+    "verdict": "pass",
+    "notes": "Outbox holds five 'Reminder: outstanding onboarding tasks' receipts to distinct speakers with outstanding tasks (sent_simulated), matching the bulk reminder trigger."
+  },
+  "CNT-10": {
+    "verdict": "partial",
+    "notes": "Bio edit from the admin roster persists: PATCH /events/horizon-2026/speakers/spk_lin with a new bio returned the updated record and re-reads show it. Headshot photo is uploaded and replaced through the speaker's own portal (R2-backed, versioned); the admin area displays it but has no headshot-replace control, so the photo half of the item is not organizer-editable."
+  },
+  "CNT-14": {
+    "verdict": "pass",
+    "notes": "POST /api/events/horizon-2026/assets/download.zip with three selected asset ids returned HTTP 200, 55,168 bytes, PK zip magic - a real archive of the latest versions. Empty selection is refused with 422."
+  },
+  "EMB-11": {
+    "verdict": "pass",
+    "notes": "Starred a session on /e/horizon-2026; localStorage key lectern.itinerary.horizon-2026 holds the session id, a full page reload keeps both the stored id and the 'My itinerary' UI, and an 'Export .ics' control sits beside it."
+  },
+  "EMB-15": {
+    "verdict": "pass",
+    "notes": "/admin/embeds offers: widget type (Agenda, Sessions list, Speakers list, Schedule itinerary, Speaker gallery), output format (styled iframe, basic iframe, JSON, XML, iCal), brand color, track filter, field toggles (description/bio, company metadata), a live preview, a generated snippet ('<iframe src=.../api/embeds/events/horizon-2026/...'), and a Saved embeds list with retrievable code."
+  },
+  "EMB-16": {
+    "verdict": "pass",
+    "notes": "The eval renamed a session to 'UPDATED: Taming 40-Minute CI...'; the organizer sessions record and the public schedule return the identical title, start time (2026-10-14T16:00Z) and room without any republish step, and the agent's EMB-S3 screenshots show the same data in the embed and JSON feed surfaces."
+  },
+  "SPK-06": {
+    "verdict": "pass",
+    "notes": "The onboarding email ('Action needed for Horizon Dev Summit 2026: N item(s) outstanding') renders per speaker with their checklist and their personal portal link (verified via the communications preview for spk_dana: portal URL present in body), and sent copies sit in the outbox with receipts."
+  },
+  "SPK-07": {
+    "verdict": "pass",
+    "notes": "Each portal token returns only that speaker's proposals, sessions, tasks and files; cross-token access to another speaker's task returns 404 (verified in the feature walk and re-checked via the portal JSON, which contains no other speaker's content)."
+  },
+  "SPK-10": {
+    "verdict": "pass",
+    "notes": "The organizer roster lists speaker assets with metadata (kind, size 18,856 bytes, version chain), and GET /api/assets/asset_seed_ada returns the file itself: HTTP 200, image/jpeg, 18,856 bytes - listed size and downloaded bytes match."
+  },
+  "SPK-13": {
+    "verdict": "pass",
+    "notes": "POST /communications/bulk with two selected speaker ids and a welcome subject returned {sent:2} naming both recipients, and both receipts persisted to the outbox."
+  },
+  "SPK-16": {
+    "verdict": "pass",
+    "notes": "A 6-hourly cron (schedule '0 */6 * * *', visible in the deploy output) runs queueDueTaskReminders; due-window logic is unit-tested and was proven locally with wrangler --test-scheduled producing exactly one receipted reminder per due task and none on re-run. Production's outbox shows receipted task-reminder records."
+  }
+}

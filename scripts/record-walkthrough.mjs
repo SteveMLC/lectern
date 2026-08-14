@@ -105,7 +105,9 @@ await dwell(1500);
 await attempt("scroll to submit", () => page.mouse.wheel(0, 1400));
 await dwell(1200);
 await attempt("submit proposal", () => page.getByRole("button", { name: /Submit proposal/i }).click());
-await dwell(3000); // confirmation with reference id on camera
+// The confirmation shows the SUB-n reference and a ten-second countdown, then
+// walks the speaker into their portal on camera. Let the whole beat play.
+await dwell(12000);
 await until(72);
 
 // Scene 4 — organizer console via passcode (72-84s)
@@ -122,8 +124,7 @@ await until(84);
 // Scene 5 — reviews: the new proposal, note, decision, drafted email (84-114s)
 await attempt("reviews", () => page.goto(`${baseUrl}/admin/reviews`, { waitUntil: "networkidle" }));
 await dwell(3000);
-await attempt("open newest proposal", () => page.getByText("Evals That Survive Contact", { exact: false }).first().click());
-await dwell(3000);
+await dwell(3000); // the newest proposal renders first, inline
 await attempt("approve", () => page.getByRole("button", { name: "Approve" }).first().click({ timeout: 6000 }));
 await dwell(2000);
 await attempt("committee note", () => page.getByPlaceholder(/loved the live-demo angle/).first()
@@ -135,42 +136,60 @@ await attempt("deliver & approve", () => page.getByRole("button", { name: /Deliv
 await dwell(2500);
 await until(114);
 
-// Scene 6 — agenda: slot it, publish, notify (114-136s)
+// Scene 6 — several calls side by side (114-132s)
+await attempt("submission forms", () => page.goto(`${baseUrl}/admin/submission-forms`, { waitUntil: "networkidle" }));
+await dwell(5000);
+await attempt("lightning public form", () => page.goto(`${baseUrl}/e/horizon-2026/cfp/form_lightning`, { waitUntil: "networkidle" }));
+await dwell(4000);
+await attempt("portal forms", () => page.goto(`${baseUrl}/admin/portal-forms`, { waitUntil: "networkidle" }));
+await dwell(4500);
+await until(132);
+
+// Scene 7 — agenda: slot it, publish, notify, then Week and Conflicts (132-166s)
 await attempt("agenda", () => page.goto(`${baseUrl}/admin/agenda`, { waitUntil: "networkidle" }));
 await dwell(3500);
 await attempt("auto-place", () => page.getByRole("button", { name: /Auto-place unscheduled/i }).click({ timeout: 6000 }));
 await dwell(3000);
 await attempt("publish agenda", () => page.getByRole("button", { name: /(Re)?[Pp]ublish agenda/ }).click({ timeout: 6000 }));
 await dwell(3000);
+await attempt("week view", () => page.getByRole("button", { name: "Week", exact: true }).click({ timeout: 8000 }));
+await dwell(4500);
+await attempt("conflicts view", () => page.getByRole("button", { name: /^Conflicts/ }).click({ timeout: 8000 }));
+await dwell(4500);
+// Notify last: the composer takes over the page, so it closes the scene.
+await attempt("back to board", () => page.getByRole("button", { name: "Room board", exact: true }).first().click({ timeout: 5000 }));
+await dwell(800);
 await attempt("notify speakers", () => page.getByText(/Notify speakers/i).first().click({ timeout: 5000 }));
-await dwell(2500);
-await until(136);
+await dwell(3000);
+await until(166);
 
-// Scene 7 — public schedule with track/format pills (136-148s). The schedule
+// Scene 8 — public schedule with track/format pills (166-178s). The schedule
 // lives on the event page's program explorer; there is no /schedule route.
 await attempt("public schedule", () => page.goto(`${baseUrl}/e/horizon-2026`, { waitUntil: "networkidle" }));
 await dwell(2500);
 await attempt("scroll to program", () => page.mouse.wheel(0, 900));
 await dwell(2500);
 await attempt("scroll schedule rows", () => page.mouse.wheel(0, 500));
-await until(148);
+await until(178);
 
-// Scene 8 — the speaker's own portal (148-162s)
-await attempt("speaker portal", () => page.goto(`${baseUrl}/speaker/spk_ada`, { waitUntil: "networkidle" }));
+// Scene 9 — the speaker's own portal, incl. the hotel form task (178-194s)
+await attempt("speaker portal", () => page.goto(`${baseUrl}/speaker/spk_dana`, { waitUntil: "networkidle" }));
 await dwell(4000);
-await attempt("scroll portal tasks", () => page.mouse.wheel(0, 800));
-await until(162);
+await attempt("scroll portal tasks", () => page.mouse.wheel(0, 900));
+await dwell(4000);
+await attempt("scroll portal form", () => page.mouse.wheel(0, 600));
+await until(194);
 
-// Scene 9 — files + communications receipts (162-172s)
+// Scene 10 — files + communications receipts (194-204s)
 await attempt("files", () => page.goto(`${baseUrl}/admin/files`, { waitUntil: "networkidle" }));
 await dwell(4500);
 await attempt("communications", () => page.goto(`${baseUrl}/admin/communications`, { waitUntil: "networkidle" }));
 await dwell(3500);
-await until(172);
+await until(204);
 
-// Scene 10 — close on the landing page (172-176s)
+// Scene 11 — close on the landing page (204-208s)
 await attempt("closing landing", () => page.goto(`${baseUrl}/`, { waitUntil: "networkidle" }));
-await until(176);
+await until(208);
 
 const video = page.video();
 await context.close();
