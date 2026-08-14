@@ -465,6 +465,10 @@ export function parseClaude(records, options = {}) {
   const unique = new Map();
   for (const record of records) {
     if (record.type !== "assistant" || !record.message?.usage || !inWindow(record.timestamp, options)) continue;
+    // Locally synthesised assistant turns (interrupts, replayed notices) carry
+    // the placeholder model "<synthetic>" and zero tokens. They are not API
+    // calls, so they get no price and never enter the reimbursement record.
+    if (record.message.model === "<synthetic>") continue;
     unique.set(record.message.id, record);
   }
   const groups = new Map();

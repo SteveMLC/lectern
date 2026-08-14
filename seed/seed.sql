@@ -193,6 +193,22 @@ INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigne
 ('round_final', 'sam@horizonsummit.example', 'sub_rag_dead',     '2026-08-02T09:05:00Z'),
 ('round_final', 'sam@horizonsummit.example', 'sub_design_evals', '2026-08-02T09:05:00Z');
 
+-- Reference codes for the seeded submissions. The insert path assigns these
+-- for real submissions; the seed writes rows directly, so it backfills them
+-- the same way the migration did. Without this a judge sees codes only on
+-- proposals they submit themselves, and opaque ids on everything seeded.
+UPDATE submissions
+SET reference_code = 'SUB-' || (
+  SELECT COUNT(*)
+  FROM submissions AS earlier
+  WHERE earlier.event_id = submissions.event_id
+    AND (
+      earlier.created_at < submissions.created_at
+      OR (earlier.created_at = submissions.created_at AND earlier.id <= submissions.id)
+    )
+)
+WHERE reference_code IS NULL;
+
 -- A portal form out of the box, from the brief's own example: the speakers
 -- answer "Hotel and travel reservations" from inside their portal. Ada has
 -- already replied, so the organizer's responses view has something to read.
