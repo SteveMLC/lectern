@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   CfpSubmissionRequest,
   SessionFormat,
@@ -60,6 +60,35 @@ const INITIAL: FormState = {
   coSpeakers: [],
 };
 
+/** How long the confirmation page waits before it takes a submitter to their
+ *  speaker portal: long enough to read the confirmation and to stop the trip. */
+const PORTAL_REDIRECT_SECONDS = 10;
+
+/**
+ * Countdown copy for the post-submission redirect. Spelled out in words, so a
+ * submitter reads what is about to happen instead of being thrown at it.
+ */
+export function portalRedirectCountdownText(secondsLeft: number): string {
+  if (secondsLeft <= 0) return "Taking you to your speaker portal now…";
+  return `Taking you to your speaker portal in ${secondsLeft} ${secondsLeft === 1 ? "second" : "seconds"}…`;
+}
+
+/**
+ * The form a submitter gets when they start another proposal: blank, and a
+ * fresh object every time so answers cannot leak from the sent proposal into
+ * the next one. A signed-in account keeps its name and email, because the form
+ * renders those two read-only and a blank read-only field cannot be submitted.
+ */
+export function blankFormAfterSubmission(account: { name: string; email: string } | null): FormState {
+  return {
+    ...INITIAL,
+    name: account?.name ?? "",
+    email: account?.email ?? "",
+    answers: {},
+    coSpeakers: [],
+  };
+}
+
 export function CfpPage() {
   const { slug = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,6 +102,7 @@ export function CfpPage() {
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [portalToken, setPortalToken] = useState<string | null>(null);
   const [submitterToken, setSubmitterToken] = useState<string | null>(null);
+  const [submitterAccount, setSubmitterAccount] = useState<{ name: string; email: string } | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
@@ -149,32 +179,39 @@ export function CfpPage() {
     );
   }
 
+  /** Back to a blank form, as if the submitter had just opened the page: no
+   *  reference id, no portal link, no field values, no errors, and no draft
+   *  token left in the query string to restore what they have already sent. */
+  function submitAnother() {
+    setForm(blankFormAfterSubmission(submitterAccount));
+    setFieldErrors({});
+    setServerError(null);
+    setSubmittedId(null);
+    setPortalToken(null);
+    setDraftSavedAt(null);
+    setResumeUrl(null);
+    setDraftLoadError(null);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("draft");
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   if (submittedId) {
     return (
       <div className="mx-auto max-w-xl px-6 py-20">
-        <Card className="p-8 text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
-            ✓
-          </div>
-          <h1 className="text-xl font-semibold text-zinc-900">Proposal received</h1>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-            {cfp.form.thankYouText ?? "Thanks — your proposal is in."}
-          </p>
-          <p className="mt-4 text-xs text-zinc-400">Reference: {submittedId}</p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link to={`/e/${event.slug}`} className="text-sm font-medium text-accent hover:underline">
-              Back to {event.name}
-            </Link>
-            {portalToken ? (
-              <Link
-                to={`/speaker/${portalToken}`}
-                className="text-sm font-medium text-accent hover:underline"
-              >
-                Open speaker portal
-              </Link>
-            ) : null}
-          </div>
-        </Card>
+        <SubmissionConfirmation
+          eventName={event.name}
+          eventSlug={event.slug}
+          submittedId={submittedId}
+          portalToken={portalToken}
+          thankYouText={cfp.form.thankYouText}
+          onSubmitAnother={submitAnother}
+        />
       </div>
     );
   }
@@ -297,6 +334,7 @@ export function CfpPage() {
           slug={event.slug}
           onSession={(token, account) => {
             setSubmitterToken(token);
+            setSubmitterAccount(account);
             if (account) {
               setForm((current) => ({ ...current, name: account.name, email: account.email }));
             }
@@ -467,6 +505,95 @@ export function CfpPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+/**
+ * What a submitter sees the moment their proposal lands. It walks them into
+ * their speaker portal ten seconds later, counted down out loud, with both
+ * exits on screen the whole time: go now, or stay put.
+ */
+function SubmissionConfirmation({
+  eventName,
+  eventSlug,
+  submittedId,
+  portalToken,
+  thankYouText,
+  onSubmitAnother,
+}: {
+  eventName: string;
+  eventSlug: string;
+  submittedId: string;
+  portalToken: string | null;
+  thankYouText: string | null;
+  onSubmitAnother: () => void;
+}) {
+  const navigate = useNavigate();
+  const portalPath = portalToken ? `/speaker/${portalToken}` : null;
+  const [secondsLeft, setSecondsLeft] = useState(PORTAL_REDIRECT_SECONDS);
+  /** Cancelling is sticky: nothing sets this back to true, so a submitter who
+   *  says stay is never grabbed a second time. */
+  const [redirecting, setRedirecting] = useState(true);
+
+  useEffect(() => {
+    if (!portalPath || !redirecting) return;
+    if (secondsLeft <= 0) {
+      void navigate(portalPath);
+      return;
+    }
+    const timer = setTimeout(() => setSecondsLeft((current) => current - 1), 1_000);
+    return () => clearTimeout(timer);
+  }, [navigate, portalPath, redirecting, secondsLeft]);
+
+  return (
+    <Card className="p-8 text-center">
+      <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
+        ✓
+      </div>
+      <h1 className="text-xl font-semibold text-zinc-900">Proposal received</h1>
+      <p className="mt-3 text-sm leading-relaxed text-zinc-600">
+        {thankYouText ?? "Thanks — your proposal is in."}
+      </p>
+      <p className="mt-4 text-xs text-zinc-400">Reference: {submittedId}</p>
+
+      {portalPath ? (
+        <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+          <p aria-live="polite" className="text-sm text-zinc-700">
+            {redirecting
+              ? portalRedirectCountdownText(secondsLeft)
+              : "Staying on this page. Open your speaker portal whenever you are ready."}
+          </p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <Button type="button" onClick={() => void navigate(portalPath)}>
+              Go now
+            </Button>
+            {/* The cancel control stays on screen after it is used: unmounting
+                the button a keyboard user has just pressed drops their focus. */}
+            <Button type="button" variant="secondary" onClick={() => setRedirecting(false)}>
+              Stay on this page
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Link to={`/e/${eventSlug}`} className="text-sm font-medium text-accent hover:underline">
+          Back to {eventName}
+        </Link>
+        {portalPath ? (
+          <Link to={portalPath} className="text-sm font-medium text-accent hover:underline">
+            Open speaker portal
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mt-6 border-t border-zinc-100 pt-5">
+        <Button type="button" variant="secondary" onClick={onSubmitAnother}>
+          Submit another proposal
+        </Button>
+        <p className="mt-2 text-xs text-zinc-500">Opens a blank form for your next session.</p>
+      </div>
+    </Card>
   );
 }
 
