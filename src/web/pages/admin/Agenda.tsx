@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import type {
   EventBundle,
@@ -32,6 +32,16 @@ import { useAdminContext } from "./AdminLayout";
 
 const FORMATS: SessionFormat[] = ["talk", "workshop", "panel", "lightning", "keynote"];
 
+type AgendaView = "board" | "list" | "week" | "conflicts";
+type AgendaConflict = OrganizerAgendaResponse["conflicts"][number];
+
+const VIEW_SECTION_TITLES: Record<AgendaView, string> = {
+  board: "By room",
+  list: "Agenda list",
+  week: "By day",
+  conflicts: "Conflicts",
+};
+
 interface AgendaData {
   bundle: EventBundle;
   agenda: OrganizerAgendaResponse;
@@ -54,10 +64,11 @@ export function Agenda() {
   const draggedSessionIdRef = useRef<string | null>(null);
   const [dragOverRoomId, setDragOverRoomId] = useState<string | null>(null);
   const [busyDrop, setBusyDrop] = useState(false);
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<AgendaView>("board");
   const [dayFilter, setDayFilter] = useState("all");
   const [trackFilter, setTrackFilter] = useState("all");
   const [roomFilter, setRoomFilter] = useState("all");
+  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
   const [directOpen, setDirectOpen] = useState(false);
   const [roomOpen, setRoomOpen] = useState(false);
   const [roomName, setRoomName] = useState("");
@@ -72,8 +83,24 @@ export function Agenda() {
     [agenda?.conflicts],
   );
 
+  // Jumping out of the conflicts list only helps if the card is actually on
+  // screen, so the scroll waits for the board to render the newly cleared filters.
+  useEffect(() => {
+    if (!focusedSessionId || view !== "board") return;
+    document.getElementById(sessionCardId(focusedSessionId))?.scrollIntoView({ block: "center" });
+  }, [focusedSessionId, view]);
+
   async function refreshAgenda() {
     setAgendaOverride(await apiClient.agenda(eventSlug));
+  }
+
+  /** Send the organizer straight to a conflicting card on the room board. */
+  function jumpToSession(sessionId: string) {
+    setDayFilter("all");
+    setTrackFilter("all");
+    setRoomFilter("all");
+    setFocusedSessionId(sessionId);
+    setView("board");
   }
 
   async function dropOnRoom(roomId: string, transferredSessionId?: string) {
@@ -151,9 +178,14 @@ export function Agenda() {
   const unscheduled = agenda.sessions.filter(
     (session) => session.slot === null && (trackFilter === "all" || session.trackId === trackFilter),
   );
-  const visibleScheduled = scheduled.filter((session) => {
+  // The week spans the whole event by definition, so it takes the track/room
+  // cut without the day filter the board and list views apply on top.
+  const trackRoomScheduled = scheduled.filter((session) => {
     if (trackFilter !== "all" && session.trackId !== trackFilter) return false;
     if (roomFilter !== "all" && session.slot?.roomId !== roomFilter) return false;
+    return true;
+  });
+  const visibleScheduled = trackRoomScheduled.filter((session) => {
     if (
       dayFilter !== "all" &&
       session.slot &&
@@ -163,6 +195,16 @@ export function Agenda() {
   });
   const visibleRooms = data.bundle.rooms.filter((room) => roomFilter === "all" || room.id === roomFilter);
   const eventDays = eventDateRange(data.bundle.event.startsOn, data.bundle.event.endsOn);
+  const weekDays = groupSessionsByDay(
+    trackRoomScheduled,
+    data.bundle.event.timezone,
+    data.bundle.event.startsOn,
+    data.bundle.event.endsOn,
+  );
+  const sectionCount =
+    view === "conflicts" ? agenda.conflicts.length :
+    view === "week" ? trackRoomScheduled.length :
+    visibleScheduled.length;
 
   return (
     <div>
@@ -185,17 +227,44 @@ export function Agenda() {
           <div className="flex gap-1.5" role="group" aria-label="Agenda view">
             <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "board" ? "primary" : "ghost"} onClick={() => setView("board")}>Room board</Button>
             <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "list" ? "primary" : "ghost"} onClick={() => setView("list")}>List</Button>
+            <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "week" ? "primary" : "ghost"} onClick={() => setView("week")}>Week</Button>
+            <Button type="button" className="px-3 py-1.5 text-xs" variant={view === "conflicts" ? "primary" : "ghost"} onClick={() => setView("conflicts")}>
+              Conflicts{agenda.conflicts.length > 0 ? ` · ${agenda.conflicts.length}` : ""}
+            </Button>
           </div>
           <span aria-hidden="true" className="hidden h-5 w-px bg-zinc-200 sm:block" />
-          <Select aria-label="Filter by day" className="w-auto text-xs" value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}>
+          {/* The week covers every event day and conflicts are event-wide, so the
+              filters they ignore are switched off rather than left to mislead. */}
+          <Select
+            aria-label="Filter by day"
+            className="w-auto text-xs"
+            value={dayFilter}
+            disabled={view === "week" || view === "conflicts"}
+            title={view === "week" ? "The week shows every event day." : view === "conflicts" ? "Conflicts are listed across the whole event." : undefined}
+            onChange={(event) => setDayFilter(event.target.value)}
+          >
             <option value="all">All event days</option>
             {eventDays.map((day, index) => <option key={day} value={day}>Day {index + 1} · {day}</option>)}
           </Select>
-          <Select aria-label="Filter by track" className="w-auto text-xs" value={trackFilter} onChange={(event) => setTrackFilter(event.target.value)}>
+          <Select
+            aria-label="Filter by track"
+            className="w-auto text-xs"
+            value={trackFilter}
+            disabled={view === "conflicts"}
+            title={view === "conflicts" ? "Conflicts are listed across the whole event." : undefined}
+            onChange={(event) => setTrackFilter(event.target.value)}
+          >
             <option value="all">All tracks</option>
             {data.bundle.tracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
           </Select>
-          <Select aria-label="Filter by room" className="w-auto text-xs" value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)}>
+          <Select
+            aria-label="Filter by room"
+            className="w-auto text-xs"
+            value={roomFilter}
+            disabled={view === "conflicts"}
+            title={view === "conflicts" ? "Conflicts are listed across the whole event." : undefined}
+            onChange={(event) => setRoomFilter(event.target.value)}
+          >
             <option value="all">All rooms</option>
             {data.bundle.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
           </Select>
@@ -338,7 +407,7 @@ export function Agenda() {
           </section>
 
           <section>
-            <SectionTitle title={view === "board" ? "By room" : "Agenda list"} count={visibleScheduled.length} />
+            <SectionTitle title={VIEW_SECTION_TITLES[view]} count={sectionCount} />
             {view === "board" ? <div className="grid gap-4 lg:grid-cols-2">
               {visibleRooms.map((room) => {
                 const roomSessions = visibleScheduled
@@ -380,6 +449,7 @@ export function Agenda() {
                             eventDate={data.bundle.event.startsOn}
                             timezone={data.bundle.event.timezone}
                             conflicted={conflictedSessions.has(session.id)}
+                            focused={focusedSessionId === session.id}
                             onPlaced={setAgendaOverride}
                             eventSlug={eventSlug}
                             draggable
@@ -392,7 +462,17 @@ export function Agenda() {
                   </Card>
                 );
               })}
-            </div> : (
+            </div> : view === "week" ? (
+              <WeekView days={weekDays} rooms={data.bundle.rooms} timezone={data.bundle.event.timezone} />
+            ) : view === "conflicts" ? (
+              <ConflictsView
+                conflicts={agenda.conflicts}
+                sessions={agenda.sessions}
+                rooms={data.bundle.rooms}
+                timezone={data.bundle.event.timezone}
+                onJump={jumpToSession}
+              />
+            ) : (
               <div className="space-y-3">
                 {visibleScheduled.length === 0 ? (
                   <EmptyState title="No sessions match these filters" body="Change the day, track, or room filter." />
@@ -504,6 +584,171 @@ function DirectSessionForm({
   );
 }
 
+/** The event laid out day by day: one column per event date, wide or narrow. */
+function WeekView({ days, rooms, timezone }: { days: AgendaDay[]; rooms: Room[]; timezone: string }) {
+  return (
+    <div>
+      {days.length === 1 && days[0] ? (
+        <p className="mb-3 text-xs leading-5 text-zinc-500">
+          This event runs for one day, so the week holds a single column — {formatEventDay(days[0].day)}.
+        </p>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        {days.map((day, index) => (
+          <Card
+            key={day.day}
+            className="overflow-hidden"
+            role="region"
+            aria-label={`Day ${index + 1}, ${formatEventDay(day.day)}`}
+          >
+            <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+              <p className="font-semibold text-zinc-900">Day {index + 1} · {formatEventDay(day.day)}</p>
+              <p className="text-xs text-zinc-500">
+                {day.sessions.length} {day.sessions.length === 1 ? "session" : "sessions"}
+              </p>
+            </div>
+            <div className="divide-y divide-zinc-100">
+              {day.sessions.length === 0 ? (
+                <p className="py-6 text-center text-sm text-zinc-400">No sessions placed</p>
+              ) : (
+                day.sessions.map((session) => (
+                  <div key={session.id} className="px-4 py-3">
+                    <p className="text-xs font-semibold text-zinc-600">
+                      {formatTimeRange(session.slot.startsAt, session.slot.endsAt, timezone)}
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium leading-snug text-zinc-900">{session.title}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      <Badge>{roomLabel(rooms, session.slot.roomId)}</Badge>
+                      {session.trackName ? <Badge tone="indigo">{session.trackName}</Badge> : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Every live conflict, split by kind, with a way back to the offending card. */
+function ConflictsView({
+  conflicts,
+  sessions,
+  rooms,
+  timezone,
+  onJump,
+}: {
+  conflicts: AgendaConflict[];
+  sessions: OrganizerSession[];
+  rooms: Room[];
+  timezone: string;
+  onJump: (sessionId: string) => void;
+}) {
+  if (conflicts.length === 0) {
+    return (
+      <EmptyState
+        title="Nothing clashes"
+        body="Every placed session has its room and its speakers to itself. Move a card and this list rechecks at once."
+      />
+    );
+  }
+  const groups = [
+    { type: "room", title: "Room double-bookings" },
+    { type: "speaker", title: "Speaker double-bookings" },
+  ] as const;
+  return (
+    <div className="space-y-5">
+      {groups.map((group) => {
+        const items = conflicts.filter((conflict) => conflict.type === group.type);
+        if (items.length === 0) return null;
+        return (
+          <div key={group.type}>
+            <SectionTitle title={group.title} count={items.length} />
+            <div className="space-y-3">
+              {items.map((conflict) => (
+                <ConflictRow
+                  key={`${conflict.type}-${conflict.slotIds.join("-")}-${conflict.roomId ?? conflict.speakerId ?? ""}`}
+                  conflict={conflict}
+                  sessions={sessions}
+                  rooms={rooms}
+                  timezone={timezone}
+                  onJump={onJump}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConflictRow({
+  conflict,
+  sessions,
+  rooms,
+  timezone,
+  onJump,
+}: {
+  conflict: AgendaConflict;
+  sessions: OrganizerSession[];
+  rooms: Room[];
+  timezone: string;
+  onJump: (sessionId: string) => void;
+}) {
+  const overlap = conflictOverlap(conflict, sessions);
+  const pair = conflict.sessionIds.map((id) => ({
+    id,
+    session: sessions.find((candidate) => candidate.id === id) ?? null,
+  }));
+  const subject = conflict.type === "room"
+    ? roomLabel(rooms, conflict.roomId ?? null)
+    : sessions.flatMap((session) => session.speakers).find((candidate) => candidate.id === conflict.speakerId)?.name ?? "A speaker";
+  return (
+    <Card className="border-rose-200 p-4 shadow-none">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-zinc-900">{subject}</p>
+          <p className="mt-0.5 text-sm text-zinc-600">
+            {conflict.type === "room"
+              ? "Two sessions hold this room at the same time."
+              : `${subject} is booked for two sessions at the same time.`}
+          </p>
+        </div>
+        <Badge tone="rose">{conflict.type === "room" ? "Room" : "Speaker"}</Badge>
+      </div>
+      <p className="mt-2 text-xs font-medium text-rose-700">
+        Overlap: {overlap ? formatSlot(overlap.startsAt, overlap.endsAt, timezone) : "one of these sessions has lost its slot"}
+      </p>
+      <ul className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+        {pair.map(({ id, session }) => (
+          <li key={id} className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-zinc-900">{session?.title ?? id}</p>
+              <p className="truncate text-xs text-zinc-500">
+                {session?.slot
+                  ? `${formatSlot(session.slot.startsAt, session.slot.endsAt, timezone)} · ${roomLabel(rooms, session.slot.roomId)}`
+                  : "No slot"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              className="shrink-0 px-2 py-1 text-xs"
+              aria-label={`Show “${session?.title ?? id}” on the room board`}
+              onClick={() => onJump(id)}
+            >
+              Show on board
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function SessionCard({
   session,
   rooms,
@@ -511,6 +756,7 @@ function SessionCard({
   eventDate,
   timezone,
   conflicted,
+  focused,
   eventSlug,
   onPlaced,
   draggable,
@@ -523,6 +769,7 @@ function SessionCard({
   eventDate: string;
   timezone: string;
   conflicted: boolean;
+  focused?: boolean;
   eventSlug: string;
   onPlaced: (agenda: OrganizerAgendaResponse) => void;
   draggable?: boolean;
@@ -647,9 +894,11 @@ function SessionCard({
 
   return (
     <article
+      id={sessionCardId(session.id)}
       className={cn(
-        "rounded-lg border bg-white p-3",
+        "scroll-mt-4 rounded-lg border bg-white p-3",
         conflicted ? "border-rose-400 ring-2 ring-rose-100" : "border-zinc-200",
+        focused && "ring-2 ring-accent",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
       draggable={draggable}
@@ -861,10 +1110,32 @@ function SectionTitle({ title, count }: { title: string; count: number }) {
   return <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-zinc-900">{title}</h2><Badge>{count}</Badge></div>;
 }
 
+function formatTimeRange(startsAt: string, endsAt: string, timezone: string): string {
+  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  return `${time.format(new Date(startsAt))}–${time.format(new Date(endsAt))}`;
+}
+
 function formatSlot(startsAt: string, endsAt: string, timezone: string): string {
   const date = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: timezone }).format(new Date(startsAt));
-  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: timezone });
-  return `${date} · ${time.format(new Date(startsAt))}–${time.format(new Date(endsAt))}`;
+  return `${date} · ${formatTimeRange(startsAt, endsAt, timezone)}`;
+}
+
+/** A calendar date carries no instant, so anchor it at UTC noon to name the day. */
+function formatEventDay(day: string): string {
+  return new Intl.DateTimeFormat("en", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${day}T12:00:00Z`));
+}
+
+function roomLabel(rooms: readonly Room[], roomId: string | null): string {
+  return rooms.find((room) => room.id === roomId)?.name ?? "Room pending";
+}
+
+function sessionCardId(sessionId: string): string {
+  return `agenda-session-${sessionId}`;
 }
 
 export function dateInTimeZone(iso: string, timezone: string): string {
@@ -885,6 +1156,56 @@ export function eventDateRange(startsOn: string, endsOn: string): string[] {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return days;
+}
+
+/** A session that has already been placed, so its slot is safe to read. */
+export type ScheduledSession = OrganizerSession & { slot: NonNullable<OrganizerSession["slot"]> };
+
+export interface AgendaDay {
+  /** Calendar date in the event timezone, e.g. "2026-11-05". */
+  day: string;
+  /** Sessions placed on that day, earliest start first. */
+  sessions: ScheduledSession[];
+}
+
+/**
+ * Bucket placed sessions into the event's own calendar days. Days come from the
+ * event range, so a quiet day still gets a column and a session placed outside
+ * the range is left out rather than inventing a day for it. Day boundaries are
+ * read in the event timezone, never the browser's.
+ */
+export function groupSessionsByDay(
+  sessions: readonly OrganizerSession[],
+  timezone: string,
+  startsOn: string,
+  endsOn: string,
+): AgendaDay[] {
+  const buckets = new Map<string, ScheduledSession[]>(
+    eventDateRange(startsOn, endsOn).map((day) => [day, []]),
+  );
+  for (const session of sessions.filter((candidate): candidate is ScheduledSession => candidate.slot !== null)) {
+    buckets.get(dateInTimeZone(session.slot.startsAt, timezone))?.push(session);
+  }
+  return [...buckets].map(([day, placed]) => ({
+    day,
+    sessions: placed.sort((a, b) => Date.parse(a.slot.startsAt) - Date.parse(b.slot.startsAt)),
+  }));
+}
+
+/**
+ * The window two conflicting sessions actually share. Null when either session
+ * has lost its slot, or when the pair no longer overlaps at all.
+ */
+export function conflictOverlap(
+  conflict: OrganizerAgendaResponse["conflicts"][number],
+  sessions: readonly OrganizerSession[],
+): { startsAt: string; endsAt: string } | null {
+  const first = sessions.find((session) => session.id === conflict.sessionIds[0])?.slot ?? null;
+  const second = sessions.find((session) => session.id === conflict.sessionIds[1])?.slot ?? null;
+  if (!first || !second) return null;
+  const startsAt = Date.parse(first.startsAt) >= Date.parse(second.startsAt) ? first.startsAt : second.startsAt;
+  const endsAt = Date.parse(first.endsAt) <= Date.parse(second.endsAt) ? first.endsAt : second.endsAt;
+  return Date.parse(startsAt) < Date.parse(endsAt) ? { startsAt, endsAt } : null;
 }
 
 export function placementForDrop(
