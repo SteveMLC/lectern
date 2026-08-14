@@ -1358,6 +1358,20 @@ api.post("/events/:slug/submissions", async (c) => {
     });
   }
 
+  // "What admins should be notified when a new submission is received?" — the
+  // addresses the organizer listed on the form, each getting its own receipted
+  // message. A form with no addresses notifies nobody, and says nothing about it.
+  await repo.notifySubmissionAdmins({
+    eventId: bundle.event.id,
+    formId: bundle.cfp.form.id,
+    submissionId: submission.id,
+    referenceCode: submission.referenceCode ?? null,
+    title: submission.title,
+    submitterName: primary?.name ?? "A submitter",
+    submitterEmail: primary?.email ?? "",
+    now,
+  });
+
   const body: CreateSubmissionResponse = { submission };
   return c.json(body, 201);
 });

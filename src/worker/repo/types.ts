@@ -116,6 +116,14 @@ export interface LecternRepo {
   createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
   simulateCommunication(input: SimulateCommunicationInput): Promise<EmailDeliveryResult>;
   queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
+  /**
+   * Reminds anyone holding an unsubmitted draft that their form's close date is
+   * near. `closesBefore` is the far edge of the reminder window; the per-draft
+   * decision belongs to shouldRemindDraft in shared/domain/draftReminders.
+   */
+  queueDraftCloseReminders(now: string, closesBefore: string): Promise<QueueDraftCloseRemindersResult>;
+  /** Copies the form's configured admin addresses on a new submission. */
+  notifySubmissionAdmins(input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult>;
   listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
@@ -307,6 +315,29 @@ export interface SimulateCommunicationInput {
 export interface QueueDueTaskRemindersResult {
   queued: number;
   taskIds: string[];
+}
+
+export interface QueueDraftCloseRemindersResult {
+  queued: number;
+  /** Draft tokens reminded on this pass. */
+  tokens: string[];
+}
+
+export interface NotifySubmissionAdminsInput {
+  eventId: string;
+  formId: string;
+  submissionId: string;
+  /** The human-readable code organizers say out loud, e.g. "SUB-12". */
+  referenceCode: string | null;
+  title: string;
+  submitterName: string;
+  submitterEmail: string;
+  now: string;
+}
+
+export interface NotifySubmissionAdminsResult {
+  notified: number;
+  recipientEmails: string[];
 }
 
 export interface SaveEvaluationRoundInput {
