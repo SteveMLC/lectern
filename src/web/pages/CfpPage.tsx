@@ -104,6 +104,10 @@ export function CfpPage() {
   const [portalToken, setPortalToken] = useState<string | null>(null);
   const [submitterToken, setSubmitterToken] = useState<string | null>(null);
   const [submitterAccount, setSubmitterAccount] = useState<{ name: string; email: string } | null>(null);
+  const [submitterSessionPending, setSubmitterSessionPending] = useState(() =>
+    typeof window !== "undefined"
+      && Boolean(window.localStorage.getItem(`lectern.submitter.${slug}`)),
+  );
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
@@ -339,8 +343,15 @@ export function CfpPage() {
           onSession={(token, account) => {
             setSubmitterToken(token);
             setSubmitterAccount(account);
+            setSubmitterSessionPending(false);
             if (account) {
               setForm((current) => ({ ...current, name: account.name, email: account.email }));
+              setFieldErrors((current) => {
+                const next = { ...current };
+                delete next["speaker.name"];
+                delete next["speaker.email"];
+                return next;
+              });
             }
           }}
         />
@@ -497,12 +508,12 @@ export function CfpPage() {
             </p>
             <div className="flex gap-2">
               {cfp.form.allowDrafts ? (
-                <Button type="button" variant="secondary" disabled={savingDraft || submitting} onClick={() => void saveDraft()}>
+                <Button type="button" variant="secondary" disabled={savingDraft || submitting || submitterSessionPending} onClick={() => void saveDraft()}>
                   {savingDraft ? "Saving draft…" : draftToken ? "Update draft" : "Save and finish later"}
                 </Button>
               ) : null}
-              <Button type="submit" disabled={submitting || savingDraft}>
-                {submitting ? "Submitting…" : "Submit proposal"}
+              <Button type="submit" disabled={submitting || savingDraft || submitterSessionPending}>
+                {submitting ? "Submitting…" : submitterSessionPending ? "Restoring account…" : "Submit proposal"}
               </Button>
             </div>
           </div>
