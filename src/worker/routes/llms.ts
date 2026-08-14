@@ -70,7 +70,13 @@ Everything is walkable right now:
    /review/rev_swyx · /review/rev_sydney · /review/rev_phlo ·
    /review/rev_kelsey (two assigned proposals each; your scorecards
    aggregate with Sam's, and "Draft scores with AI" is propose-only).
-4. /admin/agenda: drag it onto another room or use exact controls; room and
+4. /admin/portal-forms: build a form and assign it to speakers as a task, the
+   way a real organizer collects hotel, travel, or reimbursement details.
+   "Hotel and travel reservations" ships assigned to four speakers with one
+   reply already in; open /speaker/spk_dana to answer it as a speaker, then
+   read every response back on the organizer page. Same form engine as the
+   CFP, pointed at the portal.
+10. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Add a room inline, or "Auto-place" the unscheduled pool into conflict-free
    open slots. Then "Notify speakers": Claude drafts the schedule notice
