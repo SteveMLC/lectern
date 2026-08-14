@@ -73,9 +73,13 @@ import type {
   CreateSpeakerTaskInput,
   BulkTaskReminderInput,
   CreateAssetCommentInput,
+  NotifySubmissionAdminsInput,
+  NotifySubmissionAdminsResult,
+  QueueDraftCloseRemindersResult,
 } from "../types";
 import { randomId } from "../../../shared/ids";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
+import { shouldRemindDraft } from "../../../shared/domain/draftReminders";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
 import { summarizeReviewScores } from "../../../shared/domain/reviews";
@@ -348,6 +352,24 @@ function parseJson<T>(text: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * forms.notify_emails holds a JSON array of admin addresses — the customer's
+ * "What admins should be notified when a new submission is received?" chips.
+ * Anything that is not a usable address is dropped and nobody hears about it:
+ * an unset, empty, or malformed list simply notifies no one.
+ */
+function parseNotifyEmails(raw: string | null): string[] {
+  const parsed = parseJson<unknown>(raw, null);
+  if (!Array.isArray(parsed)) return [];
+  const addresses = new Set<string>();
+  for (const entry of parsed) {
+    if (typeof entry !== "string") continue;
+    const email = entry.trim().toLowerCase();
+    if (email.includes("@")) addresses.add(email);
+  }
+  return [...addresses];
 }
 
 function mapEvent(r: EventRow): Event {
@@ -2672,6 +2694,97 @@ export class D1Repo implements LecternRepo {
       taskIds.push(row.task_id);
     }
     return { queued: taskIds.length, taskIds };
+  }
+
+  /**
+   * The other half of "Set a close date to enable draft reminder emails": a
+   * saved draft is worthless once the call closes, so anyone still holding one
+   * hears about it while there is still time to submit. SQL only narrows the
+   * field; shouldRemindDraft decides, and cfp_drafts.reminded_at is what makes
+   * a six-hourly sweep send exactly one reminder per draft.
+   */
+  async queueDraftCloseReminders(now: string, closesBefore: string): Promise<QueueDraftCloseRemindersResult> {
+    const rows = await this.db.prepare(
+      `SELECT d.token, d.event_id, d.payload_json, d.reminded_at,
+              f.closes_at, e.name AS event_name, e.slug AS event_slug
+       FROM cfp_drafts d
+       JOIN forms f ON f.id = d.form_id
+       JOIN events e ON e.id = d.event_id
+       WHERE d.reminded_at IS NULL AND f.closes_at IS NOT NULL
+         AND f.closes_at > ?1 AND f.closes_at <= ?2
+       ORDER BY f.closes_at, d.token`,
+    ).bind(now, closesBefore).all<{
+      token: string; event_id: string; payload_json: string; reminded_at: string | null;
+      closes_at: string; event_name: string; event_slug: string;
+    }>();
+    const candidates = rows.results ?? [];
+    if (candidates.length === 0) return { queued: 0, tokens: [] };
+
+    const tokens: string[] = [];
+    for (const row of candidates) {
+      const parsed = CfpDraftRequest.safeParse(parseJson<unknown>(row.payload_json, null));
+      if (!parsed.success) continue;
+      const email = parsed.data.speaker?.email?.trim() ?? null;
+      if (!shouldRemindDraft({ email, closesAt: row.closes_at, remindedAt: row.reminded_at }, now)) continue;
+      if (!email) continue; // Already refused above; this keeps the type honest.
+
+      const suffix = `${row.token}_${row.closes_at}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const closeDate = new Date(row.closes_at).toLocaleDateString("en-US", {
+        dateStyle: "long",
+        timeZone: "UTC",
+      });
+      // The same return link the draft API hands the browser, so a proposer
+      // lands back on their own saved answers.
+      const resumeUrl = `/e/${encodeURIComponent(row.event_slug)}/cfp?draft=${encodeURIComponent(row.token)}`;
+      await this.simulateCommunication({
+        messageId: `msg_draft_close_${suffix}`,
+        attemptId: `del_draft_close_${suffix}`,
+        eventId: row.event_id,
+        // A draft holder is nobody's speaker yet — there is no record to point at.
+        speakerId: null,
+        toEmail: email,
+        subject: `Your draft for ${row.event_name} is not submitted yet`,
+        bodyMd: `Hi ${parsed.data.speaker?.name?.trim() || "there"},\n\n“${parsed.data.title}” is still a draft for ${row.event_name}, and drafts are never reviewed. The call for speakers closes on ${closeDate}.\n\nFinish and submit it here: ${resumeUrl}`,
+        now,
+      });
+      await this.db.prepare(
+        "UPDATE cfp_drafts SET reminded_at = ?1 WHERE token = ?2 AND reminded_at IS NULL",
+      ).bind(now, row.token).run();
+      tokens.push(row.token);
+    }
+    return { queued: tokens.length, tokens };
+  }
+
+  /**
+   * "What admins should be notified when a new submission is received?" — one
+   * receipted message per configured address. Deterministic ids keyed on the
+   * submission, because the caller cannot know how many admins a form has.
+   */
+  async notifySubmissionAdmins(input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult> {
+    const row = await this.db.prepare(
+      `SELECT f.notify_emails, e.name AS event_name
+       FROM forms f JOIN events e ON e.id = f.event_id
+       WHERE f.id = ?1 AND f.event_id = ?2`,
+    ).bind(input.formId, input.eventId).first<{ notify_emails: string | null; event_name: string }>();
+    if (!row) return { notified: 0, recipientEmails: [] };
+
+    const recipients = parseNotifyEmails(row.notify_emails);
+    if (recipients.length === 0) return { notified: 0, recipientEmails: [] };
+
+    const code = input.referenceCode ?? input.submissionId;
+    for (const [index, toEmail] of recipients.entries()) {
+      await this.simulateCommunication({
+        messageId: `msg_admin_new_${input.submissionId}_${index}`,
+        attemptId: `del_admin_new_${input.submissionId}_${index}`,
+        eventId: input.eventId,
+        speakerId: null,
+        toEmail,
+        subject: `New submission ${code}: ${input.title}`,
+        bodyMd: `${input.submitterName} submitted “${input.title}” to ${row.event_name}.\n\nReference: ${code}\nSubmitter: ${input.submitterName} <${input.submitterEmail}>\n\nOpen the submissions queue to review it.`,
+        now: input.now,
+      });
+    }
+    return { notified: recipients.length, recipientEmails: recipients };
   }
 
   async listMessages(eventId: string): Promise<OutboxMessage[]> {

@@ -51,6 +51,9 @@ import type {
   CreateSpeakerTaskInput,
   BulkTaskReminderInput,
   CreateAssetCommentInput,
+  NotifySubmissionAdminsInput,
+  NotifySubmissionAdminsResult,
+  QueueDraftCloseRemindersResult,
 } from "../types";
 import { createEmailDelivery, type EmailDelivery } from "../../integrations/emailDelivery";
 
@@ -480,6 +483,14 @@ export class AirtableRepo implements LecternRepo {
 
   async queueDueTaskReminders(_now: string, _dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
     throw new AirtableNotWiredError("queueDueTaskReminders");
+  }
+
+  async queueDraftCloseReminders(_now: string, _closesBefore: string): Promise<QueueDraftCloseRemindersResult> {
+    throw new AirtableNotWiredError("queueDraftCloseReminders");
+  }
+
+  async notifySubmissionAdmins(_input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult> {
+    throw new AirtableNotWiredError("notifySubmissionAdmins");
   }
 
   async listMessages(_eventId: string): Promise<OutboxMessage[]> {
