@@ -76,24 +76,33 @@ Everything is walkable right now:
    reply already in; open /speaker/spk_dana to answer it as a speaker, then
    read every response back on the organizer page. Same form engine as the
    CFP, pointed at the portal.
-10. /admin/agenda: drag it onto another room or use exact controls; room and
+5. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Add a room inline, or "Auto-place" the unscheduled pool into conflict-free
    open slots. Then "Notify speakers": Claude drafts the schedule notice
    telling every speaker on the session their confirmed day, time, and room —
    slot facts are required verbatim and guaranteed into the body. Dragging
    never fires an email; the organizer decides when the schedule speaks.
-5. /admin -> add a direct sponsor session — no submission behind it, by design.
-6. The speaker portal shows the speaker's OWN proposals with live status and
+6. /admin -> add a direct sponsor session — no submission behind it, by design.
+7. The speaker portal shows the speaker's OWN proposals with live status and
    decision, editable until the CFP closes or a decision lands; plus derived
    onboarding tasks and real file upload/versions (R2). Co-speakers can be
    added at submission time.
-7. /admin/communications: previewed reminder, simulated send with receipt,
+8. /admin/communications: previewed reminder, simulated send with receipt,
    downloadable .ics carrying the session — and a full outbox listing every
    recorded message with status and timestamps.
-8. /embed-preview: mobile-first schedule, sessions, speaker gallery — and an
+9. /embed-preview: mobile-first schedule, sessions, speaker gallery — and an
    anonymous personal itinerary (star sessions into "My schedule", no
    account required) on the public event page.
+
+## Speed, measured
+
+The brief asks for speed and the walkthrough calls the incumbent slow three
+times, so this is measured rather than claimed. Time to first byte, five runs
+each, from a US client: landing page 21ms median, public event page 19ms,
+schedule API 60ms, speakers API 56ms, schedule embed 57ms, this file 16ms.
+Slowest median surface: 60ms. Re-run it yourself against any deployment:
+`node scripts/measure-latency.mjs https://lectern.lectern-go7.workers.dev`
 
 ## Machine-readable
 
