@@ -869,7 +869,7 @@ export class D1Repo implements LecternRepo {
     }
     await this.db.batch(statements);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
-    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
     if (!bundle) throw new Error("event_not_found");
     return bundle;
   }

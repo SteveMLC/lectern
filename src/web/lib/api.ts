@@ -80,6 +80,9 @@ import {
   ReviewScoreDraftResponse,
   OutboxResponse,
   UploadAssetResponse,
+  ResourcePagesResponse,
+  SaveResourcePageRequest,
+  IntegrationConnectionsResponse,
 } from "../../shared/contracts";
 
 /**
@@ -195,6 +198,18 @@ export const apiClient = {
 
   organizerSpeakers: (slug: string) =>
     request(OrganizerSpeakersResponse, `/api/events/${encodeURIComponent(slug)}/speakers`, undefined, { auth: true }),
+
+  resourcePages: (slug: string) =>
+    request(ResourcePagesResponse, `/api/events/${encodeURIComponent(slug)}/resources`, undefined, { auth: true }),
+
+  createResourcePage: (slug: string, body: SaveResourcePageRequest) =>
+    request(ResourcePagesResponse, `/api/events/${encodeURIComponent(slug)}/resources`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
+  updateResourcePage: (slug: string, resourceId: string, body: SaveResourcePageRequest) =>
+    request(ResourcePagesResponse, `/api/events/${encodeURIComponent(slug)}/resources/${encodeURIComponent(resourceId)}`, { method: "PATCH", body: JSON.stringify(body) }, { auth: true }),
+
+  integrationConnections: (slug: string) =>
+    request(IntegrationConnectionsResponse, `/api/events/${encodeURIComponent(slug)}/integrations`, undefined, { auth: true }),
 
   createOrganizerSpeaker: (slug: string, body: CreateOrganizerSpeakerRequest) =>
     request(

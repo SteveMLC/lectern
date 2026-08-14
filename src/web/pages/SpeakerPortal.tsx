@@ -769,6 +769,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function Resources({ resources }: { resources: ResourcePage[] }) {
+  const [selectedId, setSelectedId] = useState(resources[0]?.id ?? "");
   if (resources.length === 0) {
     return (
       <Card className="p-5">
@@ -778,7 +779,7 @@ function Resources({ resources }: { resources: ResourcePage[] }) {
     );
   }
 
-  const primary = resources[0]!;
+  const primary = resources.find((resource) => resource.id === selectedId) ?? resources[0]!;
 
   return (
     <Card className="p-5">
@@ -786,12 +787,17 @@ function Resources({ resources }: { resources: ResourcePage[] }) {
         <h2 className="text-base font-semibold text-zinc-900">Resources</h2>
         <div className="flex flex-wrap gap-2">
           {resources.map((resource) => (
-            <span
+            <button
+              type="button"
               key={resource.id}
-              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600"
+              aria-pressed={primary.id === resource.id}
+              onClick={() => setSelectedId(resource.id)}
+              className={primary.id === resource.id
+                ? "rounded-full border border-accent bg-accent px-3 py-1 text-xs font-medium text-white"
+                : "rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 hover:border-zinc-400"}
             >
               {resource.title}
-            </span>
+            </button>
           ))}
         </div>
       </div>

@@ -19,9 +19,14 @@ export function Dashboard() {
     error: bundleError,
     loading: bundleLoading,
   } = useAsync(() => apiClient.eventBundle(eventSlug), [eventSlug]);
+  const {
+    data: roster,
+    error: rosterError,
+    loading: rosterLoading,
+  } = useAsync(() => apiClient.organizerSpeakers(eventSlug), [eventSlug]);
 
-  const loading = countsLoading || bundleLoading;
-  const error = countsError ?? bundleError;
+  const loading = countsLoading || bundleLoading || rosterLoading;
+  const error = countsError ?? bundleError ?? rosterError;
   const submitted = counts?.submissionsByStatus.submitted ?? 0;
   const underReview = counts?.submissionsByStatus.under_review ?? 0;
   const accepted = counts?.submissionsByStatus.accepted ?? 0;
@@ -35,6 +40,19 @@ export function Dashboard() {
     ? Math.min(100, Math.round(((counts?.sessions ?? 0) / accepted) * 100))
     : 0;
   const cfp = bundle?.cfp;
+  const speakersWithOpenTasks = roster?.speakers.filter((speaker) => speaker.completedTasks < speaker.totalTasks) ?? [];
+  const openTasks = speakersWithOpenTasks.reduce((sum, speaker) => sum + speaker.totalTasks - speaker.completedTasks, 0);
+  const essentialPaths = [
+    { label: "Conditional CFP forms", detail: "Questions, rules, routing, windows, and limits", to: "/admin/submission-forms" },
+    { label: "Speaker self-service", detail: "Profiles, headshots, slides, forms, and support files", to: "/admin/speakers" },
+    { label: "Communications + calendars", detail: "Templates, reminders, receipts, and ICS delivery", to: "/admin/communications" },
+    { label: "Multi-round evaluation", detail: "Scorecards, reviewers, assignments, and optional AI assist", to: "/admin/evaluations" },
+    { label: "Conflict-aware agenda", detail: "Room board, list/week views, filters, and publishing", to: "/admin/agenda" },
+    { label: "Onboarding task dashboard", detail: `${openTasks} open task${openTasks === 1 ? "" : "s"} across ${speakersWithOpenTasks.length} speaker${speakersWithOpenTasks.length === 1 ? "" : "s"}`, to: "/admin/speakers" },
+    { label: "Accelevents handoff", detail: "One-way integration status and credential path", to: "/admin/integrations", setup: true },
+    { label: "Portal resources + wiki", detail: "Published speaker guides and sanitized HTML embeds", to: "/admin/resources" },
+    { label: "Public gallery + itinerary", detail: "Mobile-friendly, searchable embed surfaces", to: "/admin/embeds" },
+  ];
 
   return (
     <div>
@@ -53,7 +71,7 @@ export function Dashboard() {
 
       {loading ? (
         <Spinner label="Loading counts" />
-      ) : error || !counts || !bundle ? (
+      ) : error || !counts || !bundle || !roster ? (
         <ErrorBanner message={error?.message ?? "Could not load dashboard."} />
       ) : (
         <>
@@ -177,6 +195,26 @@ export function Dashboard() {
                 <FocusCard label="In review" value={underReview} detail="Awaiting scores" />
                 <FocusCard label="Waitlisted" value={waitlisted} detail="Hold for balance" />
               </div>
+              <div className="mt-5 border-t border-zinc-100 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900">Outstanding speaker onboarding</h3>
+                    <p className="mt-1 text-xs text-zinc-500">Live from assigned portal tasks.</p>
+                  </div>
+                  <Badge tone={openTasks ? "amber" : "emerald"}>{openTasks} open</Badge>
+                </div>
+                {speakersWithOpenTasks.length ? (
+                  <div className="mt-3 divide-y divide-zinc-100">
+                    {speakersWithOpenTasks.slice(0, 4).map((speaker) => (
+                      <div key={speaker.id} className="flex items-center justify-between gap-4 py-2 text-sm">
+                        <span className="truncate font-medium text-zinc-800">{speaker.name}</span>
+                        <span className="shrink-0 text-xs text-zinc-500">{speaker.totalTasks - speaker.completedTasks} remaining</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="mt-3 text-sm text-emerald-700">Every assigned task is complete.</p>}
+                <Link to="/admin/speakers" className="mt-3 inline-flex text-xs font-semibold text-accent hover:underline">Open task roster →</Link>
+              </div>
               <p className="mt-4 text-sm leading-relaxed text-zinc-600">
                 The demo path is ready when a new CFP proposal appears in Submissions, gets moved
                 through review, and accepted proposals show up as sessions without losing speaker
@@ -184,6 +222,30 @@ export function Dashboard() {
               </p>
             </Card>
           </div>
+
+          <Card className="mt-6 rounded-lg p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700">Competition essentials</p>
+                <h2 className="mt-1 text-base font-semibold text-zinc-900">Non-negotiable workflow map</h2>
+                <p className="mt-1 text-sm text-zinc-500">Every required capability has an organizer path. The same paths carry a Core marker in the sidebar.</p>
+              </div>
+              <Link to={`/e/${eventSlug}/cfp`} className="text-sm font-medium text-accent hover:underline">Open public CFP →</Link>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {essentialPaths.map((path, index) => (
+                <Link key={path.label} to={path.to} className="group rounded-lg border border-zinc-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/40">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{index + 1}</span>
+                    <Badge tone={path.setup ? "amber" : "emerald"}>{path.setup ? "Setup" : "Wired"}</Badge>
+                  </div>
+                  <h3 className="mt-3 text-sm font-semibold text-zinc-900 group-hover:text-indigo-800">{path.label}</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500">{path.detail}</p>
+                  <span className="mt-3 inline-flex text-xs font-semibold text-accent">Open path →</span>
+                </Link>
+              ))}
+            </div>
+          </Card>
         </>
       )}
     </div>

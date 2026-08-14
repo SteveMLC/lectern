@@ -114,6 +114,27 @@ export function CfpPage() {
   const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    // React Router reuses this page when someone follows the link from one
+    // open call to another. Clear every form-scoped state value so answers,
+    // errors, and confirmation details cannot cross that boundary.
+    setForm(blankFormAfterSubmission(submitterAccount));
+    setFieldErrors({});
+    setServerError(null);
+    setSubmitting(false);
+    setSubmittedId(null);
+    setSubmittedRef(null);
+    setPortalToken(null);
+    setSavingDraft(false);
+    setDraftSavedAt(null);
+    setResumeUrl(null);
+    setDraftLoadError(null);
+    setSubmitterSessionPending(
+      typeof window !== "undefined"
+        && Boolean(window.localStorage.getItem(`lectern.submitter.${slug}`)),
+    );
+  }, [slug, formId]);
+
+  useEffect(() => {
     if (!draftToken) return;
     let active = true;
     setDraftLoadError(null);

@@ -15,21 +15,20 @@ export function useAdminContext(): AdminContext {
 }
 
 const NAV = [
-  { to: "/admin", label: "Dashboard", end: true },
+  { to: "/admin", label: "Dashboard", end: true, core: true },
   { to: "/admin/settings", label: "Event settings", end: false },
   { to: "/admin/submissions", label: "Submissions", end: false },
   { to: "/admin/reviews", label: "Reviews", end: false },
-  { to: "/admin/evaluations", label: "Evaluation rounds", end: false },
-  { to: "/admin/agenda", label: "Agenda", end: false },
-  { to: "/admin/speakers", label: "Speakers", end: false },
+  { to: "/admin/evaluations", label: "Evaluation rounds", end: false, core: true },
+  { to: "/admin/agenda", label: "Agenda", end: false, core: true },
+  { to: "/admin/speakers", label: "Speakers", end: false, core: true },
   { to: "/admin/files", label: "Speaker files", end: false },
-  { to: "/admin/submission-forms", label: "Submission forms", end: false },
-  { to: "/admin/portal-forms", label: "Portal forms", end: false },
-  { to: "/admin/communications", label: "Communications", end: false },
-  { to: "/admin/embeds", label: "Embeds", end: false },
-  // Resources admin editing is deliberately deferred; the route stays reachable
-  // by URL but an unfinished surface gets no navigation entry during judging.
-  { to: "/admin/integrations", label: "Integrations", end: false },
+  { to: "/admin/submission-forms", label: "Submission forms", end: false, core: true },
+  { to: "/admin/portal-forms", label: "Portal forms", end: false, core: true },
+  { to: "/admin/communications", label: "Communications", end: false, core: true },
+  { to: "/admin/resources", label: "Portal resources", end: false, core: true },
+  { to: "/admin/embeds", label: "Embeds", end: false, core: true },
+  { to: "/admin/integrations", label: "Integrations", end: false, core: true },
 ];
 
 const ACTIVE_EVENT_KEY = "lectern.organizer.event";
@@ -177,6 +176,9 @@ function EventPicker({
 function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+        Core paths are marked
+      </p>
       {NAV.map((item) => (
         <NavLink
           key={item.to}
@@ -192,7 +194,10 @@ function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
             )
           }
         >
-          {item.label}
+          <span className="flex items-center justify-between gap-2">
+            <span>{item.label}</span>
+            {item.core ? <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-700">Core</span> : null}
+          </span>
         </NavLink>
       ))}
     </nav>

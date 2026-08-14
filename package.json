@@ -7,7 +7,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "dev": "vite build && wrangler dev",
+    "dev": "vite build && wrangler dev --var EMAIL_DELIVERY_MODE:simulated",
     "dev:web": "vite",
     "build": "vite build",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",

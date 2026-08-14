@@ -1,25 +1,55 @@
 import { Badge, Button, Card, ErrorBanner, PageHeader, Spinner } from "../../components/ui";
 import { apiClient } from "../../lib/api";
 import { useAsync } from "../../lib/useAsync";
+import { useAdminContext } from "./AdminLayout";
 
 export function Integrations() {
-  const { data, error, loading, reload } = useAsync(() => apiClient.airtableStatus(), []);
+  const { eventSlug } = useAdminContext();
+  const airtable = useAsync(() => apiClient.airtableStatus(), []);
+  const connectionState = useAsync(() => apiClient.integrationConnections(eventSlug), [eventSlug]);
+  const data = airtable.data;
+  const accelevents = connectionState.data?.connections.find((connection) => connection.system === "accelevents");
   const mirroredRecords = data ? Object.values(data.mirrored).reduce((sum, count) => sum + count, 0) : 0;
   const mirrorTables = data ? data.tables.filter((table) => data.baseTables.includes(table)).length : 0;
+  const loading = airtable.loading || connectionState.loading;
+  const error = airtable.error ?? connectionState.error;
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Integrations"
-        subtitle="A live, rate-safe Airtable mirror; D1 stays the reliable full-product backend."
-        actions={<Button variant="secondary" onClick={reload}>Check connection</Button>}
+        subtitle="External program handoffs are event-scoped; D1 remains the reliable product backend."
+        actions={<Button variant="secondary" onClick={() => { airtable.reload(); connectionState.reload(); }}>Check connections</Button>}
       />
 
       {loading ? (
-        <Spinner label="Checking Airtable" />
+        <Spinner label="Checking integrations" />
       ) : error || !data ? (
         <ErrorBanner message={error?.message ?? "Integration status unavailable."} />
       ) : (
+        <>
+        <Card className="border-indigo-200 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700">Non-negotiable path</p>
+              <h2 className="mt-1 text-base font-semibold text-zinc-900">Accelevents one-way handoff</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">The connection record, direction, and credential gate live here so organizers do not have to hunt for the required integration.</p>
+            </div>
+            <Badge tone={accelevents?.status === "configured" ? "emerald" : accelevents?.status === "error" ? "rose" : "amber"}>
+              {accelevents?.status === "configured" ? "Configured" : accelevents?.status === "error" ? "Needs attention" : "Credentials required"}
+            </Badge>
+          </div>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+            <Fact label="Direction" value={String(accelevents?.config.direction ?? "push")} />
+            <Fact label="State" value={(accelevents?.status ?? "not_configured").replaceAll("_", " ")} />
+            <Fact label="Secrets" value="Worker-only" />
+          </dl>
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            {typeof accelevents?.config.note === "string" ? accelevents.config.note : "Add the Accelevents event URL and API key before the first push."} The UI does not expose or store API credentials.
+          </div>
+          <a href="https://developer.accelevents.com/docs/getting-started" target="_blank" rel="noreferrer" className="mt-4 inline-flex text-sm font-medium text-accent hover:underline">Open official API-key setup →</a>
+        </Card>
+
         <div className="grid gap-5 lg:grid-cols-2">
           <Card className="p-5">
             <div className="flex items-start justify-between gap-3">
@@ -74,6 +104,7 @@ export function Integrations() {
             </div>
           </Card>
         </div>
+        </>
       )}
     </div>
   );

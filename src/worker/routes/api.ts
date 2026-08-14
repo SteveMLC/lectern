@@ -80,6 +80,11 @@ import {
   type OutboxResponse,
   type Speaker,
   type SpeakerAsset,
+  SaveResourcePageRequest,
+  type ResourcePage,
+  type ResourcePagesResponse,
+  type IntegrationConnection,
+  type IntegrationConnectionsResponse,
 } from "../../shared/contracts";
 import { personalizeSpeakerMessage } from "../../shared/domain/communications";
 import { draftReviewScores } from "../integrations/reviewScoring";
@@ -113,6 +118,57 @@ interface SubmitterAccountRow {
   name: string;
   password_salt: string;
   password_hash: string;
+}
+
+interface ResourcePageApiRow {
+  id: string;
+  event_id: string;
+  slug: string;
+  title: string;
+  body_md: string;
+  embed_html: string | null;
+  is_published: number;
+  updated_at: string;
+}
+
+interface IntegrationConnectionApiRow {
+  id: string;
+  event_id: string;
+  system: "accelevents" | "airtable";
+  status: "not_configured" | "awaiting_credentials" | "configured" | "error";
+  config_json: string;
+  updated_at: string;
+}
+
+function mapIntegrationConnectionRow(row: IntegrationConnectionApiRow): IntegrationConnection {
+  let config: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(row.config_json);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      config = parsed as Record<string, unknown>;
+    }
+  } catch { config = {}; }
+  return { id: row.id, eventId: row.event_id, system: row.system, status: row.status, config, updatedAt: row.updated_at };
+}
+
+function mapResourcePageRow(row: ResourcePageApiRow): ResourcePage {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    slug: row.slug,
+    title: row.title,
+    bodyMd: row.body_md,
+    embedHtml: row.embed_html,
+    isPublished: row.is_published === 1,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function organizerResourcePages(env: Env, eventId: string): Promise<ResourcePagesResponse> {
+  const result = await env.DB.prepare(
+    "SELECT * FROM resource_pages WHERE event_id = ?1 ORDER BY title, id",
+  ).bind(eventId).all<ResourcePageApiRow>();
+  return { resources: (result.results ?? []).map(mapResourcePageRow) };
 }
 
 async function createSubmitterSession(env: Env, accountId: string, now: string): Promise<string> {
@@ -691,6 +747,81 @@ api.get("/public/events/:slug/speakers.xml", (c) => publicXmlResponse(c, "speake
 api.get("/public/events/:slug/itinerary.xml", (c) => publicXmlResponse(c, "itinerary"));
 api.get("/public/events/:slug/gallery.xml", (c) => publicXmlResponse(c, "gallery"));
 
+api.get("/events/:slug/resources", organizerAuth, async (c) => {
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE slug = ?1")
+    .bind(c.req.param("slug"))
+    .first<{ id: string }>();
+  if (!event) return errorResponse(404, "event_not_found", "No event with that slug.");
+  return c.json(await organizerResourcePages(c.env, event.id));
+});
+
+api.get("/events/:slug/integrations", organizerAuth, async (c) => {
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE slug = ?1")
+    .bind(c.req.param("slug"))
+    .first<{ id: string }>();
+  if (!event) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const result = await c.env.DB.prepare(
+    "SELECT * FROM integration_connections WHERE event_id = ?1 ORDER BY system",
+  ).bind(event.id).all<IntegrationConnectionApiRow>();
+  const body: IntegrationConnectionsResponse = {
+    connections: (result.results ?? []).map(mapIntegrationConnectionRow),
+  };
+  return c.json(body);
+});
+
+api.post("/events/:slug/resources", organizerAuth, async (c) => {
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE slug = ?1")
+    .bind(c.req.param("slug"))
+    .first<{ id: string }>();
+  if (!event) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveResourcePageRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Resource page is invalid.", parsed.error.issues);
+  const now = new Date().toISOString();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO resource_pages (id, event_id, slug, title, body_md, embed_html, is_published, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+    ).bind(
+      randomId("page"), event.id, parsed.data.slug, parsed.data.title,
+      parsed.data.bodyMd, parsed.data.embedHtml, parsed.data.isPublished ? 1 : 0, now,
+    ).run();
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "";
+    if (/unique/i.test(message)) return errorResponse(409, "resource_slug_exists", "That resource URL is already in use.");
+    throw caught;
+  }
+  return c.json(await organizerResourcePages(c.env, event.id), 201);
+});
+
+api.patch("/events/:slug/resources/:resourceId", organizerAuth, async (c) => {
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE slug = ?1")
+    .bind(c.req.param("slug"))
+    .first<{ id: string }>();
+  if (!event) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SaveResourcePageRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Resource page is invalid.", parsed.error.issues);
+  try {
+    const result = await c.env.DB.prepare(
+      `UPDATE resource_pages
+          SET slug = ?1, title = ?2, body_md = ?3, embed_html = ?4, is_published = ?5, updated_at = ?6
+        WHERE id = ?7 AND event_id = ?8`,
+    ).bind(
+      parsed.data.slug, parsed.data.title, parsed.data.bodyMd, parsed.data.embedHtml,
+      parsed.data.isPublished ? 1 : 0, new Date().toISOString(), c.req.param("resourceId"), event.id,
+    ).run();
+    if (!result.meta.changes) return errorResponse(404, "resource_not_found", "No resource page with that id.");
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "";
+    if (/unique/i.test(message)) return errorResponse(409, "resource_slug_exists", "That resource URL is already in use.");
+    throw caught;
+  }
+  return c.json(await organizerResourcePages(c.env, event.id));
+});
+
 api.get("/events/:slug/speakers", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -1150,6 +1281,10 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/speakers/import", auth: "organizer", purpose: "Validate and upsert an event-scoped speaker CSV." },
       { method: "POST", path: "/events/:slug/portal-forms", auth: "organizer", purpose: "Build a portal form and assign it to speakers as a form-fill task." },
       { method: "GET", path: "/events/:slug/portal-forms", auth: "organizer", purpose: "List portal forms with assignment counts and every speaker response." },
+      { method: "GET", path: "/events/:slug/resources", auth: "organizer", purpose: "List draft and published speaker-portal resource pages." },
+      { method: "POST", path: "/events/:slug/resources", auth: "organizer", purpose: "Create a speaker guide or wiki page with optional sanitized embed HTML." },
+      { method: "PATCH", path: "/events/:slug/resources/:resourceId", auth: "organizer", purpose: "Edit and publish a speaker-portal resource page." },
+      { method: "GET", path: "/events/:slug/integrations", auth: "organizer", purpose: "Show event-scoped Airtable and Accelevents connection state without exposing credentials." },
       { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId/form", auth: "speaker link", purpose: "Submit a portal form from the speaker's own task list." },
       { method: "POST", path: "/events/:slug/speaker-tasks", auth: "organizer", purpose: "Create and assign a custom speaker deliverable." },
       { method: "POST", path: "/events/:slug/speaker-tasks/remind", auth: "organizer", purpose: "Record bulk reminders for selected incomplete speakers." },

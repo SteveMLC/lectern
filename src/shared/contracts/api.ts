@@ -7,6 +7,7 @@ import {
   Form,
   FormField,
   FormLengthRule,
+  IntegrationConnection,
   Room,
   ResourcePage,
   Session,
@@ -77,6 +78,25 @@ export const EventsListResponse = z.object({
   events: z.array(EventSummary),
 });
 export type EventsListResponse = z.infer<typeof EventsListResponse>;
+
+export const ResourcePagesResponse = z.object({
+  resources: z.array(ResourcePage),
+});
+export type ResourcePagesResponse = z.infer<typeof ResourcePagesResponse>;
+
+export const IntegrationConnectionsResponse = z.object({
+  connections: z.array(IntegrationConnection),
+});
+export type IntegrationConnectionsResponse = z.infer<typeof IntegrationConnectionsResponse>;
+
+export const SaveResourcePageRequest = z.object({
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  title: z.string().trim().min(3).max(160),
+  bodyMd: z.string().trim().min(1).max(30_000),
+  embedHtml: z.string().trim().max(20_000).nullable(),
+  isPublished: z.boolean(),
+});
+export type SaveResourcePageRequest = z.infer<typeof SaveResourcePageRequest>;
 
 export const CreateEventRequest = z.object({
   name: z.string().trim().min(3).max(160),

@@ -7,6 +7,7 @@ import { formatDateTime } from "../../lib/status";
 import { useAsync } from "../../lib/useAsync";
 import { useAdminContext } from "./AdminLayout";
 import { CopyLinkButton } from "../../components/CopyLinkButton";
+import { zonedLocalInputToIso } from "../../../shared/domain/timezone";
 
 /**
  * The event's submission forms, side by side — the organizer's product runs
@@ -58,7 +59,7 @@ export function SubmissionForms() {
         thankYouText: null,
         isOpen: true,
         opensAt: null,
-        closesAt: closesAt ? new Date(closesAt).toISOString() : null,
+        closesAt: closesAt ? zonedLocalInputToIso(closesAt, timezone) : null,
         allowDrafts,
         submissionLimit: limit,
       });
@@ -109,7 +110,11 @@ export function SubmissionForms() {
                 placeholder="Lightning talks — late call"
               />
             </Field>
-            <Field label="Closes at" htmlFor="new-form-closes" help="Leave blank to stay open until you close it.">
+            <Field
+              label={`Closes at (${timezone})`}
+              htmlFor="new-form-closes"
+              help={`Entered in the event timezone, ${timezone}. Leave blank to stay open until you close it.`}
+            >
               <Input
                 id="new-form-closes"
                 type="datetime-local"
