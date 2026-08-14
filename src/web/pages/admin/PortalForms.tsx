@@ -35,7 +35,8 @@ const FIELD_TYPES: { value: PortalFormFieldType; label: string }[] = [
   { value: "number", label: "Number" },
 ];
 
-const FIELD_TYPE_LABEL = new Map(FIELD_TYPES.map((type) => [type.value, type.label]));
+/** Keyed loosely: a stored field carries the wider CFP field-type union. */
+const FIELD_TYPE_LABEL = new Map<string, string>(FIELD_TYPES.map((type) => [type.value, type.label]));
 
 /** The answer key the API stores this field under. Must match `/^[a-z][a-z0-9_]*$/`. */
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;

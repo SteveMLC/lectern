@@ -102,7 +102,7 @@ times, so this is measured rather than claimed. Time to first byte, five runs
 each, from a US client: landing page 21ms median, public event page 19ms,
 schedule API 60ms, speakers API 56ms, schedule embed 57ms, this file 16ms.
 Slowest median surface: 60ms. Re-run it yourself against any deployment:
-`node scripts/measure-latency.mjs https://lectern.lectern-go7.workers.dev`
+node scripts/measure-latency.mjs https://lectern.lectern-go7.workers.dev
 
 ## Machine-readable
 
