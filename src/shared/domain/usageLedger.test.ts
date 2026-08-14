@@ -415,3 +415,21 @@ describe("usage ledger", () => {
       .toContain("usage entry usage-1 is covered by more than one receipt");
   });
 });
+
+describe("synthetic assistant turns", () => {
+  it("never enter the reimbursement record", async () => {
+    const { parseClaude } = await import("../../../scripts/usage-ledger.mjs");
+    const records = [
+      {
+        type: "assistant", timestamp: "2026-08-14T12:00:00.000Z",
+        message: { id: "m1", model: "<synthetic>", usage: { input_tokens: 0, output_tokens: 0 } },
+      },
+      {
+        type: "assistant", timestamp: "2026-08-14T12:01:00.000Z",
+        message: { id: "m2", model: "claude-fable-5", usage: { input_tokens: 10, output_tokens: 5 } },
+      },
+    ];
+    const parsed = parseClaude(records);
+    expect(parsed.map((group) => group.model)).toEqual(["claude-fable-5"]);
+  });
+});
