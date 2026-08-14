@@ -2,7 +2,6 @@ import { Route, Routes } from "react-router";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { Agenda } from "./pages/admin/Agenda";
 import { Communications } from "./pages/admin/Communications";
-import { ComingSoon } from "./pages/admin/ComingSoon";
 import { Dashboard } from "./pages/admin/Dashboard";
 import { Integrations } from "./pages/admin/Integrations";
 import { Embeds } from "./pages/admin/Embeds";
@@ -14,6 +13,7 @@ import { Settings } from "./pages/admin/Settings";
 import { Files } from "./pages/admin/Files";
 import { PortalForms } from "./pages/admin/PortalForms";
 import { SubmissionForms } from "./pages/admin/SubmissionForms";
+import { Resources } from "./pages/admin/Resources";
 import { ApiDocs } from "./pages/ApiDocs";
 import { CfpPage } from "./pages/CfpPage";
 import { EmbedPreview } from "./pages/EmbedPreview";
@@ -52,16 +52,7 @@ export function App() {
         <Route path="portal-forms" element={<PortalForms />} />
         <Route path="communications" element={<Communications />} />
         <Route path="embeds" element={<Embeds />} />
-        <Route
-          path="resources"
-          element={
-            <ComingSoon
-              title="Resources"
-              lane="Lane C"
-              body="Speaker guide and wiki pages with sanitized HTML embeds. A seeded Speaker Guide page is already in the database."
-            />
-          }
-        />
+        <Route path="resources" element={<Resources />} />
         <Route path="integrations" element={<Integrations />} />
       </Route>
 

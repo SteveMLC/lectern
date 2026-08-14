@@ -10,11 +10,12 @@ ORGANIZER_PASSCODE=lectern-dev
 # AIRTABLE_TOKEN=
 # AIRTABLE_BASE_ID=
 
-# Optional — real email sending. All four values are required for live mail;
-# leave mode disabled to retain the persisted simulated outbox.
+# Optional — real email sending. `pnpm dev` always overrides delivery to
+# simulated, even if a Resend key is present here. Use production secrets for
+# live mail; local development retains the persisted simulated outbox.
 # RESEND_API_KEY=
 # RESEND_FROM_EMAIL=Lectern <updates@your-verified-domain.example>
-# EMAIL_DELIVERY_MODE=disabled
+# EMAIL_DELIVERY_MODE=simulated
 # EMAIL_DELIVERY_ALLOWLIST=you@example.com
 
 # Optional — AI-assisted drafting. Both the key and explicit mode are required;
