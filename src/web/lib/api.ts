@@ -30,6 +30,7 @@ import {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  ReorderFormFieldsRequest,
   FeedbackDraftRequest,
   FeedbackDraftResponse,
   ScheduleNoticeDraftRequest,
@@ -168,6 +169,10 @@ export const apiClient = {
   createRoom: (slug: string, body: CreateRoomRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/rooms`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
 
   createFormField: (slug: string, body: CreateFormFieldRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
+  reorderFormFields: (slug: string, body: ReorderFormFieldsRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields/order`, { method: "PUT", body: JSON.stringify(body) }, { auth: true }),
+
+  deleteFormField: (slug: string, fieldId: string) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields/${encodeURIComponent(fieldId)}`, { method: "DELETE" }, { auth: true }),
 
   publicSchedule: (slug: string) =>
     request(PublicScheduleResponse, `/api/public/events/${encodeURIComponent(slug)}/schedule`),

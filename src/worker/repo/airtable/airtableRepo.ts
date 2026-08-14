@@ -44,6 +44,8 @@ import type {
   CreateTrackInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  ReorderFormFieldsInput,
+  DeleteFormFieldInput,
   SaveCfpDraftInput,
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
@@ -295,6 +297,8 @@ export class AirtableRepo implements LecternRepo {
   async createTrack(_input: CreateTrackInput): Promise<EventBundle> { throw new AirtableNotWiredError("createTrack"); }
   async createRoom(_input: CreateRoomInput): Promise<EventBundle> { throw new AirtableNotWiredError("createRoom"); }
   async createFormField(_input: CreateFormFieldInput): Promise<EventBundle> { throw new AirtableNotWiredError("createFormField"); }
+  async reorderFormFields(_input: ReorderFormFieldsInput): Promise<EventBundle> { throw new AirtableNotWiredError("reorderFormFields"); }
+  async deleteFormField(_input: DeleteFormFieldInput): Promise<EventBundle> { throw new AirtableNotWiredError("deleteFormField"); }
 
   async createCfpSubmission(_input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     throw new AirtableNotWiredError("createCfpSubmission");

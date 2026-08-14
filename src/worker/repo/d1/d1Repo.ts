@@ -66,6 +66,8 @@ import type {
   CreatePortalFormInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  ReorderFormFieldsInput,
+  DeleteFormFieldInput,
   SaveCfpDraftInput,
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
@@ -834,6 +836,36 @@ export class D1Repo implements LecternRepo {
         input.condition.operator, JSON.stringify(input.condition.values), input.key));
     }
     await this.db.batch(statements);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async reorderFormFields(input: ReorderFormFieldsInput): Promise<EventBundle> {
+    // One statement per field, positions 0..n-1, so the stored order is exactly
+    // the list the organizer sent — no gaps left by earlier deletes.
+    const statements = input.fieldIds.map((fieldId, position) =>
+      this.db.prepare("UPDATE form_fields SET sort_order = ? WHERE id = ? AND form_id = ?")
+        .bind(position, fieldId, input.formId));
+    statements.push(this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId));
+    await this.db.batch(statements);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async deleteFormField(input: DeleteFormFieldInput): Promise<EventBundle> {
+    // Rules are keyed by field key, so a rule naming the deleted field as
+    // either end would otherwise outlive it and hide a field forever.
+    await this.db.batch([
+      this.db.prepare("DELETE FROM form_fields WHERE id = ? AND form_id = ?").bind(input.fieldId, input.formId),
+      this.db.prepare(
+        "DELETE FROM conditional_rules WHERE form_id = ? AND (source_field_key = ? OR target_field_key = ?)",
+      ).bind(input.formId, input.fieldKey, input.fieldKey),
+      this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId),
+    ]);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
     const bundle = row ? await this.getEventBySlug(row.slug) : null;
     if (!bundle) throw new Error("event_not_found");
