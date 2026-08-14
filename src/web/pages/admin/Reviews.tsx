@@ -212,6 +212,7 @@ function ReviewCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            {submission.referenceCode ? `${submission.referenceCode} · ` : ""}
             {submission.trackName ?? "Unassigned"} · {submission.format}
           </p>
           <h2 className="mt-1 text-base font-semibold leading-snug text-zinc-900">

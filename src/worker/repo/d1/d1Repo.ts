@@ -174,6 +174,7 @@ interface SpeakerRow {
 
 interface SubmissionRow {
   id: string;
+  reference_code: string | null;
   event_id: string;
   form_id: string | null;
   track_id: string | null;
@@ -606,6 +607,7 @@ function mapSubmissionListItem(
 ): SubmissionListItem {
   return {
     id: r.id,
+    referenceCode: r.reference_code,
     eventId: r.event_id,
     formId: r.form_id,
     trackId: r.track_id,
@@ -1291,8 +1293,12 @@ export class D1Repo implements LecternRepo {
     await this.db.batch([
       this.db
         .prepare(
-          `INSERT INTO submissions (id, event_id, form_id, track_id, title, abstract, format, status, answers_json, submitted_at, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'submitted', ?8, ?9, ?9, ?9)`,
+          // The reference code is the next number for this event, computed in
+          // the same statement so concurrent submissions cannot collide.
+          `INSERT INTO submissions (id, reference_code, event_id, form_id, track_id, title, abstract, format, status, answers_json, submitted_at, created_at, updated_at)
+           VALUES (?1,
+                   'SUB-' || (SELECT COUNT(*) + 1 FROM submissions WHERE event_id = ?2),
+                   ?2, ?3, ?4, ?5, ?6, ?7, 'submitted', ?8, ?9, ?9, ?9)`,
         )
         .bind(
           input.submissionId,

@@ -71,6 +71,7 @@ export function CfpPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [submittedRef, setSubmittedRef] = useState<string | null>(null);
   const [portalToken, setPortalToken] = useState<string | null>(null);
   const [submitterToken, setSubmitterToken] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -160,7 +161,7 @@ export function CfpPage() {
           <p className="mt-3 text-sm leading-relaxed text-zinc-600">
             {cfp.form.thankYouText ?? "Thanks — your proposal is in."}
           </p>
-          <p className="mt-4 text-xs text-zinc-400">Reference: {submittedId}</p>
+          <p className="mt-4 text-xs text-zinc-400">Reference: {submittedRef ?? submittedId}</p>
           <div className="mt-6 flex justify-center gap-3">
             <Link to={`/e/${event.slug}`} className="text-sm font-medium text-accent hover:underline">
               Back to {event.name}
@@ -267,6 +268,7 @@ export function CfpPage() {
     try {
       const res = await apiClient.submitCfp(slug, parsed.success ? parsed.data : payload, submitterToken);
       setSubmittedId(res.submission.id);
+      setSubmittedRef(res.submission.referenceCode ?? null);
       setPortalToken(res.submission.speakers[0]?.speakerId ?? null);
     } catch (err) {
       setServerError(
