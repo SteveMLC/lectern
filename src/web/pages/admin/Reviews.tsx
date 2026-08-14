@@ -36,6 +36,13 @@ export function Reviews() {
     () => apiClient.submissions(eventSlug),
     [eventSlug],
   );
+  // Only to name which call a proposal came through — meaningful once an
+  // event runs more than one submission form.
+  const bundle = useAsync(() => apiClient.eventBundle(eventSlug), [eventSlug]);
+  const formTitles = new Map(
+    (bundle.data?.cfpForms ?? []).map((form) => [form.id, form.title]),
+  );
+  const showFormBadge = (bundle.data?.cfpForms ?? []).length > 1;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -152,6 +159,7 @@ export function Reviews() {
             <ReviewCard
               key={submission.id}
               submission={submission}
+              formTitle={showFormBadge ? formTitles.get(submission.formId ?? "") ?? null : null}
               eventSlug={eventSlug}
               busy={busyId === submission.id}
               anyBusy={busyId !== null}
@@ -186,12 +194,15 @@ export function answerFacts(answers: Record<string, unknown>): string[] {
 
 function ReviewCard({
   submission,
+  formTitle,
   eventSlug,
   busy,
   anyBusy,
   onDecide,
 }: {
   submission: SubmissionListItem;
+  /** Which call the proposal came through; null hides the badge. */
+  formTitle: string | null;
   eventSlug: string;
   busy: boolean;
   anyBusy: boolean;
@@ -214,6 +225,7 @@ function ReviewCard({
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
             {submission.referenceCode ? `${submission.referenceCode} · ` : ""}
             {submission.trackName ?? "Unassigned"} · {submission.format}
+            {formTitle ? ` · ${formTitle}` : ""}
           </p>
           <h2 className="mt-1 text-base font-semibold leading-snug text-zinc-900">
             {submission.title}

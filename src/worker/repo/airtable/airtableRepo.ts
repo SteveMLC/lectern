@@ -44,6 +44,8 @@ import type {
   CreateTrackInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  ReorderFormFieldsInput,
+  DeleteFormFieldInput,
   SaveCfpDraftInput,
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
@@ -51,6 +53,9 @@ import type {
   CreateSpeakerTaskInput,
   BulkTaskReminderInput,
   CreateAssetCommentInput,
+  NotifySubmissionAdminsInput,
+  NotifySubmissionAdminsResult,
+  QueueDraftCloseRemindersResult,
 } from "../types";
 import { createEmailDelivery, type EmailDelivery } from "../../integrations/emailDelivery";
 
@@ -223,6 +228,10 @@ export class AirtableRepo implements LecternRepo {
     }));
   }
 
+  async createCfpForm(): Promise<EventBundle> {
+    throw new AirtableNotWiredError("createCfpForm");
+  }
+
   async getEventBySlug(slug: string): Promise<EventBundle | null> {
     const records = await this.readTable(AIRTABLE_TABLES.events);
     const record = records.find((item) => item.fields.Slug === slug);
@@ -247,6 +256,7 @@ export class AirtableRepo implements LecternRepo {
       tracks: [],
       rooms: [],
       cfp: null,
+      cfpForms: [],
     };
   }
 
@@ -295,6 +305,8 @@ export class AirtableRepo implements LecternRepo {
   async createTrack(_input: CreateTrackInput): Promise<EventBundle> { throw new AirtableNotWiredError("createTrack"); }
   async createRoom(_input: CreateRoomInput): Promise<EventBundle> { throw new AirtableNotWiredError("createRoom"); }
   async createFormField(_input: CreateFormFieldInput): Promise<EventBundle> { throw new AirtableNotWiredError("createFormField"); }
+  async reorderFormFields(_input: ReorderFormFieldsInput): Promise<EventBundle> { throw new AirtableNotWiredError("reorderFormFields"); }
+  async deleteFormField(_input: DeleteFormFieldInput): Promise<EventBundle> { throw new AirtableNotWiredError("deleteFormField"); }
 
   async createCfpSubmission(_input: CreateCfpSubmissionInput): Promise<SubmissionListItem> {
     throw new AirtableNotWiredError("createCfpSubmission");
@@ -310,6 +322,10 @@ export class AirtableRepo implements LecternRepo {
 
   async listSubmissions(_eventId: string): Promise<SubmissionListItem[]> {
     throw new AirtableNotWiredError("listSubmissions");
+  }
+
+  async countSubmitterProposals(): Promise<number> {
+    throw new AirtableNotWiredError("countSubmitterProposals");
   }
 
   async getSubmissionById(_id: string): Promise<SubmissionListItem | null> {
@@ -480,6 +496,14 @@ export class AirtableRepo implements LecternRepo {
 
   async queueDueTaskReminders(_now: string, _dueBefore: string): Promise<{ queued: number; taskIds: string[] }> {
     throw new AirtableNotWiredError("queueDueTaskReminders");
+  }
+
+  async queueDraftCloseReminders(_now: string, _closesBefore: string): Promise<QueueDraftCloseRemindersResult> {
+    throw new AirtableNotWiredError("queueDraftCloseReminders");
+  }
+
+  async notifySubmissionAdmins(_input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult> {
+    throw new AirtableNotWiredError("notifySubmissionAdmins");
   }
 
   async listMessages(_eventId: string): Promise<OutboxMessage[]> {

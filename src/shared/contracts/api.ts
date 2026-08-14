@@ -6,6 +6,7 @@ import {
   Event,
   Form,
   FormField,
+  FormLengthRule,
   Room,
   ResourcePage,
   Session,
@@ -121,6 +122,43 @@ export const CreateFormFieldRequest = z.object({
 });
 export type CreateFormFieldRequest = z.infer<typeof CreateFormFieldRequest>;
 
+/** One row in the event's list of submission forms — enough for the admin
+ * list and the public "other open calls" links without loading every field. */
+export const CfpFormSummary = z.object({
+  id: z.string(),
+  title: z.string(),
+  isOpen: z.boolean(),
+  opensAt: z.iso.datetime({ offset: true }).nullable(),
+  closesAt: z.iso.datetime({ offset: true }).nullable(),
+  submissionCount: z.number().int().nonnegative(),
+  draftCount: z.number().int().nonnegative(),
+  /** True for the form /e/:slug/cfp resolves to — the oldest, kept stable. */
+  isPrimary: z.boolean(),
+});
+export type CfpFormSummary = z.infer<typeof CfpFormSummary>;
+
+export const CreateCfpFormRequest = z.object({
+  title: z.string().trim().min(3).max(160),
+  welcomeText: z.string().trim().max(2000).nullable().default(null),
+  thankYouText: z.string().trim().max(2000).nullable().default(null),
+  isOpen: z.boolean().default(true),
+  opensAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  closesAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  allowDrafts: z.boolean().default(true),
+  submissionLimit: z.number().int().min(1).nullable().default(null),
+});
+export type CreateCfpFormRequest = z.infer<typeof CreateCfpFormRequest>;
+/**
+ * The whole ordered list of custom CFP field ids, not a delta: the organizer
+ * sends the order they can see, and the worker refuses anything that is not a
+ * permutation of the stored fields. Locked core questions carry no id and never
+ * appear here.
+ */
+export const ReorderFormFieldsRequest = z.object({
+  fieldIds: z.array(z.string().trim().min(1).max(80)).max(60),
+});
+export type ReorderFormFieldsRequest = z.infer<typeof ReorderFormFieldsRequest>;
+
 /** Everything the public event + CFP pages need in one round trip. */
 export const EventBundle = z.object({
   event: Event,
@@ -131,8 +169,12 @@ export const EventBundle = z.object({
       form: Form,
       fields: z.array(FormField),
       rules: z.array(ConditionalRule),
+      lengthRules: z.array(FormLengthRule).default([]),
     })
     .nullable(),
+  /** Every submission form on the event, primary first. Defaults keep old
+   * cached clients parsing. */
+  cfpForms: z.array(CfpFormSummary).default([]),
 });
 export type EventBundle = z.infer<typeof EventBundle>;
 
@@ -367,6 +409,9 @@ export type BulkCommunicationResponse = z.infer<typeof BulkCommunicationResponse
 // ---------------------------------------------------------------------------
 
 export const CfpSubmissionRequest = z.object({
+  /** Which of the event's submission forms this answers. Omitted means the
+   * primary form, which keeps every pre-existing client valid. */
+  formId: z.string().nullable().default(null),
   speaker: z.object({
     name: z.string().min(2).max(120),
     email: z.email().max(254),

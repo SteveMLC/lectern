@@ -30,6 +30,8 @@ import {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  CreateCfpFormRequest,
+  ReorderFormFieldsRequest,
   FeedbackDraftRequest,
   FeedbackDraftResponse,
   ScheduleNoticeDraftRequest,
@@ -159,7 +161,16 @@ export const apiClient = {
 
   createEvent: (body: CreateEventRequest) => request(EventBundle, "/api/events", { method: "POST", body: JSON.stringify(body) }, { auth: true }),
 
-  eventBundle: (slug: string) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}`),
+  eventBundle: (slug: string, formId?: string) =>
+    request(EventBundle, `/api/events/${encodeURIComponent(slug)}${formId ? `?form=${encodeURIComponent(formId)}` : ""}`),
+
+  createCfpForm: (slug: string, body: CreateCfpFormRequest) =>
+    request(
+      EventBundle,
+      `/api/events/${encodeURIComponent(slug)}/cfp/forms`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
 
   updateEventSettings: (slug: string, body: UpdateEventSettingsRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}`, { method: "PATCH", body: JSON.stringify(body) }, { auth: true }),
 
@@ -168,6 +179,10 @@ export const apiClient = {
   createRoom: (slug: string, body: CreateRoomRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/rooms`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
 
   createFormField: (slug: string, body: CreateFormFieldRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields`, { method: "POST", body: JSON.stringify(body) }, { auth: true }),
+
+  reorderFormFields: (slug: string, body: ReorderFormFieldsRequest) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields/order`, { method: "PUT", body: JSON.stringify(body) }, { auth: true }),
+
+  deleteFormField: (slug: string, fieldId: string) => request(EventBundle, `/api/events/${encodeURIComponent(slug)}/cfp/fields/${encodeURIComponent(fieldId)}`, { method: "DELETE" }, { auth: true }),
 
   publicSchedule: (slug: string) =>
     request(PublicScheduleResponse, `/api/public/events/${encodeURIComponent(slug)}/schedule`),
@@ -318,12 +333,12 @@ export const apiClient = {
       body: JSON.stringify({ email }),
     }),
 
-  saveCfpDraft: (slug: string, token: string | null, body: CfpDraftRequest) =>
+  saveCfpDraft: (slug: string, token: string | null, body: CfpDraftRequest, formId?: string) =>
     request(
       CfpDraftResponse,
-      token
+      `${token
         ? `/api/events/${encodeURIComponent(slug)}/drafts/${encodeURIComponent(token)}`
-        : `/api/events/${encodeURIComponent(slug)}/drafts`,
+        : `/api/events/${encodeURIComponent(slug)}/drafts`}${formId ? `?form=${encodeURIComponent(formId)}` : ""}`,
       { method: token ? "PUT" : "POST", body: JSON.stringify(body) },
     ),
 

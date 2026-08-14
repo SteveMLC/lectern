@@ -129,6 +129,9 @@ export const Event = z.object({
   timezone: z.string(),
   venue: z.string().nullable(),
   websiteUrl: z.string().nullable(),
+  /** Event-wide proposal cap per person, drafts included — the fallback
+   * when a form sets no limit of its own. */
+  submissionMax: z.number().int().min(1).nullable().optional(),
   /** Organizer-controlled publication receipt for the public agenda. */
   agendaPublishedAt: isoDateTime.nullable(),
   createdAt: isoDateTime,
@@ -171,9 +174,26 @@ export const Form = z.object({
   closesAt: isoDateTime.nullable(),
   maxSpeakersPerSubmission: z.number().int().min(1),
   allowDrafts: z.boolean(),
+  /** How many proposals one submitter may hold on this form, drafts
+   * included. Null means the form sets no limit of its own. */
+  submissionLimit: z.number().int().min(1).nullable().optional(),
+  /** Admins emailed when a submission arrives on this form. */
+  notifyEmails: z.array(z.email()).optional(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
+
+/** A cap on the combined length of several fields — a printed programme
+ * block, where the page is the constraint rather than any one field. */
+export const FormLengthRule = z.object({
+  id: z.string(),
+  formId: z.string(),
+  label: z.string(),
+  fieldKeys: z.array(z.string()).min(2),
+  maxChars: z.number().int().min(1),
+  sortOrder: z.number().int(),
+});
+export type FormLengthRule = z.infer<typeof FormLengthRule>;
 export type Form = z.infer<typeof Form>;
 
 export const FormField = z.object({

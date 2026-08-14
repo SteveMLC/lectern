@@ -193,6 +193,37 @@ INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigne
 ('round_final', 'sam@horizonsummit.example', 'sub_rag_dead',     '2026-08-02T09:05:00Z'),
 ('round_final', 'sam@horizonsummit.example', 'sub_design_evals', '2026-08-02T09:05:00Z');
 
+-- A second call running beside the main CFP, the way the organizer's own
+-- product shows three forms side by side. Its link is /e/horizon-2026/cfp/
+-- form_lightning; the main form keeps /cfp. One proposal has already come
+-- through it so the Reviews list shows a mixed-form programme.
+INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+                   opens_at, closes_at, max_speakers_per_submission, allow_drafts,
+                   submission_limit, created_at, updated_at) VALUES
+('form_lightning', 'evt_horizon2026', 'cfp', 'Lightning talks — late call',
+ 'Ten minutes, one idea. The main call is for full sessions; this one is for the sharp, small thing you cannot stop talking about.',
+ 'Got it — lightning decisions land within a week.', 1,
+ NULL, '2026-09-05T07:00:00Z', 1, 1, 1, '2026-08-01T09:00:00Z', '2026-08-01T09:00:00Z');
+
+INSERT INTO form_fields (id, form_id, key, label, field_type, required, sort_order, help_text, options_json) VALUES
+('fld_light_demo', 'form_lightning', 'live_demo', 'Will you show a live demo?', 'select', 1, 0,
+ 'Lightning slots have no time for recovery; tell us your plan.', '["Yes, live","Recorded backup","Slides only"]');
+
+INSERT INTO speakers (id, event_id, name, email, company, title, bio, location, socials_json, workflow_status, logistics_notes, created_at, updated_at) VALUES
+('spk_theo', 'evt_horizon2026', 'Theo Brandt', 'theo@latencylab.example', 'Latency Lab', 'Performance Engineer',
+ 'Theo measures things other people guess about.', 'Berlin, DE', '{}', 'invited', NULL,
+ '2026-08-08T10:00:00Z', '2026-08-08T10:00:00Z');
+
+INSERT INTO submissions (id, reference_code, event_id, form_id, track_id, title, abstract, format, status, answers_json, submitted_at, created_at, updated_at) VALUES
+('sub_cold_starts', NULL, 'evt_horizon2026', 'form_lightning', 'trk_ai',
+ 'Cold starts are a choice',
+ 'Seven minutes of flame graphs: where the first 400ms of your serverless function actually goes, and the three defaults that put it there.',
+ 'lightning', 'submitted', '{"live_demo":"Yes, live"}',
+ '2026-08-09T14:30:00Z', '2026-08-09T14:30:00Z', '2026-08-09T14:30:00Z');
+
+INSERT INTO submission_speakers (submission_id, speaker_id, role, sort_order) VALUES
+('sub_cold_starts', 'spk_theo', 'primary', 0);
+
 -- Reference codes for the seeded submissions. The insert path assigns these
 -- for real submissions; the seed writes rows directly, so it backfills them
 -- the same way the migration did. Without this a judge sees codes only on

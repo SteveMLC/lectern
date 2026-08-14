@@ -76,22 +76,30 @@ Everything is walkable right now:
    reply already in; open /speaker/spk_dana to answer it as a speaker, then
    read every response back on the organizer page. Same form engine as the
    CFP, pointed at the portal.
-5. /admin/agenda: drag it onto another room or use exact controls; room and
+5. /admin/submission-forms: run several calls side by side, the way a real
+   programme does. "Lightning talks (late call)" ships open beside the main
+   CFP at /e/horizon-2026/cfp/form_lightning with its own questions, close
+   date, and a one-proposal-per-person cap that counts drafts; the main call
+   keeps /cfp untouched. Each form's questions reorder with accessible
+   Move up/down controls (and drag), core questions are Locked, and combined
+   character caps ("printed programme block") are enforced by the API, not
+   just the form. Reviews names which call each proposal came through.
+6. /admin/agenda: drag it onto another room or use exact controls; room and
    speaker double-bookings are flagged live (two conflicts ship pre-staged).
    Add a room inline, or "Auto-place" the unscheduled pool into conflict-free
    open slots. Then "Notify speakers": Claude drafts the schedule notice
    telling every speaker on the session their confirmed day, time, and room —
    slot facts are required verbatim and guaranteed into the body. Dragging
    never fires an email; the organizer decides when the schedule speaks.
-6. /admin -> add a direct sponsor session — no submission behind it, by design.
-7. The speaker portal shows the speaker's OWN proposals with live status and
+7. /admin -> add a direct sponsor session — no submission behind it, by design.
+8. The speaker portal shows the speaker's OWN proposals with live status and
    decision, editable until the CFP closes or a decision lands; plus derived
    onboarding tasks and real file upload/versions (R2). Co-speakers can be
    added at submission time.
-8. /admin/communications: previewed reminder, simulated send with receipt,
+9. /admin/communications: previewed reminder, simulated send with receipt,
    downloadable .ics carrying the session — and a full outbox listing every
    recorded message with status and timestamps.
-9. /embed-preview: mobile-first schedule, sessions, speaker gallery — and an
+10. /embed-preview: mobile-first schedule, sessions, speaker gallery — and an
    anonymous personal itinerary (star sessions into "My schedule", no
    account required) on the public event page.
 

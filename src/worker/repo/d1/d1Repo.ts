@@ -39,6 +39,7 @@ import type {
 } from "../../../shared/contracts";
 import { CfpDraftRequest } from "../../../shared/contracts";
 import type {
+  CreateCfpFormInput,
   CreateDirectSessionInput,
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
@@ -66,6 +67,8 @@ import type {
   CreatePortalFormInput,
   CreateRoomInput,
   CreateFormFieldInput,
+  ReorderFormFieldsInput,
+  DeleteFormFieldInput,
   SaveCfpDraftInput,
   CreateOrganizerSpeakerInput,
   UpdateOrganizerSpeakerInput,
@@ -73,9 +76,13 @@ import type {
   CreateSpeakerTaskInput,
   BulkTaskReminderInput,
   CreateAssetCommentInput,
+  NotifySubmissionAdminsInput,
+  NotifySubmissionAdminsResult,
+  QueueDraftCloseRemindersResult,
 } from "../types";
 import { randomId } from "../../../shared/ids";
 import { buildDirectSession, buildSessionFromSubmission } from "../../../shared/domain/acceptance";
+import { shouldRemindDraft } from "../../../shared/domain/draftReminders";
 import { canApplyDecision, reviewerIdentity, statusForDecision } from "../../../shared/domain/decisions";
 import { findScheduleConflicts } from "../../../shared/domain/schedule";
 import { summarizeReviewScores } from "../../../shared/domain/reviews";
@@ -96,6 +103,7 @@ interface EventRow {
   timezone: string;
   venue: string | null;
   website_url: string | null;
+  submission_max: number | null;
   agenda_published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -130,6 +138,8 @@ interface FormRow {
   closes_at: string | null;
   max_speakers_per_submission: number;
   allow_drafts: number;
+  submission_limit: number | null;
+  notify_emails: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -350,6 +360,24 @@ function parseJson<T>(text: string | null, fallback: T): T {
   }
 }
 
+/**
+ * forms.notify_emails holds a JSON array of admin addresses — the customer's
+ * "What admins should be notified when a new submission is received?" chips.
+ * Anything that is not a usable address is dropped and nobody hears about it:
+ * an unset, empty, or malformed list simply notifies no one.
+ */
+function parseNotifyEmails(raw: string | null): string[] {
+  const parsed = parseJson<unknown>(raw, null);
+  if (!Array.isArray(parsed)) return [];
+  const addresses = new Set<string>();
+  for (const entry of parsed) {
+    if (typeof entry !== "string") continue;
+    const email = entry.trim().toLowerCase();
+    if (email.includes("@")) addresses.add(email);
+  }
+  return [...addresses];
+}
+
 function mapEvent(r: EventRow): Event {
   return {
     id: r.id,
@@ -362,6 +390,7 @@ function mapEvent(r: EventRow): Event {
     timezone: r.timezone,
     venue: r.venue,
     websiteUrl: r.website_url,
+    submissionMax: r.submission_max ?? null,
     agendaPublishedAt: r.agenda_published_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -414,6 +443,8 @@ function mapForm(r: FormRow): Form {
     closesAt: r.closes_at,
     maxSpeakersPerSubmission: r.max_speakers_per_submission,
     allowDrafts: r.allow_drafts === 1,
+    submissionLimit: r.submission_limit ?? null,
+    notifyEmails: parseJson<string[]>(r.notify_emails, []),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -784,12 +815,15 @@ export class D1Repo implements LecternRepo {
   async updateEventSettings(input: UpdateEventSettingsInput): Promise<EventBundle> {
     await this.db.batch([
       this.db.prepare(
-        "UPDATE forms SET is_open = ?, opens_at = ?, closes_at = ?, updated_at = ? WHERE event_id = ? AND kind = 'cfp'",
-      ).bind(input.cfpIsOpen ? 1 : 0, input.cfpOpensAt, input.cfpClosesAt, input.now, input.eventId),
+        // Scoped to one form: with several calls running, the settings panel
+        // edits the primary (or named) form, never every form at once.
+        `UPDATE forms SET is_open = ?1, opens_at = ?2, closes_at = ?3, updated_at = ?4
+         WHERE id = COALESCE(?6, (SELECT id FROM forms WHERE event_id = ?5 AND kind = 'cfp' ORDER BY created_at, id LIMIT 1))`,
+      ).bind(input.cfpIsOpen ? 1 : 0, input.cfpOpensAt, input.cfpClosesAt, input.now, input.eventId, input.formId ?? null),
       this.db.prepare("UPDATE events SET updated_at = ? WHERE id = ?").bind(input.now, input.eventId),
     ]);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
-    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId ?? undefined) : null;
     if (!bundle) throw new Error("event_not_found");
     return bundle;
   }
@@ -840,6 +874,36 @@ export class D1Repo implements LecternRepo {
     return bundle;
   }
 
+  async reorderFormFields(input: ReorderFormFieldsInput): Promise<EventBundle> {
+    // One statement per field, positions 0..n-1, so the stored order is exactly
+    // the list the organizer sent — no gaps left by earlier deletes.
+    const statements = input.fieldIds.map((fieldId, position) =>
+      this.db.prepare("UPDATE form_fields SET sort_order = ? WHERE id = ? AND form_id = ?")
+        .bind(position, fieldId, input.formId));
+    statements.push(this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId));
+    await this.db.batch(statements);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async deleteFormField(input: DeleteFormFieldInput): Promise<EventBundle> {
+    // Rules are keyed by field key, so a rule naming the deleted field as
+    // either end would otherwise outlive it and hide a field forever.
+    await this.db.batch([
+      this.db.prepare("DELETE FROM form_fields WHERE id = ? AND form_id = ?").bind(input.fieldId, input.formId),
+      this.db.prepare(
+        "DELETE FROM conditional_rules WHERE form_id = ? AND (source_field_key = ? OR target_field_key = ?)",
+      ).bind(input.formId, input.fieldKey, input.fieldKey),
+      this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId),
+    ]);
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
   async listEvents(): Promise<EventSummary[]> {
     const { results } = await this.db
       .prepare(
@@ -857,37 +921,79 @@ export class D1Repo implements LecternRepo {
     }));
   }
 
-  async getEventBySlug(slug: string): Promise<EventBundle | null> {
+  async getEventBySlug(slug: string, cfpFormId?: string): Promise<EventBundle | null> {
     const event = await this.db
       .prepare("SELECT * FROM events WHERE slug = ?")
       .bind(slug)
       .first<EventRow>();
     if (!event) return null;
 
-    const [tracksRes, roomsRes, formRes] = await this.db.batch([
+    const [tracksRes, roomsRes, summariesRes, formRes] = await this.db.batch([
       this.db.prepare("SELECT * FROM tracks WHERE event_id = ? ORDER BY sort_order").bind(event.id),
       this.db.prepare("SELECT * FROM rooms WHERE event_id = ? ORDER BY sort_order").bind(event.id),
+      this.db.prepare(
+        `SELECT f.id, f.title, f.is_open, f.opens_at, f.closes_at,
+                (SELECT COUNT(*) FROM submissions s WHERE s.form_id = f.id) AS submission_count,
+                (SELECT COUNT(*) FROM cfp_drafts d WHERE d.form_id = f.id) AS draft_count
+         FROM forms f
+         WHERE f.event_id = ?1 AND f.kind = 'cfp'
+         ORDER BY f.created_at, f.id`,
+      ).bind(event.id),
       this.db
-        .prepare("SELECT * FROM forms WHERE event_id = ? AND kind = 'cfp' ORDER BY created_at LIMIT 1")
-        .bind(event.id),
+        // The primary form is the oldest, kept stable so /cfp never moves;
+        // a caller may target any other form on the event by id.
+        .prepare(
+          cfpFormId
+            ? "SELECT * FROM forms WHERE event_id = ?1 AND kind = 'cfp' AND id = ?2"
+            : "SELECT * FROM forms WHERE event_id = ?1 AND kind = 'cfp' ORDER BY created_at, id LIMIT 1",
+        )
+        .bind(...(cfpFormId ? [event.id, cfpFormId] : [event.id])),
     ]);
 
     const tracks = (tracksRes?.results ?? []) as unknown as TrackRow[];
     const rooms = (roomsRes?.results ?? []) as unknown as RoomRow[];
+    const summaryRows = (summariesRes?.results ?? []) as unknown as {
+      id: string; title: string; is_open: number; opens_at: string | null;
+      closes_at: string | null; submission_count: number; draft_count: number;
+    }[];
+    const cfpForms = summaryRows.map((row, index) => ({
+      id: row.id,
+      title: row.title,
+      isOpen: row.is_open === 1,
+      opensAt: row.opens_at,
+      closesAt: row.closes_at,
+      submissionCount: row.submission_count,
+      draftCount: row.draft_count,
+      isPrimary: index === 0,
+    }));
     const formRow = ((formRes?.results ?? []) as unknown as FormRow[])[0];
 
     let cfp: EventBundle["cfp"] = null;
     if (formRow) {
-      const [fieldsRes, rulesRes] = await this.db.batch([
+      const [fieldsRes, rulesRes, lengthRes] = await this.db.batch([
         this.db
           .prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY sort_order")
           .bind(formRow.id),
         this.db.prepare("SELECT * FROM conditional_rules WHERE form_id = ?").bind(formRow.id),
+        this.db
+          .prepare("SELECT * FROM form_length_rules WHERE form_id = ? ORDER BY sort_order")
+          .bind(formRow.id),
       ]);
       cfp = {
         form: mapForm(formRow),
         fields: ((fieldsRes?.results ?? []) as unknown as FormFieldRow[]).map(mapFormField),
         rules: ((rulesRes?.results ?? []) as unknown as ConditionalRuleRow[]).map(mapRule),
+        lengthRules: ((lengthRes?.results ?? []) as unknown as {
+          id: string; form_id: string; label: string;
+          field_keys_json: string; max_chars: number; sort_order: number;
+        }[]).map((row) => ({
+          id: row.id,
+          formId: row.form_id,
+          label: row.label,
+          fieldKeys: parseJson<string[]>(row.field_keys_json, []),
+          maxChars: row.max_chars,
+          sortOrder: row.sort_order,
+        })),
       };
     }
 
@@ -896,6 +1002,7 @@ export class D1Repo implements LecternRepo {
       tracks: tracks.map(mapTrack),
       rooms: rooms.map(mapRoom),
       cfp,
+      cfpForms,
     };
   }
 
@@ -1416,6 +1523,40 @@ export class D1Repo implements LecternRepo {
         reviewsBySubmission.get(row.id) ?? [],
       ),
     );
+  }
+
+  async createCfpForm(input: CreateCfpFormInput): Promise<EventBundle> {
+    await this.db.prepare(
+      `INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+                          opens_at, closes_at, max_speakers_per_submission, allow_drafts,
+                          submission_limit, created_at, updated_at)
+       VALUES (?1, ?2, 'cfp', ?3, ?4, ?5, ?6, ?7, ?8, 3, ?9, ?10, ?11, ?11)`,
+    ).bind(
+      input.formId, input.eventId, input.title, input.welcomeText, input.thankYouText,
+      input.isOpen ? 1 : 0, input.opensAt, input.closesAt, input.allowDrafts ? 1 : 0,
+      input.submissionLimit, input.now,
+    ).run();
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async countSubmitterProposals(eventId: string, email: string, formId?: string): Promise<number> {
+    const row = await this.db.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM submissions s
+            JOIN submission_speakers ss ON ss.submission_id = s.id
+            JOIN speakers sp ON sp.id = ss.speaker_id
+          WHERE s.event_id = ?1 AND lower(sp.email) = ?2
+            AND (?3 IS NULL OR s.form_id = ?3)
+            AND s.status NOT IN ('withdrawn')) AS sent,
+         (SELECT COUNT(*) FROM cfp_drafts d
+          WHERE d.event_id = ?1
+            AND (?3 IS NULL OR d.form_id = ?3)
+            AND lower(json_extract(d.payload_json, '$.speaker.email')) = ?2) AS drafts`,
+    ).bind(eventId, email.toLowerCase(), formId ?? null).first<{ sent: number; drafts: number }>();
+    return (row?.sent ?? 0) + (row?.drafts ?? 0);
   }
 
   async getSubmissionById(id: string): Promise<SubmissionListItem | null> {
@@ -2672,6 +2813,97 @@ export class D1Repo implements LecternRepo {
       taskIds.push(row.task_id);
     }
     return { queued: taskIds.length, taskIds };
+  }
+
+  /**
+   * The other half of "Set a close date to enable draft reminder emails": a
+   * saved draft is worthless once the call closes, so anyone still holding one
+   * hears about it while there is still time to submit. SQL only narrows the
+   * field; shouldRemindDraft decides, and cfp_drafts.reminded_at is what makes
+   * a six-hourly sweep send exactly one reminder per draft.
+   */
+  async queueDraftCloseReminders(now: string, closesBefore: string): Promise<QueueDraftCloseRemindersResult> {
+    const rows = await this.db.prepare(
+      `SELECT d.token, d.event_id, d.payload_json, d.reminded_at,
+              f.closes_at, e.name AS event_name, e.slug AS event_slug
+       FROM cfp_drafts d
+       JOIN forms f ON f.id = d.form_id
+       JOIN events e ON e.id = d.event_id
+       WHERE d.reminded_at IS NULL AND f.closes_at IS NOT NULL
+         AND f.closes_at > ?1 AND f.closes_at <= ?2
+       ORDER BY f.closes_at, d.token`,
+    ).bind(now, closesBefore).all<{
+      token: string; event_id: string; payload_json: string; reminded_at: string | null;
+      closes_at: string; event_name: string; event_slug: string;
+    }>();
+    const candidates = rows.results ?? [];
+    if (candidates.length === 0) return { queued: 0, tokens: [] };
+
+    const tokens: string[] = [];
+    for (const row of candidates) {
+      const parsed = CfpDraftRequest.safeParse(parseJson<unknown>(row.payload_json, null));
+      if (!parsed.success) continue;
+      const email = parsed.data.speaker?.email?.trim() ?? null;
+      if (!shouldRemindDraft({ email, closesAt: row.closes_at, remindedAt: row.reminded_at }, now)) continue;
+      if (!email) continue; // Already refused above; this keeps the type honest.
+
+      const suffix = `${row.token}_${row.closes_at}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const closeDate = new Date(row.closes_at).toLocaleDateString("en-US", {
+        dateStyle: "long",
+        timeZone: "UTC",
+      });
+      // The same return link the draft API hands the browser, so a proposer
+      // lands back on their own saved answers.
+      const resumeUrl = `/e/${encodeURIComponent(row.event_slug)}/cfp?draft=${encodeURIComponent(row.token)}`;
+      await this.simulateCommunication({
+        messageId: `msg_draft_close_${suffix}`,
+        attemptId: `del_draft_close_${suffix}`,
+        eventId: row.event_id,
+        // A draft holder is nobody's speaker yet — there is no record to point at.
+        speakerId: null,
+        toEmail: email,
+        subject: `Your draft for ${row.event_name} is not submitted yet`,
+        bodyMd: `Hi ${parsed.data.speaker?.name?.trim() || "there"},\n\n“${parsed.data.title}” is still a draft for ${row.event_name}, and drafts are never reviewed. The call for speakers closes on ${closeDate}.\n\nFinish and submit it here: ${resumeUrl}`,
+        now,
+      });
+      await this.db.prepare(
+        "UPDATE cfp_drafts SET reminded_at = ?1 WHERE token = ?2 AND reminded_at IS NULL",
+      ).bind(now, row.token).run();
+      tokens.push(row.token);
+    }
+    return { queued: tokens.length, tokens };
+  }
+
+  /**
+   * "What admins should be notified when a new submission is received?" — one
+   * receipted message per configured address. Deterministic ids keyed on the
+   * submission, because the caller cannot know how many admins a form has.
+   */
+  async notifySubmissionAdmins(input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult> {
+    const row = await this.db.prepare(
+      `SELECT f.notify_emails, e.name AS event_name
+       FROM forms f JOIN events e ON e.id = f.event_id
+       WHERE f.id = ?1 AND f.event_id = ?2`,
+    ).bind(input.formId, input.eventId).first<{ notify_emails: string | null; event_name: string }>();
+    if (!row) return { notified: 0, recipientEmails: [] };
+
+    const recipients = parseNotifyEmails(row.notify_emails);
+    if (recipients.length === 0) return { notified: 0, recipientEmails: [] };
+
+    const code = input.referenceCode ?? input.submissionId;
+    for (const [index, toEmail] of recipients.entries()) {
+      await this.simulateCommunication({
+        messageId: `msg_admin_new_${input.submissionId}_${index}`,
+        attemptId: `del_admin_new_${input.submissionId}_${index}`,
+        eventId: input.eventId,
+        speakerId: null,
+        toEmail,
+        subject: `New submission ${code}: ${input.title}`,
+        bodyMd: `${input.submitterName} submitted “${input.title}” to ${row.event_name}.\n\nReference: ${code}\nSubmitter: ${input.submitterName} <${input.submitterEmail}>\n\nOpen the submissions queue to review it.`,
+        now: input.now,
+      });
+    }
+    return { notified: recipients.length, recipientEmails: recipients };
   }
 
   async listMessages(eventId: string): Promise<OutboxMessage[]> {

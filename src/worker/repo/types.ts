@@ -30,6 +30,7 @@ import type {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  ReorderFormFieldsRequest,
   CreateOrganizerSpeakerRequest,
   UpdateOrganizerSpeakerRequest,
   CfpDraftRequest,
@@ -55,7 +56,10 @@ export interface LecternRepo {
   health(): Promise<boolean>;
 
   listEvents(): Promise<EventSummary[]>;
-  getEventBySlug(slug: string): Promise<EventBundle | null>;
+  getEventBySlug(slug: string, cfpFormId?: string): Promise<EventBundle | null>;
+  /** A second (or later) call for the same event — "Lightning Talks" beside
+   * the main CFP. The primary form is never displaced. */
+  createCfpForm(input: CreateCfpFormInput): Promise<EventBundle>;
   getPublicSchedule(slug: string): Promise<PublicScheduleResponse | null>;
   getPublicSessions(slug: string): Promise<PublicSessionsResponse | null>;
   getPublicSpeakers(slug: string): Promise<PublicSpeakersResponse | null>;
@@ -79,6 +83,9 @@ export interface LecternRepo {
   saveCfpDraft(input: SaveCfpDraftInput): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest }>;
   getCfpDraft(eventId: string, token: string): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest } | null>;
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
+  /** Proposals plus saved drafts already held by this email on an event —
+   * the organizer's capacity control counts both. */
+  countSubmitterProposals(eventId: string, email: string, formId?: string): Promise<number>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
   getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;
@@ -108,12 +115,36 @@ export interface LecternRepo {
   createTrack(input: CreateTrackInput): Promise<EventBundle>;
   createRoom(input: CreateRoomInput): Promise<EventBundle>;
   createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
+  reorderFormFields(input: ReorderFormFieldsInput): Promise<EventBundle>;
+  deleteFormField(input: DeleteFormFieldInput): Promise<EventBundle>;
   simulateCommunication(input: SimulateCommunicationInput): Promise<EmailDeliveryResult>;
   queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
+  /**
+   * Reminds anyone holding an unsubmitted draft that their form's close date is
+   * near. `closesBefore` is the far edge of the reminder window; the per-draft
+   * decision belongs to shouldRemindDraft in shared/domain/draftReminders.
+   */
+  queueDraftCloseReminders(now: string, closesBefore: string): Promise<QueueDraftCloseRemindersResult>;
+  /** Copies the form's configured admin addresses on a new submission. */
+  notifySubmissionAdmins(input: NotifySubmissionAdminsInput): Promise<NotifySubmissionAdminsResult>;
   listMessages(eventId: string): Promise<OutboxMessage[]>;
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
   createAssetComment(input: CreateAssetCommentInput): Promise<AssetComment>;
+}
+
+export interface CreateCfpFormInput {
+  formId: string;
+  eventId: string;
+  title: string;
+  welcomeText: string | null;
+  thankYouText: string | null;
+  isOpen: boolean;
+  opensAt: string | null;
+  closesAt: string | null;
+  allowDrafts: boolean;
+  submissionLimit: number | null;
+  now: string;
 }
 
 export interface UpdateSessionInput {
@@ -289,6 +320,29 @@ export interface QueueDueTaskRemindersResult {
   taskIds: string[];
 }
 
+export interface QueueDraftCloseRemindersResult {
+  queued: number;
+  /** Draft tokens reminded on this pass. */
+  tokens: string[];
+}
+
+export interface NotifySubmissionAdminsInput {
+  eventId: string;
+  formId: string;
+  submissionId: string;
+  /** The human-readable code organizers say out loud, e.g. "SUB-12". */
+  referenceCode: string | null;
+  title: string;
+  submitterName: string;
+  submitterEmail: string;
+  now: string;
+}
+
+export interface NotifySubmissionAdminsResult {
+  notified: number;
+  recipientEmails: string[];
+}
+
 export interface SaveEvaluationRoundInput {
   eventId: string;
   planId: string;
@@ -328,6 +382,8 @@ export interface CreateEventInput extends CreateEventRequest {
 
 export interface UpdateEventSettingsInput extends UpdateEventSettingsRequest {
   eventId: string;
+  /** Which form the settings apply to; null means the primary form. */
+  formId?: string | null;
   now: string;
 }
 
@@ -346,6 +402,23 @@ export interface CreateFormFieldInput extends CreateFormFieldRequest {
   ruleId: string | null;
   eventId: string;
   formId: string;
+}
+
+/** Field ids in their new order; the route has already checked they are the
+ *  form's own fields, so the repo writes positions 0..n-1 straight through. */
+export interface ReorderFormFieldsInput extends ReorderFormFieldsRequest {
+  eventId: string;
+  formId: string;
+  now: string;
+}
+
+export interface DeleteFormFieldInput {
+  eventId: string;
+  formId: string;
+  fieldId: string;
+  /** The deleted field's key, so conditional rules that name it go with it. */
+  fieldKey: string;
+  now: string;
 }
 
 export interface SpeakerPortalBundle {

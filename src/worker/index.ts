@@ -7,6 +7,7 @@ import { demoApi } from "./routes/demo";
 import { demoPage } from "./routes/demoPage";
 import { llms } from "./routes/llms";
 import { createRepo } from "./repo/factory";
+import { DRAFT_REMINDER_WINDOW_MS } from "../shared/domain/draftReminders";
 
 /**
  * One Worker serves everything:
@@ -40,10 +41,17 @@ export default {
   scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const now = new Date();
     const dueBefore = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const closesBefore = new Date(now.getTime() + DRAFT_REMINDER_WINDOW_MS);
+    const repo = createRepo(env);
     ctx.waitUntil(
-      createRepo(env)
+      repo
         .queueDueTaskReminders(now.toISOString(), dueBefore.toISOString())
         .then((result) => console.log(`automatic task reminders queued: ${result.queued}`)),
+    );
+    ctx.waitUntil(
+      repo
+        .queueDraftCloseReminders(now.toISOString(), closesBefore.toISOString())
+        .then((result) => console.log(`draft close reminders queued: ${result.queued}`)),
     );
   },
 };
