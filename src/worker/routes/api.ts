@@ -64,6 +64,10 @@ import {
   SubmitterAccountLoginRequest,
   type SubmitterAccountDashboardResponse,
   type SubmitterAccountSessionResponse,
+  CreatePortalFormRequest,
+  type CreatePortalFormResponse,
+  type PortalFormsResponse,
+  SubmitTaskFormRequest,
   UpdateSpeakerProposalRequest,
   SaveEvaluationRoundRequest,
   SaveRoundReviewerRequest,
@@ -739,6 +743,84 @@ api.post("/events/:slug/speakers/import", organizerAuth, async (c) => {
   return c.json(body);
 });
 
+// Portal forms — the brief's "Portal > Forms". The organizer builds a form and
+// assigns it as a task; the speaker answers it inside their portal.
+api.post("/events/:slug/portal-forms", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreatePortalFormRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Portal form is invalid.", parsed.error.issues);
+  const keys = new Set(parsed.data.fields.map((field) => field.key));
+  if (keys.size !== parsed.data.fields.length) {
+    return errorResponse(422, "validation_error", "Field keys must be unique within a form.");
+  }
+  try {
+    const result = await repo.createPortalForm({
+      formId: randomId("form"),
+      definitionId: randomId("taskdef"),
+      eventId: bundle.event.id,
+      title: parsed.data.title,
+      instructions: parsed.data.instructions,
+      dueAt: parsed.data.dueAt,
+      fields: parsed.data.fields.map((field) => ({ ...field, id: randomId("fld") })),
+      speakerIds: parsed.data.speakerIds,
+      speakerTaskIds: parsed.data.speakerIds.map(() => randomId("stask")),
+      now: new Date().toISOString(),
+    });
+    const body: CreatePortalFormResponse = result;
+    return c.json(body, 201);
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "speaker_not_found") {
+      return errorResponse(422, "speaker_not_found", "One or more selected speakers do not belong to this event.");
+    }
+    throw caught;
+  }
+});
+
+api.get("/events/:slug/portal-forms", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  const body: PortalFormsResponse = { forms: await repo.listPortalForms(bundle.event.id) };
+  return c.json(body);
+});
+
+api.put("/speaker-portal/:token/tasks/:taskId/form", async (c) => {
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(c.req.param("token").trim());
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+  const entry = portal.tasks.find((item) => item.task.id === c.req.param("taskId"));
+  if (!entry || !entry.definition.formId) {
+    return errorResponse(404, "task_not_found", "No form task with that id for this speaker.");
+  }
+  let raw: unknown;
+  try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = SubmitTaskFormRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Answers are invalid.", parsed.error.issues);
+  const fields = entry.form?.fields ?? [];
+  const missing = fields.filter((field) => {
+    if (!field.required) return false;
+    const value = parsed.data.answers[field.key];
+    return value === undefined || value === null || value === "" || value === false;
+  });
+  if (missing.length > 0) {
+    return errorResponse(422, "validation_error",
+      `Missing required field(s): ${missing.map((field) => field.label).join(", ")}.`,
+      missing.map((field) => ({ path: ["answers", field.key], message: "Required" })));
+  }
+  const body: SpeakerPortalResponse = await repo.submitTaskForm({
+    responseId: randomId("resp"),
+    speakerId: portal.speaker.id,
+    taskDefinitionId: entry.definition.id,
+    answers: parsed.data.answers,
+    now: new Date().toISOString(),
+  });
+  return c.json(body);
+});
+
 api.post("/events/:slug/speaker-tasks", organizerAuth, async (c) => {
   const repo = createRepo(c.env);
   const bundle = await repo.getEventBySlug(c.req.param("slug"));
@@ -1050,6 +1132,9 @@ api.get("/docs", (c) =>
       { method: "GET", path: "/events/:slug/submissions", auth: "organizer", purpose: "Organizer submissions list." },
       { method: "POST", path: "/events/:slug/speakers", auth: "organizer", purpose: "Add a speaker directly to the event roster." },
       { method: "POST", path: "/events/:slug/speakers/import", auth: "organizer", purpose: "Validate and upsert an event-scoped speaker CSV." },
+      { method: "POST", path: "/events/:slug/portal-forms", auth: "organizer", purpose: "Build a portal form and assign it to speakers as a form-fill task." },
+      { method: "GET", path: "/events/:slug/portal-forms", auth: "organizer", purpose: "List portal forms with assignment counts and every speaker response." },
+      { method: "PUT", path: "/speaker-portal/:token/tasks/:taskId/form", auth: "speaker link", purpose: "Submit a portal form from the speaker's own task list." },
       { method: "POST", path: "/events/:slug/speaker-tasks", auth: "organizer", purpose: "Create and assign a custom speaker deliverable." },
       { method: "POST", path: "/events/:slug/speaker-tasks/remind", auth: "organizer", purpose: "Record bulk reminders for selected incomplete speakers." },
       { method: "POST", path: "/events/:slug/communications/bulk", auth: "organizer", purpose: "Record a free-form bulk communication and per-recipient receipts." },
@@ -1089,6 +1174,7 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/communications/simulate", auth: "organizer", purpose: "Deliver to a roster speaker or any direct recipient through the configured transport; every send persists to the outbox with its receipt." },
       { method: "POST", path: "/events/:slug/assets/download.zip", auth: "organizer", purpose: "Download selected current speaker files as a valid ZIP." },
       { method: "POST", path: "/events/:slug/assets/:assetId/comments", auth: "organizer", purpose: "Add a durable organizer comment to a speaker file." },
+      { method: "GET", path: "/speaker-portal/:token/sessions/:sessionId/invite.ics", auth: "speaker link", purpose: "The speaker own session invitation (METHOD:REQUEST) with Accept/Decline in Gmail, Outlook, and iCal." },
       { method: "GET", path: "/public/events/:slug/sessions/:sessionId/calendar.ics", auth: "public", purpose: "Download a scheduled session as an RFC 5545 calendar file." },
       { method: "GET", path: "/public/events/:slug/itinerary.ics?sessions=id,id", auth: "public", purpose: "Export an attendee's selected scheduled sessions as one RFC 5545 calendar." },
       { method: "POST", path: "/speakers/:speakerId/assets", auth: "organizer", purpose: "Upload a speaker asset to R2." },
@@ -2191,7 +2277,7 @@ api.get("/events/:slug/communications/preview", organizerAuth, async (c) => {
     pendingTaskCount: pending.length,
     icsUrl:
       kind.data === "session_update" && session?.startsAt && session.endsAt
-        ? `/api/public/events/${encodeURIComponent(bundle.event.slug)}/sessions/${encodeURIComponent(session.id)}/calendar.ics`
+        ? `/api/speaker-portal/${encodeURIComponent(portal.speaker.id)}/sessions/${encodeURIComponent(session.id)}/invite.ics`
         : null,
   };
   return c.json(body);
@@ -2250,6 +2336,45 @@ api.post("/events/:slug/communications/simulate", organizerAuth, async (c) => {
     error: delivery.error,
   };
   return c.json(body, 201);
+});
+
+/**
+ * A speaker's personal invitation to their own session: METHOD:REQUEST with
+ * this speaker as ATTENDEE, so Gmail, Outlook, and iCal show Accept/Decline
+ * rather than a downloaded copy. The public .ics stays a publication.
+ */
+api.get("/speaker-portal/:token/sessions/:sessionId/invite.ics", async (c) => {
+  const repo = createRepo(c.env);
+  const portal = await repo.getSpeakerPortalByToken(c.req.param("token").trim());
+  if (!portal) return errorResponse(404, "portal_not_found", "No speaker portal for that link.");
+  const session = portal.sessions.find((item) => item.id === c.req.param("sessionId"));
+  if (!session) return errorResponse(404, "session_not_found", "That session is not on this speaker's schedule.");
+  if (!session.startsAt || !session.endsAt) {
+    return errorResponse(409, "session_not_scheduled", "That session has no confirmed time yet.");
+  }
+  const bundle = await repo.getEventBySlug(portal.event.slug);
+  const organizerEmail = c.env.RESEND_FROM_EMAIL?.match(/<([^>]+)>/)?.[1]
+    ?? c.env.RESEND_FROM_EMAIL
+    ?? "no-reply@lectern.invalid";
+  const ics = buildCalendarInvite({
+    uid: `${session.id}.${portal.speaker.id}@lectern`,
+    eventName: portal.event.name,
+    sessionTitle: session.title,
+    description: session.abstract,
+    location: session.roomName ?? bundle?.event.venue ?? "Room TBA",
+    startsAt: session.startsAt,
+    endsAt: session.endsAt,
+    generatedAt: new Date().toISOString(),
+    organizer: { name: portal.event.name, email: organizerEmail },
+    attendee: { name: portal.speaker.name, email: portal.speaker.email },
+  });
+  return new Response(ics, {
+    headers: {
+      "content-type": "text/calendar; charset=utf-8; method=REQUEST",
+      "content-disposition": 'attachment; filename="session-invitation.ics"',
+      "cache-control": "private, no-store",
+    },
+  });
 });
 
 api.get("/public/events/:slug/sessions/:sessionId/calendar.ics", async (c) => {

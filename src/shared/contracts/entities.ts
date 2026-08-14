@@ -263,6 +263,9 @@ export type AssetComment = z.infer<typeof AssetComment>;
 
 export const Submission = z.object({
   id: z.string(),
+  /** Short per-event code (SUB-7) — what an organizer says out loud.
+   * Optional: rows created before the code existed simply have none. */
+  referenceCode: z.string().nullable().optional(),
   eventId: z.string(),
   formId: z.string().nullable(),
   trackId: z.string().nullable(),
@@ -412,6 +415,8 @@ export const TaskDefinition = z.object({
   appliesTo: TaskAppliesTo,
   dueAt: isoDateTime.nullable(),
   sortOrder: z.number().int(),
+  /** Set when the task is answered by filling out a portal form. */
+  formId: z.string().nullable().default(null),
 });
 export type TaskDefinition = z.infer<typeof TaskDefinition>;
 

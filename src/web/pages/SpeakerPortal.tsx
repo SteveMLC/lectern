@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router";
 import { useState } from "react";
 import type {
   AssetKind,
+  FormField,
   ResourcePage,
   Speaker,
   SpeakerPortalResponse,
@@ -210,7 +211,7 @@ export function SpeakerPortal() {
             <h2 className="text-base font-semibold text-zinc-900">Speaker tasks</h2>
             <div className="mt-4 space-y-3">
               {taskError ? <ErrorBanner message={taskError} /> : null}
-              {data.tasks.map(({ task, definition }) => (
+              {data.tasks.map(({ task, definition, form, formResponse }) => (
                 <div key={task.id} className="rounded-lg border border-zinc-200 bg-white p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -228,20 +229,31 @@ export function SpeakerPortal() {
                       Due {formatDateTime(definition.dueAt, data.event.timezone)}
                     </p>
                   ) : null}
-                  <Button
-                    type="button"
-                    aria-label={`${task.status === "complete" ? "Mark pending" : "Mark complete"}: ${definition.label}`}
-                    variant={task.status === "complete" ? "ghost" : "secondary"}
-                    className="mt-3 w-full px-3 py-1.5 text-xs"
-                    disabled={taskBusyId !== null}
-                    onClick={() => void toggleTask(task)}
-                  >
-                    {taskBusyId === task.id
-                      ? "Saving…"
-                      : task.status === "complete"
-                        ? "Mark pending"
-                        : "Mark complete"}
-                  </Button>
+                  {form ? (
+                    <TaskForm
+                      token={token}
+                      taskId={task.id}
+                      taskLabel={definition.label}
+                      fields={form.fields}
+                      savedAnswers={formResponse}
+                      onSubmitted={setPortalOverride}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      aria-label={`${task.status === "complete" ? "Mark pending" : "Mark complete"}: ${definition.label}`}
+                      variant={task.status === "complete" ? "ghost" : "secondary"}
+                      className="mt-3 w-full px-3 py-1.5 text-xs"
+                      disabled={taskBusyId !== null}
+                      onClick={() => void toggleTask(task)}
+                    >
+                      {taskBusyId === task.id
+                        ? "Saving…"
+                        : task.status === "complete"
+                          ? "Mark pending"
+                          : "Mark complete"}
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -554,6 +566,137 @@ function ProfileEditor({
         </form>
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * A task the organizer built as a portal form — hotel stay, reimbursement,
+ * dietary needs. The speaker answers it here rather than marking it complete by
+ * hand; submitting stores the answers and completes the task in one call.
+ */
+function TaskForm({
+  token,
+  taskId,
+  taskLabel,
+  fields,
+  savedAnswers,
+  onSubmitted,
+}: {
+  token: string;
+  taskId: string;
+  taskLabel: string;
+  fields: FormField[];
+  savedAnswers: Record<string, unknown> | null;
+  onSubmitted: (portal: SpeakerPortalResponse) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<string, unknown>>(() => ({ ...(savedAnswers ?? {}) }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  function setAnswer(key: string, value: unknown) {
+    setAnswers((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      onSubmitted(await apiClient.submitTaskForm(token, taskId, { answers }));
+      setSaved(true);
+    } catch (caught) {
+      setError(caught instanceof ApiRequestError ? caught.message : "The form could not be submitted.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+      {savedAnswers ? (
+        <p className="text-xs font-medium text-emerald-700">
+          Submitted — your answers are saved. Change anything below and submit again.
+        </p>
+      ) : null}
+      {fields.map((field) => {
+        const inputId = `task-${taskId}-${field.key}`;
+        const value = answers[field.key];
+        const text = value === null || value === undefined ? "" : String(value);
+        return (
+          <Field
+            key={field.id}
+            label={field.label}
+            htmlFor={inputId}
+            required={field.required}
+            help={field.helpText}
+          >
+            {field.fieldType === "textarea" ? (
+              <Textarea
+                id={inputId}
+                value={text}
+                required={field.required}
+                onChange={(event) => setAnswer(field.key, event.target.value)}
+              />
+            ) : field.fieldType === "select" ? (
+              <Select
+                id={inputId}
+                value={text}
+                required={field.required}
+                onChange={(event) => setAnswer(field.key, event.target.value)}
+              >
+                <option value="">Select…</option>
+                {(field.options ?? []).map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </Select>
+            ) : field.fieldType === "checkbox" ? (
+              <input
+                id={inputId}
+                type="checkbox"
+                className="size-4 rounded border-zinc-300"
+                checked={value === true}
+                required={field.required}
+                onChange={(event) => setAnswer(field.key, event.target.checked)}
+              />
+            ) : field.fieldType === "number" ? (
+              <Input
+                id={inputId}
+                type="number"
+                value={text}
+                required={field.required}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  const parsed = Number(raw);
+                  setAnswer(field.key, raw === "" || !Number.isFinite(parsed) ? raw : parsed);
+                }}
+              />
+            ) : (
+              <Input
+                id={inputId}
+                type={field.fieldType === "email" ? "email" : field.fieldType === "url" ? "url" : "text"}
+                value={text}
+                required={field.required}
+                onChange={(event) => setAnswer(field.key, event.target.value)}
+              />
+            )}
+          </Field>
+        );
+      })}
+      {error ? <ErrorBanner message={error} /> : null}
+      {saved && !error ? (
+        <p role="status" className="text-xs font-medium text-emerald-700">Form submitted.</p>
+      ) : null}
+      <Button
+        type="submit"
+        aria-label={`${savedAnswers ? "Update" : "Submit"} form: ${taskLabel}`}
+        className="w-full px-3 py-1.5 text-xs"
+        disabled={saving}
+      >
+        {saving ? "Submitting…" : savedAnswers ? "Update form" : "Submit form"}
+      </Button>
+    </form>
   );
 }
 

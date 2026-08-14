@@ -254,6 +254,63 @@ export const ImportOrganizerSpeakersResponse = z.object({
 });
 export type ImportOrganizerSpeakersResponse = z.infer<typeof ImportOrganizerSpeakersResponse>;
 
+/**
+ * Portal forms — the brief's "Portal > Forms": a form the organizer builds and
+ * assigns as a speaker task (hotel stay, flight reimbursement, finalize bio).
+ * Deliberately the same form engine as the CFP, pointed at a different reader.
+ */
+export const PortalFormFieldInput = z.object({
+  label: z.string().trim().min(2).max(120),
+  key: z.string().trim().regex(/^[a-z][a-z0-9_]*$/).max(80),
+  fieldType: z.enum(["text", "textarea", "select", "checkbox", "email", "url", "number"]),
+  required: z.boolean().default(false),
+  helpText: z.string().trim().max(300).nullable().default(null),
+  options: z.array(z.string().trim().min(1).max(120)).max(30).nullable().default(null),
+});
+export type PortalFormFieldInput = z.infer<typeof PortalFormFieldInput>;
+
+export const CreatePortalFormRequest = z.object({
+  title: z.string().trim().min(2).max(160),
+  instructions: z.string().trim().max(2000).nullable().default(null),
+  dueAt: z.iso.datetime({ offset: true }).nullable(),
+  speakerIds: z.array(z.string()).min(1).max(250),
+  fields: z.array(PortalFormFieldInput).min(1).max(30),
+});
+export type CreatePortalFormRequest = z.infer<typeof CreatePortalFormRequest>;
+
+export const PortalFormSummary = z.object({
+  formId: z.string(),
+  definitionId: z.string(),
+  title: z.string(),
+  instructions: z.string().nullable(),
+  dueAt: z.iso.datetime({ offset: true }).nullable(),
+  fields: z.array(FormField),
+  assigned: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  responses: z.array(z.object({
+    speakerId: z.string(),
+    speakerName: z.string(),
+    answers: z.record(z.string(), z.unknown()),
+    submittedAt: z.iso.datetime({ offset: true }),
+  })),
+});
+export type PortalFormSummary = z.infer<typeof PortalFormSummary>;
+
+export const PortalFormsResponse = z.object({ forms: z.array(PortalFormSummary) });
+export type PortalFormsResponse = z.infer<typeof PortalFormsResponse>;
+
+export const CreatePortalFormResponse = z.object({
+  formId: z.string(),
+  definitionId: z.string(),
+  assigned: z.number().int().nonnegative(),
+});
+export type CreatePortalFormResponse = z.infer<typeof CreatePortalFormResponse>;
+
+export const SubmitTaskFormRequest = z.object({
+  answers: z.record(z.string(), z.unknown()),
+});
+export type SubmitTaskFormRequest = z.infer<typeof SubmitTaskFormRequest>;
+
 export const CreateSpeakerTaskRequest = z.object({
   taskType: z.enum(["general", "file_upload"]).default("file_upload"),
   title: z.string().trim().min(2).max(160),
@@ -644,7 +701,13 @@ export const SpeakerPortalResponse = z.object({
   sessions: z.array(SpeakerPortalSession),
   proposals: z.array(SpeakerPortalProposal),
   cfp: EventBundle.shape.cfp,
-  tasks: z.array(z.object({ task: SpeakerTask, definition: TaskDefinition })),
+  tasks: z.array(z.object({
+    task: SpeakerTask,
+    definition: TaskDefinition,
+    /** Present on form tasks: the form to fill out, and this speaker's answers. */
+    form: z.object({ fields: z.array(FormField) }).nullable().default(null),
+    formResponse: z.record(z.string(), z.unknown()).nullable().default(null),
+  })),
   assets: z.array(SpeakerAsset),
   assetComments: z.array(AssetComment),
   resources: z.array(ResourcePage),

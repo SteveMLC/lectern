@@ -12,6 +12,7 @@ import { Speakers } from "./pages/admin/Speakers";
 import { Submissions } from "./pages/admin/Submissions";
 import { Settings } from "./pages/admin/Settings";
 import { Files } from "./pages/admin/Files";
+import { PortalForms } from "./pages/admin/PortalForms";
 import { ApiDocs } from "./pages/ApiDocs";
 import { CfpPage } from "./pages/CfpPage";
 import { EmbedPreview } from "./pages/EmbedPreview";
@@ -45,6 +46,7 @@ export function App() {
         <Route path="agenda" element={<Agenda />} />
         <Route path="speakers" element={<Speakers />} />
         <Route path="files" element={<Files />} />
+        <Route path="portal-forms" element={<PortalForms />} />
         <Route path="communications" element={<Communications />} />
         <Route path="embeds" element={<Embeds />} />
         <Route
