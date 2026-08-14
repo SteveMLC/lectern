@@ -57,22 +57,24 @@ describe("parseOptionList", () => {
 
 describe("portal form contract", () => {
   it("rejects a choice list that cannot offer a choice", () => {
-    const parsed = CreatePortalFormRequest.safeParse({
-      title: "Travel form",
-      instructions: null,
-      dueAt: null,
-      speakerIds: ["spk_dana"],
-      fields: [{
-        label: "Hotel",
-        key: "hotel",
-        fieldType: "select",
-        required: false,
-        helpText: null,
-        options: [],
-      }],
-    });
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) expect(parsed.error.issues[0]?.path).toEqual(["fields", 0, "options"]);
+    for (const options of [[], null, undefined]) {
+      const parsed = CreatePortalFormRequest.safeParse({
+        title: "Travel form",
+        instructions: null,
+        dueAt: null,
+        speakerIds: ["spk_dana"],
+        fields: [{
+          label: "Hotel",
+          key: "hotel",
+          fieldType: "select",
+          required: false,
+          helpText: null,
+          options,
+        }],
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) expect(parsed.error.issues[0]?.path).toEqual(["fields", 0, "options"]);
+    }
   });
 });
 
