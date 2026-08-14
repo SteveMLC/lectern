@@ -35,7 +35,8 @@ const probe = JSON.parse(run("ffprobe", [
 const visual = probe.streams?.find((stream) => stream.codec_type === "video");
 const sound = probe.streams?.find((stream) => stream.codec_type === "audio");
 const duration = Number(probe.format?.duration);
-if (visual?.codec_name !== "h264" || visual.width < 1280 || visual.height < 720 || sound?.codec_name !== "aac" || duration > 180) {
+if (visual?.codec_name !== "h264" || visual.width < 1280 || visual.height < 720 || sound?.codec_name !== "aac" || duration > 240) {
+  // 240s: the tour grew when multi-form, portal forms, and the agenda views shipped.
   throw new Error(`Narrated walkthrough failed media validation: ${JSON.stringify({ visual, sound, duration })}`);
 }
 
