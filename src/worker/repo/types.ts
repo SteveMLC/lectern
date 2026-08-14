@@ -30,6 +30,7 @@ import type {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  ReorderFormFieldsRequest,
   CreateOrganizerSpeakerRequest,
   UpdateOrganizerSpeakerRequest,
   CfpDraftRequest,
@@ -114,6 +115,8 @@ export interface LecternRepo {
   createTrack(input: CreateTrackInput): Promise<EventBundle>;
   createRoom(input: CreateRoomInput): Promise<EventBundle>;
   createFormField(input: CreateFormFieldInput): Promise<EventBundle>;
+  reorderFormFields(input: ReorderFormFieldsInput): Promise<EventBundle>;
+  deleteFormField(input: DeleteFormFieldInput): Promise<EventBundle>;
   simulateCommunication(input: SimulateCommunicationInput): Promise<EmailDeliveryResult>;
   queueDueTaskReminders(now: string, dueBefore: string): Promise<QueueDueTaskRemindersResult>;
   /**
@@ -399,6 +402,23 @@ export interface CreateFormFieldInput extends CreateFormFieldRequest {
   ruleId: string | null;
   eventId: string;
   formId: string;
+}
+
+/** Field ids in their new order; the route has already checked they are the
+ *  form's own fields, so the repo writes positions 0..n-1 straight through. */
+export interface ReorderFormFieldsInput extends ReorderFormFieldsRequest {
+  eventId: string;
+  formId: string;
+  now: string;
+}
+
+export interface DeleteFormFieldInput {
+  eventId: string;
+  formId: string;
+  fieldId: string;
+  /** The deleted field's key, so conditional rules that name it go with it. */
+  fieldKey: string;
+  now: string;
 }
 
 export interface SpeakerPortalBundle {

@@ -23,6 +23,7 @@ import {
   CreateRoomRequest,
   CreateFormFieldRequest,
   CreateCfpFormRequest,
+  ReorderFormFieldsRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
   type PublishAgendaResponse,
@@ -84,6 +85,7 @@ import { personalizeSpeakerMessage } from "../../shared/domain/communications";
 import { draftReviewScores } from "../integrations/reviewScoring";
 import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
+import { fieldOrderError, isLockedCfpField } from "../../shared/domain/formFields";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
 import { canSubmitAgain, combinedLengthMessage, exceededLengthRules, submissionLimitMessage } from "../../shared/domain/formLimits";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
@@ -1121,6 +1123,8 @@ api.get("/docs", (c) =>
       { method: "POST", path: "/events/:slug/rooms", auth: "organizer", purpose: "Create an event-scoped agenda room." },
       { method: "POST", path: "/events/:slug/cfp/forms", auth: "organizer", purpose: "Open another call for the same event - every form runs its own fields, windows, and limits." },
       { method: "POST", path: "/events/:slug/cfp/fields", auth: "organizer", purpose: "Add a validated CFP field and optional conditional rule." },
+      { method: "PUT", path: "/events/:slug/cfp/fields/order", auth: "organizer", purpose: "Reorder the custom CFP questions; takes the whole ordered list of field ids." },
+      { method: "DELETE", path: "/events/:slug/cfp/fields/:fieldId", auth: "organizer", purpose: "Remove a custom CFP question and any rule naming it. Locked core questions are refused." },
       { method: "GET", path: "/events/:slug", auth: "public", purpose: "Event bundle for event and CFP pages." },
       { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
       { method: "GET", path: "/public/events/:slug/sessions", auth: "public", purpose: "Iframe-safe sessions JSON." },
@@ -1702,10 +1706,35 @@ api.post("/events/:slug/cfp/fields", organizerAuth, async (c) => {
   const parsed = CreateFormFieldRequest.safeParse(raw);
   if (!parsed.success) return errorResponse(422, "validation_error", "Form field is invalid.", parsed.error.issues);
   if (bundle.cfp.fields.some((field) => field.key === parsed.data.key)) return errorResponse(409, "field_key_taken", "That field key already exists.");
+  // A custom field keyed like a core one would shadow a locked question the
+  // programme reads off the submission, so form_fields never holds a locked key.
+  if (isLockedCfpField(parsed.data.key)) return errorResponse(409, "field_key_locked", "That key belongs to a locked question every proposal already asks.");
   if (parsed.data.fieldType === "select" && (!parsed.data.options || parsed.data.options.length < 2)) return errorResponse(422, "validation_error", "Select fields need at least two options.");
   const source = parsed.data.condition?.sourceFieldKey;
   if (source && source !== "format" && !bundle.cfp.fields.some((field) => field.key === source)) return errorResponse(422, "validation_error", "Conditional source field is unknown.");
   return c.json(await repo.createFormField({ id: randomId("field"), ruleId: parsed.data.condition ? randomId("rule") : null, eventId: bundle.event.id, formId: bundle.cfp.form.id, ...parsed.data }), 201);
+});
+
+api.put("/events/:slug/cfp/fields/order", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = ReorderFormFieldsRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Field order is invalid.", parsed.error.issues);
+  const problem = fieldOrderError(bundle.cfp.fields.map((field) => field.id), parsed.data.fieldIds);
+  if (problem) return errorResponse(422, "validation_error", problem);
+  return c.json(await repo.reorderFormFields({ eventId: bundle.event.id, formId: bundle.cfp.form.id, fieldIds: parsed.data.fieldIds, now: new Date().toISOString() }));
+});
+
+api.delete("/events/:slug/cfp/fields/:fieldId", organizerAuth, async (c) => {
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
+  const field = bundle.cfp.fields.find((candidate) => candidate.id === c.req.param("fieldId"));
+  if (!field) return errorResponse(404, "field_not_found", "No custom question with that id on this form.");
+  if (isLockedCfpField(field.key)) return errorResponse(409, "field_locked", "That question is locked because the programme depends on it.");
+  return c.json(await repo.deleteFormField({ eventId: bundle.event.id, formId: bundle.cfp.form.id, fieldId: field.id, fieldKey: field.key, now: new Date().toISOString() }));
 });
 
 api.get("/events/:slug/evaluations.csv", organizerAuth, async (c) => {

@@ -148,6 +148,16 @@ export const CreateCfpFormRequest = z.object({
   submissionLimit: z.number().int().min(1).nullable().default(null),
 });
 export type CreateCfpFormRequest = z.infer<typeof CreateCfpFormRequest>;
+/**
+ * The whole ordered list of custom CFP field ids, not a delta: the organizer
+ * sends the order they can see, and the worker refuses anything that is not a
+ * permutation of the stored fields. Locked core questions carry no id and never
+ * appear here.
+ */
+export const ReorderFormFieldsRequest = z.object({
+  fieldIds: z.array(z.string().trim().min(1).max(80)).max(60),
+});
+export type ReorderFormFieldsRequest = z.infer<typeof ReorderFormFieldsRequest>;
 
 /** Everything the public event + CFP pages need in one round trip. */
 export const EventBundle = z.object({
