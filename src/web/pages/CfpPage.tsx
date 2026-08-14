@@ -90,10 +90,10 @@ export function blankFormAfterSubmission(account: { name: string; email: string 
 }
 
 export function CfpPage() {
-  const { slug = "" } = useParams();
+  const { slug = "", formId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const draftToken = searchParams.get("draft");
-  const { data, error, loading } = useAsync(() => apiClient.eventBundle(slug), [slug]);
+  const { data, error, loading } = useAsync(() => apiClient.eventBundle(slug, formId), [slug, formId]);
 
   const [form, setForm] = useState<FormState>(INITIAL);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -169,6 +169,9 @@ export function CfpPage() {
   }
 
   const { event, tracks, cfp } = data;
+  const otherOpenCalls = (data.cfpForms ?? []).filter(
+    (candidate) => candidate.id !== cfp?.form.id && candidate.isOpen,
+  );
   if (!cfp || !isCfpOpen(cfp.form, new Date().toISOString())) {
     return (
       <div className="mx-auto max-w-xl px-6 py-20 text-center">
@@ -256,9 +259,12 @@ export function CfpPage() {
         trackId: form.trackId,
         format: form.format,
         answers: form.answers,
-      });
+      }, formId);
       setDraftSavedAt(response.savedAt);
-      setResumeUrl(new URL(response.resumeUrl, window.location.origin).toString());
+      const resumePath = formId
+        ? `/e/${encodeURIComponent(slug)}/cfp/${encodeURIComponent(formId)}?draft=${encodeURIComponent(response.token)}`
+        : response.resumeUrl;
+      setResumeUrl(new URL(resumePath, window.location.origin).toString());
       if (!draftToken) setSearchParams({ draft: response.token }, { replace: true });
     } catch (caught) {
       setServerError(caught instanceof ApiRequestError ? caught.message : "Draft could not be saved.");
@@ -272,6 +278,7 @@ export function CfpPage() {
     setServerError(null);
 
     const payload: CfpSubmissionRequest = {
+      formId: cfp?.form.id ?? null,
       speaker: {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -336,6 +343,23 @@ export function CfpPage() {
         </h1>
         {cfp.form.welcomeText ? (
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">{cfp.form.welcomeText}</p>
+        ) : null}
+        {otherOpenCalls.length > 0 ? (
+          <p className="mt-3 text-xs text-zinc-500">
+            This event is also running{" "}
+            {otherOpenCalls.map((call, index) => (
+              <span key={call.id}>
+                {index > 0 ? " and " : ""}
+                <Link
+                  className="font-medium text-accent hover:underline"
+                  to={call.isPrimary ? `/e/${event.slug}/cfp` : `/e/${event.slug}/cfp/${call.id}`}
+                >
+                  {call.title}
+                </Link>
+              </span>
+            ))}
+            .
+          </p>
         ) : null}
 
         <SubmitterAccountCard

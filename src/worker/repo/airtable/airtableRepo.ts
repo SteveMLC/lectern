@@ -223,6 +223,10 @@ export class AirtableRepo implements LecternRepo {
     }));
   }
 
+  async createCfpForm(): Promise<EventBundle> {
+    throw new AirtableNotWiredError("createCfpForm");
+  }
+
   async getEventBySlug(slug: string): Promise<EventBundle | null> {
     const records = await this.readTable(AIRTABLE_TABLES.events);
     const record = records.find((item) => item.fields.Slug === slug);
@@ -247,6 +251,7 @@ export class AirtableRepo implements LecternRepo {
       tracks: [],
       rooms: [],
       cfp: null,
+      cfpForms: [],
     };
   }
 

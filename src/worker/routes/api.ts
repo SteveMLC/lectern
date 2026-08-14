@@ -22,6 +22,7 @@ import {
   CreateTrackRequest,
   CreateRoomRequest,
   CreateFormFieldRequest,
+  CreateCfpFormRequest,
   type HealthResponse,
   type OrganizerAgendaResponse,
   type PublishAgendaResponse,
@@ -177,7 +178,7 @@ api.on(["GET", "HEAD"], "/public/walkthrough.mp4", async (c) => {
 async function saveCfpDraft(c: Context<{ Bindings: Env }>, token: string) {
   const slug = c.req.param("slug") ?? "";
   const repo = createRepo(c.env);
-  const bundle = await repo.getEventBySlug(slug);
+  const bundle = await repo.getEventBySlug(slug, c.req.query("form") || undefined);
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp || !bundle.cfp.form.allowDrafts) {
     return errorResponse(409, "drafts_unavailable", "This call for speakers does not accept drafts.");
@@ -637,7 +638,7 @@ api.get("/events", async (c) => {
 });
 
 api.get("/events/:slug", async (c) => {
-  const bundle = await createRepo(c.env).getEventBySlug(c.req.param("slug"));
+  const bundle = await createRepo(c.env).getEventBySlug(c.req.param("slug"), c.req.query("form") || undefined);
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   return c.json(bundle);
 });
@@ -1118,6 +1119,7 @@ api.get("/docs", (c) =>
       { method: "PATCH", path: "/events/:slug", auth: "organizer", purpose: "Update CFP open/close settings." },
       { method: "POST", path: "/events/:slug/tracks", auth: "organizer", purpose: "Create an event-scoped track." },
       { method: "POST", path: "/events/:slug/rooms", auth: "organizer", purpose: "Create an event-scoped agenda room." },
+      { method: "POST", path: "/events/:slug/cfp/forms", auth: "organizer", purpose: "Open another call for the same event - every form runs its own fields, windows, and limits." },
       { method: "POST", path: "/events/:slug/cfp/fields", auth: "organizer", purpose: "Add a validated CFP field and optional conditional rule." },
       { method: "GET", path: "/events/:slug", auth: "public", purpose: "Event bundle for event and CFP pages." },
       { method: "GET", path: "/public/events/:slug/schedule", auth: "public", purpose: "Iframe-safe schedule JSON." },
@@ -1234,17 +1236,6 @@ api.get("/events/:slug/drafts/:token", async (c) => {
 
 api.post("/events/:slug/submissions", async (c) => {
   const repo = createRepo(c.env);
-  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "");
-  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
-  if (!bundle.cfp) {
-    return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
-  }
-
-  const now = new Date().toISOString();
-  if (!isCfpOpen(bundle.cfp.form, now)) {
-    return errorResponse(409, "cfp_closed", "The call for speakers is closed.");
-  }
-
   let raw: unknown;
   try {
     raw = await c.req.json();
@@ -1255,6 +1246,23 @@ api.post("/events/:slug/submissions", async (c) => {
   const parsed = CfpSubmissionRequest.safeParse(raw);
   if (!parsed.success) {
     return errorResponse(422, "validation_error", "Submission is invalid.", parsed.error.issues);
+  }
+
+  // Parsed first so the body can name which of the event's calls it answers;
+  // omitted formId resolves to the primary form and every old client works.
+  const bundle = await repo.getEventBySlug(c.req.param("slug") ?? "", parsed.data.formId ?? undefined);
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  if (!bundle.cfp) {
+    return errorResponse(
+      parsed.data.formId ? 404 : 409,
+      parsed.data.formId ? "form_not_found" : "cfp_unavailable",
+      parsed.data.formId ? "No submission form with that id on this event." : "This event has no call for speakers.",
+    );
+  }
+
+  const now = new Date().toISOString();
+  if (!isCfpOpen(bundle.cfp.form, now)) {
+    return errorResponse(409, "cfp_closed", "The call for speakers is closed.");
   }
   const data = parsed.data;
   const submitterToken = c.req.header("x-lectern-submitter") ?? "";
@@ -1275,16 +1283,19 @@ api.post("/events/:slug/submissions", async (c) => {
   // Submission capacity and combined-length rules are enforced here as well as
   // in the form, because the form can be bypassed and these caps are the
   // organizer's, not a suggestion.
-  const submissionLimit = bundle.cfp.form.submissionLimit ?? null;
-  if (submissionLimit !== null) {
-    const used = await repo.countSubmitterProposals(bundle.event.id, data.speaker.email.trim().toLowerCase());
-    if (!canSubmitAgain({ limit: submissionLimit, used })) {
-      return errorResponse(
-        409,
-        "submission_limit_reached",
-        submissionLimitMessage({ limit: submissionLimit, used }) ?? "You have reached this call's proposal limit.",
-      );
-    }
+  // Their control is two-tier: a form-level limit scoped to this call, and an
+  // event-wide max that applies when the form sets none.
+  const email = data.speaker.email.trim().toLowerCase();
+  const formLimit = bundle.cfp.form.submissionLimit ?? null;
+  const capacity = formLimit !== null
+    ? { limit: formLimit, used: await repo.countSubmitterProposals(bundle.event.id, email, bundle.cfp.form.id) }
+    : { limit: bundle.event.submissionMax ?? null, used: await repo.countSubmitterProposals(bundle.event.id, email) };
+  if (!canSubmitAgain(capacity)) {
+    return errorResponse(
+      409,
+      "submission_limit_reached",
+      submissionLimitMessage(capacity) ?? "You have reached this call's proposal limit.",
+    );
   }
 
   const overLength = exceededLengthRules(
@@ -1652,8 +1663,25 @@ api.post("/events/:slug/rooms", organizerAuth, async (c) => {
   return c.json(await repo.createRoom({ id: randomId("room"), eventId: bundle.event.id, ...parsed.data }), 201);
 });
 
+api.post("/events/:slug/cfp/forms", organizerAuth, async (c) => {
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
+  let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
+  const parsed = CreateCfpFormRequest.safeParse(raw);
+  if (!parsed.success) return errorResponse(422, "validation_error", "Submission form is invalid.", parsed.error.issues);
+  const updated = await repo.createCfpForm({
+    formId: randomId("form"),
+    eventId: bundle.event.id,
+    ...parsed.data,
+    now: new Date().toISOString(),
+  });
+  return c.json(updated, 201);
+});
+
 api.post("/events/:slug/cfp/fields", organizerAuth, async (c) => {
-  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  const repo = createRepo(c.env);
+  const bundle = await repo.getEventBySlug(c.req.param("slug"), c.req.query("form") || undefined);
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
   let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }

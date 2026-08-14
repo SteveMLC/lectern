@@ -39,6 +39,7 @@ import type {
 } from "../../../shared/contracts";
 import { CfpDraftRequest } from "../../../shared/contracts";
 import type {
+  CreateCfpFormInput,
   CreateDirectSessionInput,
   CreateCfpSubmissionInput,
   CreateSpeakerAssetInput,
@@ -96,6 +97,7 @@ interface EventRow {
   timezone: string;
   venue: string | null;
   website_url: string | null;
+  submission_max: number | null;
   agenda_published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -364,6 +366,7 @@ function mapEvent(r: EventRow): Event {
     timezone: r.timezone,
     venue: r.venue,
     websiteUrl: r.website_url,
+    submissionMax: r.submission_max ?? null,
     agendaPublishedAt: r.agenda_published_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -788,8 +791,11 @@ export class D1Repo implements LecternRepo {
   async updateEventSettings(input: UpdateEventSettingsInput): Promise<EventBundle> {
     await this.db.batch([
       this.db.prepare(
-        "UPDATE forms SET is_open = ?, opens_at = ?, closes_at = ?, updated_at = ? WHERE event_id = ? AND kind = 'cfp'",
-      ).bind(input.cfpIsOpen ? 1 : 0, input.cfpOpensAt, input.cfpClosesAt, input.now, input.eventId),
+        // Scoped to one form: with several calls running, the settings panel
+        // edits the primary (or named) form, never every form at once.
+        `UPDATE forms SET is_open = ?1, opens_at = ?2, closes_at = ?3, updated_at = ?4
+         WHERE id = COALESCE(?6, (SELECT id FROM forms WHERE event_id = ?5 AND kind = 'cfp' ORDER BY created_at, id LIMIT 1))`,
+      ).bind(input.cfpIsOpen ? 1 : 0, input.cfpOpensAt, input.cfpClosesAt, input.now, input.eventId, input.formId ?? null),
       this.db.prepare("UPDATE events SET updated_at = ? WHERE id = ?").bind(input.now, input.eventId),
     ]);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
@@ -861,23 +867,51 @@ export class D1Repo implements LecternRepo {
     }));
   }
 
-  async getEventBySlug(slug: string): Promise<EventBundle | null> {
+  async getEventBySlug(slug: string, cfpFormId?: string): Promise<EventBundle | null> {
     const event = await this.db
       .prepare("SELECT * FROM events WHERE slug = ?")
       .bind(slug)
       .first<EventRow>();
     if (!event) return null;
 
-    const [tracksRes, roomsRes, formRes] = await this.db.batch([
+    const [tracksRes, roomsRes, summariesRes, formRes] = await this.db.batch([
       this.db.prepare("SELECT * FROM tracks WHERE event_id = ? ORDER BY sort_order").bind(event.id),
       this.db.prepare("SELECT * FROM rooms WHERE event_id = ? ORDER BY sort_order").bind(event.id),
+      this.db.prepare(
+        `SELECT f.id, f.title, f.is_open, f.opens_at, f.closes_at,
+                (SELECT COUNT(*) FROM submissions s WHERE s.form_id = f.id) AS submission_count,
+                (SELECT COUNT(*) FROM cfp_drafts d WHERE d.form_id = f.id) AS draft_count
+         FROM forms f
+         WHERE f.event_id = ?1 AND f.kind = 'cfp'
+         ORDER BY f.created_at, f.id`,
+      ).bind(event.id),
       this.db
-        .prepare("SELECT * FROM forms WHERE event_id = ? AND kind = 'cfp' ORDER BY created_at LIMIT 1")
-        .bind(event.id),
+        // The primary form is the oldest, kept stable so /cfp never moves;
+        // a caller may target any other form on the event by id.
+        .prepare(
+          cfpFormId
+            ? "SELECT * FROM forms WHERE event_id = ?1 AND kind = 'cfp' AND id = ?2"
+            : "SELECT * FROM forms WHERE event_id = ?1 AND kind = 'cfp' ORDER BY created_at, id LIMIT 1",
+        )
+        .bind(...(cfpFormId ? [event.id, cfpFormId] : [event.id])),
     ]);
 
     const tracks = (tracksRes?.results ?? []) as unknown as TrackRow[];
     const rooms = (roomsRes?.results ?? []) as unknown as RoomRow[];
+    const summaryRows = (summariesRes?.results ?? []) as unknown as {
+      id: string; title: string; is_open: number; opens_at: string | null;
+      closes_at: string | null; submission_count: number; draft_count: number;
+    }[];
+    const cfpForms = summaryRows.map((row, index) => ({
+      id: row.id,
+      title: row.title,
+      isOpen: row.is_open === 1,
+      opensAt: row.opens_at,
+      closesAt: row.closes_at,
+      submissionCount: row.submission_count,
+      draftCount: row.draft_count,
+      isPrimary: index === 0,
+    }));
     const formRow = ((formRes?.results ?? []) as unknown as FormRow[])[0];
 
     let cfp: EventBundle["cfp"] = null;
@@ -914,6 +948,7 @@ export class D1Repo implements LecternRepo {
       tracks: tracks.map(mapTrack),
       rooms: rooms.map(mapRoom),
       cfp,
+      cfpForms,
     };
   }
 
@@ -1436,18 +1471,37 @@ export class D1Repo implements LecternRepo {
     );
   }
 
-  async countSubmitterProposals(eventId: string, email: string): Promise<number> {
+  async createCfpForm(input: CreateCfpFormInput): Promise<EventBundle> {
+    await this.db.prepare(
+      `INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+                          opens_at, closes_at, max_speakers_per_submission, allow_drafts,
+                          submission_limit, created_at, updated_at)
+       VALUES (?1, ?2, 'cfp', ?3, ?4, ?5, ?6, ?7, ?8, 3, ?9, ?10, ?11, ?11)`,
+    ).bind(
+      input.formId, input.eventId, input.title, input.welcomeText, input.thankYouText,
+      input.isOpen ? 1 : 0, input.opensAt, input.closesAt, input.allowDrafts ? 1 : 0,
+      input.submissionLimit, input.now,
+    ).run();
+    const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
+    if (!bundle) throw new Error("event_not_found");
+    return bundle;
+  }
+
+  async countSubmitterProposals(eventId: string, email: string, formId?: string): Promise<number> {
     const row = await this.db.prepare(
       `SELECT
          (SELECT COUNT(*) FROM submissions s
             JOIN submission_speakers ss ON ss.submission_id = s.id
             JOIN speakers sp ON sp.id = ss.speaker_id
           WHERE s.event_id = ?1 AND lower(sp.email) = ?2
+            AND (?3 IS NULL OR s.form_id = ?3)
             AND s.status NOT IN ('withdrawn')) AS sent,
          (SELECT COUNT(*) FROM cfp_drafts d
           WHERE d.event_id = ?1
+            AND (?3 IS NULL OR d.form_id = ?3)
             AND lower(json_extract(d.payload_json, '$.speaker.email')) = ?2) AS drafts`,
-    ).bind(eventId, email.toLowerCase()).first<{ sent: number; drafts: number }>();
+    ).bind(eventId, email.toLowerCase(), formId ?? null).first<{ sent: number; drafts: number }>();
     return (row?.sent ?? 0) + (row?.drafts ?? 0);
   }
 

@@ -23,6 +23,7 @@ const NAV = [
   { to: "/admin/agenda", label: "Agenda", end: false },
   { to: "/admin/speakers", label: "Speakers", end: false },
   { to: "/admin/files", label: "Speaker files", end: false },
+  { to: "/admin/submission-forms", label: "Submission forms", end: false },
   { to: "/admin/portal-forms", label: "Portal forms", end: false },
   { to: "/admin/communications", label: "Communications", end: false },
   { to: "/admin/embeds", label: "Embeds", end: false },

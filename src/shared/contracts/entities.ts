@@ -129,6 +129,9 @@ export const Event = z.object({
   timezone: z.string(),
   venue: z.string().nullable(),
   websiteUrl: z.string().nullable(),
+  /** Event-wide proposal cap per person, drafts included — the fallback
+   * when a form sets no limit of its own. */
+  submissionMax: z.number().int().min(1).nullable().optional(),
   /** Organizer-controlled publication receipt for the public agenda. */
   agendaPublishedAt: isoDateTime.nullable(),
   createdAt: isoDateTime,

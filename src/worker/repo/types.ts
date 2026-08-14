@@ -55,7 +55,10 @@ export interface LecternRepo {
   health(): Promise<boolean>;
 
   listEvents(): Promise<EventSummary[]>;
-  getEventBySlug(slug: string): Promise<EventBundle | null>;
+  getEventBySlug(slug: string, cfpFormId?: string): Promise<EventBundle | null>;
+  /** A second (or later) call for the same event — "Lightning Talks" beside
+   * the main CFP. The primary form is never displaced. */
+  createCfpForm(input: CreateCfpFormInput): Promise<EventBundle>;
   getPublicSchedule(slug: string): Promise<PublicScheduleResponse | null>;
   getPublicSessions(slug: string): Promise<PublicSessionsResponse | null>;
   getPublicSpeakers(slug: string): Promise<PublicSpeakersResponse | null>;
@@ -81,7 +84,7 @@ export interface LecternRepo {
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
   /** Proposals plus saved drafts already held by this email on an event —
    * the organizer's capacity control counts both. */
-  countSubmitterProposals(eventId: string, email: string): Promise<number>;
+  countSubmitterProposals(eventId: string, email: string, formId?: string): Promise<number>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
   getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;
@@ -117,6 +120,20 @@ export interface LecternRepo {
   createSpeakerAsset(input: CreateSpeakerAssetInput): Promise<SpeakerAsset>;
   getSpeakerAssetById(id: string): Promise<SpeakerAsset | null>;
   createAssetComment(input: CreateAssetCommentInput): Promise<AssetComment>;
+}
+
+export interface CreateCfpFormInput {
+  formId: string;
+  eventId: string;
+  title: string;
+  welcomeText: string | null;
+  thankYouText: string | null;
+  isOpen: boolean;
+  opensAt: string | null;
+  closesAt: string | null;
+  allowDrafts: boolean;
+  submissionLimit: number | null;
+  now: string;
 }
 
 export interface UpdateSessionInput {
@@ -331,6 +348,8 @@ export interface CreateEventInput extends CreateEventRequest {
 
 export interface UpdateEventSettingsInput extends UpdateEventSettingsRequest {
   eventId: string;
+  /** Which form the settings apply to; null means the primary form. */
+  formId?: string | null;
   now: string;
 }
 
