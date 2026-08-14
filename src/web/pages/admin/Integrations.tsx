@@ -31,9 +31,9 @@ export function Integrations() {
         <Card className="border-indigo-200 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700">Non-negotiable path</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700">Optional integration</p>
               <h2 className="mt-1 text-base font-semibold text-zinc-900">Accelevents one-way handoff</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">The connection record, direction, and credential gate live here so organizers do not have to hunt for the required integration.</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Accelevents is not required for completion. Teams that use it can find the connection record, direction, and credential gate here.</p>
             </div>
             <Badge tone={accelevents?.status === "configured" ? "emerald" : accelevents?.status === "error" ? "rose" : "amber"}>
               {accelevents?.status === "configured" ? "Configured" : accelevents?.status === "error" ? "Needs attention" : "Credentials required"}

@@ -49,7 +49,7 @@ export function Dashboard() {
     { label: "Multi-round evaluation", detail: "Scorecards, reviewers, assignments, and optional AI assist", to: "/admin/evaluations" },
     { label: "Conflict-aware agenda", detail: "Room board, list/week views, filters, and publishing", to: "/admin/agenda" },
     { label: "Onboarding task dashboard", detail: `${openTasks} open task${openTasks === 1 ? "" : "s"} across ${speakersWithOpenTasks.length} speaker${speakersWithOpenTasks.length === 1 ? "" : "s"}`, to: "/admin/speakers" },
-    { label: "Accelevents handoff", detail: "One-way integration status and credential path", to: "/admin/integrations", setup: true },
+    { label: "Accelevents handoff", detail: "Optional one-way integration; not required for completion", to: "/admin/integrations", optional: true },
     { label: "Portal resources + wiki", detail: "Published speaker guides and sanitized HTML embeds", to: "/admin/resources" },
     { label: "Public gallery + itinerary", detail: "Mobile-friendly, searchable embed surfaces", to: "/admin/embeds" },
   ];
@@ -237,7 +237,7 @@ export function Dashboard() {
                 <Link key={path.label} to={path.to} className="group rounded-lg border border-zinc-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/40">
                   <div className="flex items-start justify-between gap-3">
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{index + 1}</span>
-                    <Badge tone={path.setup ? "amber" : "emerald"}>{path.setup ? "Setup" : "Wired"}</Badge>
+                    <Badge tone={path.optional ? "zinc" : "emerald"}>{path.optional ? "Optional" : "Wired"}</Badge>
                   </div>
                   <h3 className="mt-3 text-sm font-semibold text-zinc-900 group-hover:text-indigo-800">{path.label}</h3>
                   <p className="mt-1 text-xs leading-5 text-zinc-500">{path.detail}</p>
