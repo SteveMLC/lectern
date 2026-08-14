@@ -193,6 +193,36 @@ INSERT INTO review_assignments (round_id, reviewer_email, submission_id, assigne
 ('round_final', 'sam@horizonsummit.example', 'sub_rag_dead',     '2026-08-02T09:05:00Z'),
 ('round_final', 'sam@horizonsummit.example', 'sub_design_evals', '2026-08-02T09:05:00Z');
 
+-- A portal form out of the box, from the brief's own example: the speakers
+-- answer "Hotel and travel reservations" from inside their portal. Ada has
+-- already replied, so the organizer's responses view has something to read.
+INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+                   opens_at, closes_at, max_speakers_per_submission, allow_drafts, created_at, updated_at) VALUES
+('form_hotel', 'evt_horizon2026', 'portal', 'Hotel and travel reservations',
+ 'Tell us where you are staying so we can confirm your room block and airport pickup.',
+ NULL, 1, NULL, '2026-09-20T07:00:00Z', 1, 0, '2026-08-05T09:00:00Z', '2026-08-05T09:00:00Z');
+
+INSERT INTO form_fields (id, form_id, key, label, field_type, required, sort_order, help_text, options_json) VALUES
+('fld_hotel_needed', 'form_hotel', 'needs_hotel', 'Do you need a room in the block?', 'select', 1, 0, 'We hold rooms until September 20.', '["Yes","No, booking my own"]'),
+('fld_hotel_arrive', 'form_hotel', 'arrival_date', 'Arrival date', 'text', 1, 1, 'Format: YYYY-MM-DD', NULL),
+('fld_hotel_diet',   'form_hotel', 'dietary', 'Dietary requirements', 'textarea', 0, 2, 'Speaker dinner is on the Wednesday.', NULL);
+
+INSERT INTO task_definitions (id, event_id, key, label, description, applies_to, due_at, sort_order, form_id) VALUES
+('taskdef_hotel', 'evt_horizon2026', 'form_taskdef_hotel', 'Hotel and travel reservations',
+ 'Tell us where you are staying so we can confirm your room block and airport pickup.',
+ 'all_speakers', '2026-09-20T07:00:00Z', 60, 'form_hotel');
+
+INSERT INTO speaker_tasks (id, event_id, speaker_id, task_definition_id, status, completed_at, updated_at) VALUES
+('stask_hotel_ada',   'evt_horizon2026', 'spk_ada',   'taskdef_hotel', 'complete', '2026-08-06T16:20:00Z', '2026-08-06T16:20:00Z'),
+('stask_hotel_dana',  'evt_horizon2026', 'spk_dana',  'taskdef_hotel', 'pending',  NULL, '2026-08-05T09:00:00Z'),
+('stask_hotel_lin',   'evt_horizon2026', 'spk_lin',   'taskdef_hotel', 'pending',  NULL, '2026-08-05T09:00:00Z'),
+('stask_hotel_priya', 'evt_horizon2026', 'spk_priya', 'taskdef_hotel', 'pending',  NULL, '2026-08-05T09:00:00Z');
+
+INSERT INTO task_form_responses (id, task_definition_id, speaker_id, form_id, answers_json, submitted_at) VALUES
+('resp_hotel_ada', 'taskdef_hotel', 'spk_ada', 'form_hotel',
+ '{"needs_hotel":"Yes","arrival_date":"2026-10-13","dietary":"Vegetarian; no shellfish."}',
+ '2026-08-06T16:20:00Z');
+
 -- The Kill My SaaS judges, provisioned as real reviewers so each can walk
 -- their own scored queue: /review/rev_swyx etc. Multiple reviewers on the
 -- same submissions is the point — scorecards aggregate and notes stack.

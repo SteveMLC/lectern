@@ -25,6 +25,7 @@ export function toCsv(rows: readonly (readonly string[])[]): string {
 export function submissionsToCsv(submissions: readonly SubmissionListItem[]): string {
   const header = [
     "Title",
+    "Reference",
     "Status",
     "Track",
     "Format",
@@ -38,6 +39,7 @@ export function submissionsToCsv(submissions: readonly SubmissionListItem[]): st
   ];
   const rows = submissions.map((s) => [
     s.title,
+    s.referenceCode ?? "",
     s.status,
     s.trackName ?? "",
     s.format,

@@ -394,6 +394,18 @@ export class AirtableRepo implements LecternRepo {
     throw new AirtableNotWiredError("updateSpeakerTask");
   }
 
+  async createPortalForm(): Promise<{ formId: string; definitionId: string; assigned: number }> {
+    throw new AirtableNotWiredError("createPortalForm");
+  }
+
+  async listPortalForms(): Promise<never[]> {
+    throw new AirtableNotWiredError("listPortalForms");
+  }
+
+  async submitTaskForm(): Promise<SpeakerPortalBundle> {
+    throw new AirtableNotWiredError("submitTaskForm");
+  }
+
   async updateSpeakerProposal(_input: UpdateSpeakerProposalInput): Promise<SpeakerPortalBundle> {
     throw new AirtableNotWiredError("updateSpeakerProposal");
   }

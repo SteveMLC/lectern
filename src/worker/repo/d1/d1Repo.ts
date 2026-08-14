@@ -17,6 +17,7 @@ import type {
   PublicSessionsResponse,
   PublicSessionSpeaker,
   PublicSpeaker,
+  PortalFormSummary,
   PublicSpeakersResponse,
   ResourcePage,
   Room,
@@ -58,9 +59,11 @@ import type {
   SaveRoundReviewerInput,
   SaveAssignmentsInput,
   SubmitReviewerScorecardInput,
+  SubmitTaskFormInput,
   CreateEventInput,
   UpdateEventSettingsInput,
   CreateTrackInput,
+  CreatePortalFormInput,
   CreateRoomInput,
   CreateFormFieldInput,
   SaveCfpDraftInput,
@@ -171,6 +174,7 @@ interface SpeakerRow {
 
 interface SubmissionRow {
   id: string;
+  reference_code: string | null;
   event_id: string;
   form_id: string | null;
   track_id: string | null;
@@ -309,6 +313,7 @@ interface TaskDefinitionRow {
   applies_to: string;
   due_at: string | null;
   sort_order: number;
+  form_id?: string | null;
 }
 
 interface SpeakerTaskRow {
@@ -549,6 +554,7 @@ function mapTaskDefinition(r: TaskDefinitionRow): TaskDefinition {
     appliesTo: r.applies_to as TaskDefinition["appliesTo"],
     dueAt: r.due_at,
     sortOrder: r.sort_order,
+    formId: r.form_id ?? null,
   };
 }
 
@@ -601,6 +607,7 @@ function mapSubmissionListItem(
 ): SubmissionListItem {
   return {
     id: r.id,
+    referenceCode: r.reference_code,
     eventId: r.event_id,
     formId: r.form_id,
     trackId: r.track_id,
@@ -965,7 +972,7 @@ export class D1Repo implements LecternRepo {
       this.db.prepare(
         `SELECT st.id, st.event_id, st.speaker_id, st.task_definition_id, st.status,
           st.completed_at, st.updated_at, td.id AS definition_id, td.key, td.label, td.description,
-          td.applies_to, td.due_at, td.sort_order
+          td.applies_to, td.due_at, td.sort_order, td.form_id
          FROM speaker_tasks st JOIN task_definitions td ON td.id = st.task_definition_id
          WHERE st.event_id = ? ORDER BY td.due_at, td.sort_order`,
       ).bind(eventId),
@@ -980,7 +987,7 @@ export class D1Repo implements LecternRepo {
     const comments = ((commentsRes?.results ?? []) as unknown as AssetCommentRow[]).map(mapAssetComment);
     const taskRows = (tasksRes?.results ?? []) as unknown as Array<SpeakerTaskRow & {
       definition_id: string; key: string; label: string; description: string | null;
-      applies_to: string; due_at: string | null; sort_order: number;
+      applies_to: string; due_at: string | null; sort_order: number; form_id: string | null;
     }>;
     return ((speakersRes?.results ?? []) as unknown as Array<SpeakerRow & {
       headshot_asset_id: string | null; total_tasks: number; completed_tasks: number;
@@ -998,6 +1005,7 @@ export class D1Repo implements LecternRepo {
         definition: {
           id: task.definition_id, eventId: task.event_id, key: task.key, label: task.label,
           description: task.description, appliesTo: task.applies_to as TaskDefinition["appliesTo"],
+          formId: task.form_id ?? null,
           dueAt: task.due_at, sortOrder: task.sort_order,
         },
       })),
@@ -1074,10 +1082,143 @@ export class D1Repo implements LecternRepo {
       definition: {
         id: input.definitionId, eventId: input.eventId, key: `custom_${input.taskType}_${input.definitionId}`,
         label: input.title, description: input.instructions, appliesTo: "all_speakers",
-        dueAt: input.dueAt, sortOrder: 100,
+        dueAt: input.dueAt, sortOrder: 100, formId: null,
       },
       assigned: speakerIds.length,
     };
+  }
+
+  /**
+   * Portal forms reuse the CFP's form engine: a form of kind 'portal', its
+   * fields, and a task definition that points at it. Assigning it to speakers
+   * is the same speaker_tasks write every other task uses.
+   */
+  async createPortalForm(input: CreatePortalFormInput): Promise<{ formId: string; definitionId: string; assigned: number }> {
+    const valid = await this.db.prepare(
+      `SELECT id FROM speakers WHERE event_id = ? AND id IN (${input.speakerIds.map(() => "?").join(",")})`,
+    ).bind(input.eventId, ...input.speakerIds).all<{ id: string }>();
+    const speakerIds = valid.results.map((row) => row.id);
+    if (speakerIds.length !== new Set(input.speakerIds).size) throw new Error("speaker_not_found");
+
+    await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO forms (id, event_id, kind, title, welcome_text, thank_you_text, is_open,
+                            opens_at, closes_at, max_speakers_per_submission, allow_drafts, created_at, updated_at)
+         VALUES (?1, ?2, 'portal', ?3, ?4, NULL, 1, NULL, ?5, 1, 0, ?6, ?6)`,
+      ).bind(input.formId, input.eventId, input.title, input.instructions, input.dueAt, input.now),
+      ...input.fields.map((field, index) => this.db.prepare(
+        `INSERT INTO form_fields (id, form_id, key, label, field_type, required, sort_order, help_text, options_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+      ).bind(field.id, input.formId, field.key, field.label, field.fieldType,
+        field.required ? 1 : 0, index, field.helpText,
+        field.options ? JSON.stringify(field.options) : null)),
+      this.db.prepare(
+        `INSERT INTO task_definitions (id, event_id, key, label, description, applies_to, due_at, sort_order, form_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'all_speakers', ?6, 100, ?7)`,
+      ).bind(input.definitionId, input.eventId, `form_${input.definitionId}`, input.title,
+        input.instructions, input.dueAt, input.formId),
+      ...speakerIds.map((speakerId, index) => this.db.prepare(
+        `INSERT INTO speaker_tasks (id, event_id, speaker_id, task_definition_id, status, completed_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, 'pending', NULL, ?5)`,
+      ).bind(input.speakerTaskIds[index], input.eventId, speakerId, input.definitionId, input.now)),
+    ]);
+    return { formId: input.formId, definitionId: input.definitionId, assigned: speakerIds.length };
+  }
+
+  async listPortalForms(eventId: string): Promise<PortalFormSummary[]> {
+    const [formsRes, fieldsRes, countsRes, responsesRes] = await this.db.batch([
+      this.db.prepare(
+        `SELECT f.id AS form_id, f.title, f.closes_at, td.id AS definition_id, td.description
+         FROM forms f
+         JOIN task_definitions td ON td.form_id = f.id
+         WHERE f.event_id = ?1 AND f.kind = 'portal'
+         ORDER BY f.created_at DESC`,
+      ).bind(eventId),
+      this.db.prepare(
+        `SELECT ff.* FROM form_fields ff
+         JOIN forms f ON f.id = ff.form_id
+         WHERE f.event_id = ?1 AND f.kind = 'portal'
+         ORDER BY ff.form_id, ff.sort_order`,
+      ).bind(eventId),
+      this.db.prepare(
+        `SELECT st.task_definition_id,
+                COUNT(*) AS assigned,
+                SUM(CASE WHEN st.status = 'complete' THEN 1 ELSE 0 END) AS completed
+         FROM speaker_tasks st
+         JOIN task_definitions td ON td.id = st.task_definition_id
+         WHERE td.event_id = ?1 AND td.form_id IS NOT NULL
+         GROUP BY st.task_definition_id`,
+      ).bind(eventId),
+      this.db.prepare(
+        `SELECT r.task_definition_id, r.speaker_id, r.answers_json, r.submitted_at, sp.name AS speaker_name
+         FROM task_form_responses r
+         JOIN speakers sp ON sp.id = r.speaker_id
+         WHERE sp.event_id = ?1
+         ORDER BY r.submitted_at DESC`,
+      ).bind(eventId),
+    ]);
+
+    const fields = ((fieldsRes?.results ?? []) as unknown as FormFieldRow[]).map(mapFormField);
+    const counts = new Map<string, { assigned: number; completed: number }>();
+    for (const row of (countsRes?.results ?? []) as unknown as {
+      task_definition_id: string; assigned: number; completed: number;
+    }[]) counts.set(row.task_definition_id, { assigned: row.assigned, completed: row.completed ?? 0 });
+
+    const responses = new Map<string, PortalFormSummary["responses"]>();
+    for (const row of (responsesRes?.results ?? []) as unknown as {
+      task_definition_id: string; speaker_id: string; speaker_name: string;
+      answers_json: string; submitted_at: string;
+    }[]) {
+      const list = responses.get(row.task_definition_id) ?? [];
+      list.push({
+        speakerId: row.speaker_id,
+        speakerName: row.speaker_name,
+        answers: parseJson<Record<string, unknown>>(row.answers_json, {}),
+        submittedAt: row.submitted_at,
+      });
+      responses.set(row.task_definition_id, list);
+    }
+
+    return ((formsRes?.results ?? []) as unknown as {
+      form_id: string; title: string; closes_at: string | null;
+      definition_id: string; description: string | null;
+    }[]).map((row) => ({
+      formId: row.form_id,
+      definitionId: row.definition_id,
+      title: row.title,
+      instructions: row.description,
+      dueAt: row.closes_at,
+      fields: fields.filter((field) => field.formId === row.form_id),
+      assigned: counts.get(row.definition_id)?.assigned ?? 0,
+      completed: counts.get(row.definition_id)?.completed ?? 0,
+      responses: responses.get(row.definition_id) ?? [],
+    }));
+  }
+
+  async submitTaskForm(input: SubmitTaskFormInput): Promise<SpeakerPortalBundle> {
+    const task = await this.db.prepare(
+      `SELECT st.id, td.form_id FROM speaker_tasks st
+       JOIN task_definitions td ON td.id = st.task_definition_id
+       WHERE st.speaker_id = ?1 AND st.task_definition_id = ?2 AND td.form_id IS NOT NULL`,
+    ).bind(input.speakerId, input.taskDefinitionId).first<{ id: string; form_id: string }>();
+    if (!task) throw new Error("task_not_found");
+
+    await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO task_form_responses (id, task_definition_id, speaker_id, form_id, answers_json, submitted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(task_definition_id, speaker_id) DO UPDATE SET
+           answers_json = excluded.answers_json, submitted_at = excluded.submitted_at`,
+      ).bind(input.responseId, input.taskDefinitionId, input.speakerId, task.form_id,
+        JSON.stringify(input.answers), input.now),
+      this.db.prepare(
+        "UPDATE speaker_tasks SET status = 'complete', completed_at = ?1, updated_at = ?1 WHERE id = ?2",
+      ).bind(input.now, task.id),
+    ]);
+
+    const portal = await this.getSpeakerPortalByToken(input.speakerId);
+    if (!portal) throw new Error("Speaker portal disappeared after form submission.");
+    return portal;
   }
 
   async updateSpeakerTaskDueDate(eventId: string, definitionId: string, dueAt: string | null): Promise<TaskDefinition> {
@@ -1152,8 +1293,12 @@ export class D1Repo implements LecternRepo {
     await this.db.batch([
       this.db
         .prepare(
-          `INSERT INTO submissions (id, event_id, form_id, track_id, title, abstract, format, status, answers_json, submitted_at, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'submitted', ?8, ?9, ?9, ?9)`,
+          // The reference code is the next number for this event, computed in
+          // the same statement so concurrent submissions cannot collide.
+          `INSERT INTO submissions (id, reference_code, event_id, form_id, track_id, title, abstract, format, status, answers_json, submitted_at, created_at, updated_at)
+           VALUES (?1,
+                   'SUB-' || (SELECT COUNT(*) + 1 FROM submissions WHERE event_id = ?2),
+                   ?2, ?3, ?4, ?5, ?6, ?7, 'submitted', ?8, ?9, ?9, ?9)`,
         )
         .bind(
           input.submissionId,
@@ -1843,7 +1988,7 @@ export class D1Repo implements LecternRepo {
       .first<SpeakerRow>();
     if (!speaker) return null;
 
-    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes, commentsRes, coSpeakersRes] = await this.db.batch([
+    const [eventRes, sessionsRes, proposalsRes, tasksRes, assetsRes, resourcesRes, commentsRes, coSpeakersRes, portalFieldsRes, formResponsesRes] = await this.db.batch([
       this.db
         .prepare(
           "SELECT id, slug, name, tagline, starts_on, ends_on, timezone FROM events WHERE id = ?",
@@ -1875,7 +2020,7 @@ export class D1Repo implements LecternRepo {
         .prepare(
           `SELECT st.*, td.id AS def_id, td.event_id AS def_event_id, td.key AS def_key,
                   td.label AS def_label, td.description AS def_description,
-                  td.applies_to AS def_applies_to, td.due_at AS def_due_at,
+                  td.applies_to AS def_applies_to, td.due_at AS def_due_at, td.form_id AS def_form_id,
                   td.sort_order AS def_sort_order
            FROM speaker_tasks st
            JOIN task_definitions td ON td.id = st.task_definition_id
@@ -1905,12 +2050,33 @@ export class D1Repo implements LecternRepo {
            )
          ORDER BY ss.submission_id, ss.sort_order`,
       ).bind(speaker.id),
+      // Fields of every portal form this speaker has been assigned, and any
+      // answers already saved, so a form task renders and resumes in one trip.
+      this.db.prepare(
+        `SELECT ff.* FROM form_fields ff
+         WHERE ff.form_id IN (
+           SELECT td.form_id FROM task_definitions td
+           JOIN speaker_tasks st ON st.task_definition_id = td.id
+           WHERE st.speaker_id = ? AND td.form_id IS NOT NULL
+         )
+         ORDER BY ff.form_id, ff.sort_order`,
+      ).bind(speaker.id),
+      this.db.prepare(
+        "SELECT task_definition_id, answers_json FROM task_form_responses WHERE speaker_id = ?",
+      ).bind(speaker.id),
     ]);
 
     const event = ((eventRes?.results ?? []) as unknown as EventRow[])[0];
     if (!event) return null;
     const eventBundle = await this.getEventBySlug(event.slug);
 
+    const portalFields = ((portalFieldsRes?.results ?? []) as unknown as FormFieldRow[]).map(mapFormField);
+    const formResponses = new Map<string, Record<string, unknown>>();
+    for (const row of (formResponsesRes?.results ?? []) as unknown as {
+      task_definition_id: string; answers_json: string;
+    }[]) {
+      formResponses.set(row.task_definition_id, parseJson<Record<string, unknown>>(row.answers_json, {}));
+    }
     const tasks = ((tasksRes?.results ?? []) as unknown as (SpeakerTaskRow & {
       def_id: string;
       def_event_id: string;
@@ -1918,6 +2084,7 @@ export class D1Repo implements LecternRepo {
       def_label: string;
       def_description: string | null;
       def_applies_to: string;
+      def_form_id: string | null;
       def_due_at: string | null;
       def_sort_order: number;
     })[]).map((row) => ({
@@ -1929,9 +2096,14 @@ export class D1Repo implements LecternRepo {
         label: row.def_label,
         description: row.def_description,
         applies_to: row.def_applies_to,
+        form_id: row.def_form_id,
         due_at: row.def_due_at,
         sort_order: row.def_sort_order,
       }),
+      form: row.def_form_id
+        ? { fields: portalFields.filter((field) => field.formId === row.def_form_id) }
+        : null,
+      formResponse: formResponses.get(row.def_id) ?? null,
     }));
 
     return {

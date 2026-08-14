@@ -75,7 +75,7 @@ describe("submissionsToCsv", () => {
     const csv = submissionsToCsv([submission]);
     const lines = csv.trimEnd().split("\r\n");
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain("Title,Status,Track");
+    expect(lines[0]).toContain("Title,Reference,Status,Track");
     expect(lines[0]).toContain("Committee notes");
     expect(lines[1]).toContain('"Shipping ""Fast"", Safely"');
     expect(lines[1]).toContain("Tom Ostrander; Ada Okafor");

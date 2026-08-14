@@ -7,6 +7,13 @@ export interface CalendarInviteInput {
   startsAt: string;
   endsAt: string;
   generatedAt: string;
+  /**
+   * Supply both to emit a real invitation (METHOD:REQUEST with ORGANIZER and
+   * ATTENDEE), which Gmail, Outlook, and iCal render with Accept/Decline.
+   * Omit them for a published event — a downloadable entry with no RSVP.
+   */
+  organizer?: { name: string; email: string };
+  attendee?: { name: string; email: string };
 }
 
 function icsDate(value: string): string {
@@ -39,12 +46,15 @@ export function buildCalendarInvite(input: CalendarInviteInput): string {
   if (Date.parse(input.endsAt) <= Date.parse(input.startsAt)) {
     throw new RangeError("Calendar event must end after it starts.");
   }
+  // An invitation needs a method, an organizer, and an attendee; without all
+  // three, mail clients file it as a published event with no RSVP.
+  const isInvitation = Boolean(input.organizer && input.attendee);
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Lectern//Program Calendar//EN",
     "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
+    isInvitation ? "METHOD:REQUEST" : "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${escapeIcs(input.uid)}`,
     `DTSTAMP:${icsDate(input.generatedAt)}`,
@@ -53,6 +63,13 @@ export function buildCalendarInvite(input: CalendarInviteInput): string {
     `SUMMARY:${escapeIcs(`${input.sessionTitle} — ${input.eventName}`)}`,
     `DESCRIPTION:${escapeIcs(input.description)}`,
     `LOCATION:${escapeIcs(input.location)}`,
+    ...(input.organizer
+      ? [`ORGANIZER;CN=${escapeIcs(input.organizer.name)}:mailto:${input.organizer.email}`]
+      : []),
+    ...(input.attendee
+      ? [`ATTENDEE;CN=${escapeIcs(input.attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${input.attendee.email}`]
+      : []),
+    ...(isInvitation ? ["SEQUENCE:0"] : []),
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",

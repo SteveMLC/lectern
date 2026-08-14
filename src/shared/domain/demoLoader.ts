@@ -290,7 +290,7 @@ export function buildDemoLoadPlan(options: BuildPlanOptions): DemoLoadPlan {
     key: k,
     label: TASK_LABELS[k].label,
     description: TASK_LABELS[k].description,
-    appliesTo: "accepted_speakers",
+    appliesTo: "accepted_speakers", formId: null,
     dueAt: null,
     sortOrder: i,
   }));
