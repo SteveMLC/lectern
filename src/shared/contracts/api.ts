@@ -266,6 +266,10 @@ export const PortalFormFieldInput = z.object({
   required: z.boolean().default(false),
   helpText: z.string().trim().max(300).nullable().default(null),
   options: z.array(z.string().trim().min(1).max(120)).max(30).nullable().default(null),
+}).superRefine((field, ctx) => {
+  if (field.fieldType === "select" && (!field.options || field.options.length === 0)) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: "Choice-list fields require at least one option." });
+  }
 });
 export type PortalFormFieldInput = z.infer<typeof PortalFormFieldInput>;
 
