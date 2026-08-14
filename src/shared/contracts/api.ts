@@ -6,6 +6,7 @@ import {
   Event,
   Form,
   FormField,
+  FormLengthRule,
   Room,
   ResourcePage,
   Session,
@@ -131,6 +132,7 @@ export const EventBundle = z.object({
       form: Form,
       fields: z.array(FormField),
       rules: z.array(ConditionalRule),
+      lengthRules: z.array(FormLengthRule).default([]),
     })
     .nullable(),
 });

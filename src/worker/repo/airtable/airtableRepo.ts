@@ -312,6 +312,10 @@ export class AirtableRepo implements LecternRepo {
     throw new AirtableNotWiredError("listSubmissions");
   }
 
+  async countSubmitterProposals(): Promise<number> {
+    throw new AirtableNotWiredError("countSubmitterProposals");
+  }
+
   async getSubmissionById(_id: string): Promise<SubmissionListItem | null> {
     throw new AirtableNotWiredError("getSubmissionById");
   }

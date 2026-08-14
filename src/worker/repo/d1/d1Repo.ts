@@ -130,6 +130,8 @@ interface FormRow {
   closes_at: string | null;
   max_speakers_per_submission: number;
   allow_drafts: number;
+  submission_limit: number | null;
+  notify_emails: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -414,6 +416,8 @@ function mapForm(r: FormRow): Form {
     closesAt: r.closes_at,
     maxSpeakersPerSubmission: r.max_speakers_per_submission,
     allowDrafts: r.allow_drafts === 1,
+    submissionLimit: r.submission_limit ?? null,
+    notifyEmails: parseJson<string[]>(r.notify_emails, []),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -878,16 +882,30 @@ export class D1Repo implements LecternRepo {
 
     let cfp: EventBundle["cfp"] = null;
     if (formRow) {
-      const [fieldsRes, rulesRes] = await this.db.batch([
+      const [fieldsRes, rulesRes, lengthRes] = await this.db.batch([
         this.db
           .prepare("SELECT * FROM form_fields WHERE form_id = ? ORDER BY sort_order")
           .bind(formRow.id),
         this.db.prepare("SELECT * FROM conditional_rules WHERE form_id = ?").bind(formRow.id),
+        this.db
+          .prepare("SELECT * FROM form_length_rules WHERE form_id = ? ORDER BY sort_order")
+          .bind(formRow.id),
       ]);
       cfp = {
         form: mapForm(formRow),
         fields: ((fieldsRes?.results ?? []) as unknown as FormFieldRow[]).map(mapFormField),
         rules: ((rulesRes?.results ?? []) as unknown as ConditionalRuleRow[]).map(mapRule),
+        lengthRules: ((lengthRes?.results ?? []) as unknown as {
+          id: string; form_id: string; label: string;
+          field_keys_json: string; max_chars: number; sort_order: number;
+        }[]).map((row) => ({
+          id: row.id,
+          formId: row.form_id,
+          label: row.label,
+          fieldKeys: parseJson<string[]>(row.field_keys_json, []),
+          maxChars: row.max_chars,
+          sortOrder: row.sort_order,
+        })),
       };
     }
 
@@ -1416,6 +1434,21 @@ export class D1Repo implements LecternRepo {
         reviewsBySubmission.get(row.id) ?? [],
       ),
     );
+  }
+
+  async countSubmitterProposals(eventId: string, email: string): Promise<number> {
+    const row = await this.db.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM submissions s
+            JOIN submission_speakers ss ON ss.submission_id = s.id
+            JOIN speakers sp ON sp.id = ss.speaker_id
+          WHERE s.event_id = ?1 AND lower(sp.email) = ?2
+            AND s.status NOT IN ('withdrawn')) AS sent,
+         (SELECT COUNT(*) FROM cfp_drafts d
+          WHERE d.event_id = ?1
+            AND lower(json_extract(d.payload_json, '$.speaker.email')) = ?2) AS drafts`,
+    ).bind(eventId, email.toLowerCase()).first<{ sent: number; drafts: number }>();
+    return (row?.sent ?? 0) + (row?.drafts ?? 0);
   }
 
   async getSubmissionById(id: string): Promise<SubmissionListItem | null> {

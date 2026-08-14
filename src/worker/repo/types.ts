@@ -79,6 +79,9 @@ export interface LecternRepo {
   saveCfpDraft(input: SaveCfpDraftInput): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest }>;
   getCfpDraft(eventId: string, token: string): Promise<{ token: string; savedAt: string; draft: CfpDraftRequest } | null>;
   listSubmissions(eventId: string): Promise<SubmissionListItem[]>;
+  /** Proposals plus saved drafts already held by this email on an event —
+   * the organizer's capacity control counts both. */
+  countSubmitterProposals(eventId: string, email: string): Promise<number>;
   getSubmissionById(id: string): Promise<SubmissionListItem | null>;
   decideSubmission(input: DecideSubmissionInput): Promise<SubmissionDecisionResult>;
   getOrganizerAgenda(eventId: string): Promise<OrganizerAgendaResponse>;

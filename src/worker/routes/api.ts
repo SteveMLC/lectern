@@ -84,6 +84,7 @@ import { draftReviewScores } from "../integrations/reviewScoring";
 import { canEditSpeakerProposal, isCfpOpen, speakerProposalLockReason } from "../../shared/domain/cfp";
 import { reviewResultsToCsv, submissionsToCsv } from "../../shared/domain/csv";
 import { buildCalendarCollection, buildCalendarInvite } from "../../shared/domain/ics";
+import { canSubmitAgain, combinedLengthMessage, exceededLengthRules, submissionLimitMessage } from "../../shared/domain/formLimits";
 import { missingRequiredFields, pruneAnswers } from "../../shared/domain/rules";
 import { parseSpeakerCsv } from "../../shared/domain/speakerCsv";
 import { buildStoreZip } from "../../shared/domain/zip";
@@ -1269,6 +1270,36 @@ api.post("/events/:slug/submissions", async (c) => {
 
   if (!bundle.tracks.some((t) => t.id === data.trackId)) {
     return errorResponse(422, "validation_error", "Unknown track for this event.");
+  }
+
+  // Submission capacity and combined-length rules are enforced here as well as
+  // in the form, because the form can be bypassed and these caps are the
+  // organizer's, not a suggestion.
+  const submissionLimit = bundle.cfp.form.submissionLimit ?? null;
+  if (submissionLimit !== null) {
+    const used = await repo.countSubmitterProposals(bundle.event.id, data.speaker.email.trim().toLowerCase());
+    if (!canSubmitAgain({ limit: submissionLimit, used })) {
+      return errorResponse(
+        409,
+        "submission_limit_reached",
+        submissionLimitMessage({ limit: submissionLimit, used }) ?? "You have reached this call's proposal limit.",
+      );
+    }
+  }
+
+  const overLength = exceededLengthRules(
+    (bundle.cfp.lengthRules ?? []).map((rule) => ({
+      id: rule.id, label: rule.label, fieldKeys: rule.fieldKeys, maxChars: rule.maxChars,
+    })),
+    { title: data.title, abstract: data.abstract, ...(data.answers ?? {}) },
+  );
+  if (overLength.length > 0) {
+    return errorResponse(
+      422,
+      "validation_error",
+      overLength.map(combinedLengthMessage).join(" "),
+      overLength.map((usage) => ({ path: ["lengthRule", usage.rule.id], message: combinedLengthMessage(usage) })),
+    );
   }
 
   const ctx = { format: data.format, answers: data.answers ?? {} };
