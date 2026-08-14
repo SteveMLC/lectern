@@ -823,7 +823,7 @@ export class D1Repo implements LecternRepo {
       this.db.prepare("UPDATE events SET updated_at = ? WHERE id = ?").bind(input.now, input.eventId),
     ]);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
-    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId ?? undefined) : null;
     if (!bundle) throw new Error("event_not_found");
     return bundle;
   }
@@ -883,7 +883,7 @@ export class D1Repo implements LecternRepo {
     statements.push(this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId));
     await this.db.batch(statements);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
-    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
     if (!bundle) throw new Error("event_not_found");
     return bundle;
   }
@@ -899,7 +899,7 @@ export class D1Repo implements LecternRepo {
       this.db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(input.now, input.formId),
     ]);
     const row = await this.db.prepare("SELECT slug FROM events WHERE id = ?").bind(input.eventId).first<{ slug: string }>();
-    const bundle = row ? await this.getEventBySlug(row.slug) : null;
+    const bundle = row ? await this.getEventBySlug(row.slug, input.formId) : null;
     if (!bundle) throw new Error("event_not_found");
     return bundle;
   }

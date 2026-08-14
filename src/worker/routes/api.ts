@@ -1716,7 +1716,7 @@ api.post("/events/:slug/cfp/fields", organizerAuth, async (c) => {
 });
 
 api.put("/events/:slug/cfp/fields/order", organizerAuth, async (c) => {
-  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"), c.req.query("form") || undefined);
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
   let raw: unknown; try { raw = await c.req.json(); } catch { return errorResponse(400, "bad_json", "Request body must be JSON."); }
@@ -1728,7 +1728,7 @@ api.put("/events/:slug/cfp/fields/order", organizerAuth, async (c) => {
 });
 
 api.delete("/events/:slug/cfp/fields/:fieldId", organizerAuth, async (c) => {
-  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"));
+  const repo = createRepo(c.env); const bundle = await repo.getEventBySlug(c.req.param("slug"), c.req.query("form") || undefined);
   if (!bundle) return errorResponse(404, "event_not_found", "No event with that slug.");
   if (!bundle.cfp) return errorResponse(409, "cfp_unavailable", "This event has no call for speakers.");
   const field = bundle.cfp.fields.find((candidate) => candidate.id === c.req.param("fieldId"));

@@ -81,10 +81,25 @@ Two things worth taking:
 5. **Speed** — not a gap but the loudest complaint on the tape. **Measured**:
    slowest median surface 60ms, pages at 19-21ms, with
    `scripts/measure-latency.mjs` committed so anyone can re-run it.
-6. **Per-form submission limits**, then multiple submission forms per event.
-   Not started.
-7. Cross-field character limits, admin notification recipients, drag-to-reorder,
-   locked fields — real, but the customer ranked them last himself.
+6. **Per-form submission limits** — **done.** Two-tier, as their control
+   shows: a form-level cap counting drafts, then the event max when the form
+   sets none. Enforced on the API, not just the form.
+7. **Cross-field character limits** — **done.** "Printed programme block"
+   rules sum named fields; the API refuses an over-length submission with the
+   exact overage.
+8. **Multiple submission forms per event** — **done.** The primary form keeps
+   /cfp; every other call runs at /e/:slug/cfp/:formId with its own
+   questions, window, drafts, and capacity. Admin gains a Submission forms
+   page; Reviews names the source call. Seeded: "Lightning talks — late
+   call".
+9. **Draft reminder emails** — **done.** One receipted reminder per draft
+   when the close date is within seven days, on the existing cron.
+10. **Admin notification recipients** — **done.** Receipted mail per
+    configured admin on each new submission, naming title, code, submitter.
+11. **Locked fields and drag-to-reorder** — **done.** Core questions badge
+    Locked and cannot be removed or shadowed; custom questions reorder by
+    accessible Move up/down buttons and drag, persisted and reflected on the
+    public form.
 
 ## Not gaps, confirmed
 
