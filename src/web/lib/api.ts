@@ -46,6 +46,10 @@ import {
   OrganizerSpeakerMutationResponse,
   ImportOrganizerSpeakersRequest,
   ImportOrganizerSpeakersResponse,
+  CreatePortalFormRequest,
+  CreatePortalFormResponse,
+  PortalFormsResponse,
+  SubmitTaskFormRequest,
   CreateSpeakerTaskRequest,
   CreateSpeakerTaskResponse,
   UpdateSpeakerTaskDueDateRequest,
@@ -206,6 +210,22 @@ export const apiClient = {
       CreateSpeakerTaskResponse,
       `/api/events/${encodeURIComponent(slug)}/speaker-tasks`,
       { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  createPortalForm: (slug: string, body: CreatePortalFormRequest) =>
+    request(
+      CreatePortalFormResponse,
+      `/api/events/${encodeURIComponent(slug)}/portal-forms`,
+      { method: "POST", body: JSON.stringify(body) },
+      { auth: true },
+    ),
+
+  portalForms: (slug: string) =>
+    request(
+      PortalFormsResponse,
+      `/api/events/${encodeURIComponent(slug)}/portal-forms`,
+      undefined,
       { auth: true },
     ),
 
@@ -450,6 +470,13 @@ export const apiClient = {
     request(
       SpeakerPortalResponse,
       `/api/speaker-portal/${encodeURIComponent(token)}/tasks/${encodeURIComponent(taskId)}`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+
+  submitTaskForm: (token: string, taskId: string, body: SubmitTaskFormRequest) =>
+    request(
+      SpeakerPortalResponse,
+      `/api/speaker-portal/${encodeURIComponent(token)}/tasks/${encodeURIComponent(taskId)}/form`,
       { method: "PUT", body: JSON.stringify(body) },
     ),
 

@@ -2,6 +2,7 @@ import type {
   AssetKind,
   AssetComment,
   EventBundle,
+  FormField,
   EventCounts,
   EventSummary,
   EvaluationWorkspaceResponse,
@@ -32,6 +33,7 @@ import type {
   CreateOrganizerSpeakerRequest,
   UpdateOrganizerSpeakerRequest,
   CfpDraftRequest,
+  PortalFormSummary,
   SubmissionListItem,
   TaskDefinition,
 } from "../../shared/contracts";
@@ -62,6 +64,9 @@ export interface LecternRepo {
   updateOrganizerSpeaker(input: UpdateOrganizerSpeakerInput): Promise<Speaker>;
   importOrganizerSpeakers(input: ImportOrganizerSpeakersInput): Promise<{ imported: number; updated: number; total: number }>;
   createSpeakerTask(input: CreateSpeakerTaskInput): Promise<{ definition: TaskDefinition; assigned: number }>;
+  createPortalForm(input: CreatePortalFormInput): Promise<{ formId: string; definitionId: string; assigned: number }>;
+  listPortalForms(eventId: string): Promise<PortalFormSummary[]>;
+  submitTaskForm(input: SubmitTaskFormInput): Promise<SpeakerPortalBundle>;
   updateSpeakerTaskDueDate(eventId: string, definitionId: string, dueAt: string | null): Promise<TaskDefinition>;
   sendBulkTaskReminders(input: BulkTaskReminderInput): Promise<{ queued: number; recipientEmails: string[] }>;
 
@@ -162,6 +167,35 @@ export interface CreateSpeakerTaskInput {
   dueAt: string | null;
   speakerIds: string[];
   speakerTaskIds: string[];
+  now: string;
+}
+
+export interface CreatePortalFormInput {
+  formId: string;
+  definitionId: string;
+  eventId: string;
+  title: string;
+  instructions: string | null;
+  dueAt: string | null;
+  fields: Array<{
+    id: string;
+    key: string;
+    label: string;
+    fieldType: string;
+    required: boolean;
+    helpText: string | null;
+    options: string[] | null;
+  }>;
+  speakerIds: string[];
+  speakerTaskIds: string[];
+  now: string;
+}
+
+export interface SubmitTaskFormInput {
+  responseId: string;
+  speakerId: string;
+  taskDefinitionId: string;
+  answers: Record<string, unknown>;
   now: string;
 }
 
@@ -365,6 +399,9 @@ export interface SpeakerPortalSession {
 export interface SpeakerPortalTask {
   task: SpeakerTask;
   definition: TaskDefinition;
+  /** Present on form tasks: the form to fill out, and this speaker's answers. */
+  form: { fields: FormField[] } | null;
+  formResponse: Record<string, unknown> | null;
 }
 
 export interface CreateCfpSubmissionInput {

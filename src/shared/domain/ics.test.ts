@@ -42,3 +42,42 @@ describe("buildCalendarInvite", () => {
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
   });
 });
+
+describe("calendar invitations vs publications", () => {
+  const base = {
+    uid: "ses_1@lectern",
+    eventName: "Horizon Dev Summit 2026",
+    sessionTitle: "Agents in Production",
+    description: "What breaks first.",
+    location: "Main Hall",
+    startsAt: "2026-10-14T17:00:00.000Z",
+    endsAt: "2026-10-14T17:45:00.000Z",
+    generatedAt: "2026-08-14T12:00:00.000Z",
+  };
+
+  it("publishes when no organizer or attendee is supplied", () => {
+    const ics = buildCalendarInvite(base);
+    expect(ics).toContain("METHOD:PUBLISH");
+    expect(ics).not.toContain("ATTENDEE");
+    expect(ics).not.toContain("ORGANIZER");
+  });
+
+  it("invites when both organizer and attendee are supplied", () => {
+    // Long property lines are folded per RFC 5545; unfold the way a client does.
+    const ics = buildCalendarInvite({
+      ...base,
+      organizer: { name: "Horizon Dev Summit 2026", email: "lectern@qualora.io" },
+      attendee: { name: "Ada Okafor", email: "ada@nimbuslabs.example" },
+    }).replace(/\r\n /g, "");
+    expect(ics).toContain("METHOD:REQUEST");
+    expect(ics).toContain("ORGANIZER;CN=Horizon Dev Summit 2026:mailto:lectern@qualora.io");
+    expect(ics).toContain("RSVP=TRUE:mailto:ada@nimbuslabs.example");
+    expect(ics).toContain("PARTSTAT=NEEDS-ACTION");
+    expect(ics).toContain("SEQUENCE:0");
+  });
+
+  it("stays a publication when only one side is known", () => {
+    const ics = buildCalendarInvite({ ...base, organizer: { name: "X", email: "x@y.z" } });
+    expect(ics).toContain("METHOD:PUBLISH");
+  });
+});

@@ -412,6 +412,8 @@ export const TaskDefinition = z.object({
   appliesTo: TaskAppliesTo,
   dueAt: isoDateTime.nullable(),
   sortOrder: z.number().int(),
+  /** Set when the task is answered by filling out a portal form. */
+  formId: z.string().nullable().default(null),
 });
 export type TaskDefinition = z.infer<typeof TaskDefinition>;
 
